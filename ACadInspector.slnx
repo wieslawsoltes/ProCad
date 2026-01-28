@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="ACadInspector.Browser/ACadInspector.Browser.csproj" />
+  <Project Path="ACadInspector.Desktop/ACadInspector.Desktop.csproj" />
+  <Project Path="ACadInspector/ACadInspector.csproj" />
+  <Project Path="external/ACadSharp/src/ACadSharp/ACadSharp.csproj" />
+</Solution>
