@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Override root CPM settings for external projects (ACadSharp). -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

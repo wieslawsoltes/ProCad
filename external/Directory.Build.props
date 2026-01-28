@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Disable CPM for projects under external/ (e.g., ACadSharp submodule). -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
