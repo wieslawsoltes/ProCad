@@ -1,0 +1,460 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Numerics;
+using ACadSharp;
+using ACadSharp.Entities;
+using ACadSharp.Header;
+using ACadSharp.Objects;
+using ACadSharp.Tables;
+using CSMath;
+
+namespace ACadInspector.Rendering;
+
+public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
+{
+    private static readonly Transform IdentityTransform = new(Matrix4.Identity);
+
+    private readonly IRenderEntityDispatcher _dispatcher;
+    private readonly IRenderStyleResolver _styleResolver;
+    private readonly IRenderLinePatternResolver _linePatternResolver;
+    private readonly IRenderShapeResolver _shapeResolver;
+    private readonly IRenderTextShaper _textShaper;
+    private readonly IRenderEntityVisibilityResolver _visibilityResolver;
+    private readonly IRenderGeometrySampler _geometrySampler;
+    private readonly IRenderEntityOrderResolver _orderResolver;
+    private readonly IRenderCacheStampProvider _cacheStampProvider;
+
+    public CadRenderSceneBuilder(
+        IRenderEntityDispatcher dispatcher,
+        IRenderStyleResolver styleResolver,
+        IRenderLinePatternResolver linePatternResolver,
+        IRenderShapeResolver shapeResolver,
+        IRenderTextShaper textShaper,
+        IRenderEntityVisibilityResolver visibilityResolver,
+        IRenderGeometrySampler geometrySampler,
+        IRenderEntityOrderResolver orderResolver,
+        IRenderCacheStampProvider cacheStampProvider)
+    {
+        _dispatcher = dispatcher;
+        _styleResolver = styleResolver;
+        _linePatternResolver = linePatternResolver;
+        _shapeResolver = shapeResolver;
+        _textShaper = textShaper;
+        _visibilityResolver = visibilityResolver;
+        _geometrySampler = geometrySampler;
+        _orderResolver = orderResolver;
+        _cacheStampProvider = cacheStampProvider;
+    }
+
+    public RenderScene Build(CadDocument document, CadRenderSceneSettings settings)
+    {
+        if (document is null)
+        {
+            throw new ArgumentNullException(nameof(document));
+        }
+
+        if (settings is null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var stats = new RenderStatsAccumulator();
+        var diagnostics = new RenderDiagnostics();
+        if (settings.IsPaperSpace)
+        {
+            var layout = ResolvePaperSpaceLayout(document);
+            var layoutScaling = ResolvePaperSpaceLineTypeScaling(layout);
+            var paperSettings = WithViewportScale(settings, viewportScale: 1f, layoutScaling, annotationScaleFactor: 1f);
+            var context = new RenderBuildContext(
+                document,
+                paperSettings,
+                _styleResolver,
+                _linePatternResolver,
+                _shapeResolver,
+                _textShaper,
+                _visibilityResolver,
+                _geometrySampler,
+                _orderResolver,
+                _dispatcher,
+                diagnostics,
+                stats);
+
+            BuildPaperSpace(document, layout, paperSettings, context, diagnostics);
+            return BuildScene(context, stats, stopwatch);
+        }
+
+        var modelContext = new RenderBuildContext(
+            document,
+            settings,
+            _styleResolver,
+            _linePatternResolver,
+            _shapeResolver,
+            _textShaper,
+            _visibilityResolver,
+            _geometrySampler,
+            _orderResolver,
+            _dispatcher,
+            diagnostics,
+            stats);
+        AppendEntities(document.Entities, document.ModelSpace, IdentityTransform, modelContext);
+        return BuildScene(modelContext, stats, stopwatch);
+    }
+
+    private void BuildPaperSpace(
+        CadDocument document,
+        Layout? layout,
+        CadRenderSceneSettings settings,
+        RenderBuildContext context,
+        RenderDiagnostics diagnostics)
+    {
+        var paperSpace = ResolvePaperSpaceBlock(document, layout);
+        if (paperSpace is null)
+        {
+            return;
+        }
+
+        var viewports = ResolveViewports(layout, paperSpace);
+        foreach (var viewport in viewports)
+        {
+            if (!ShouldRenderViewport(viewport))
+            {
+                continue;
+            }
+
+            var viewportScale = NormalizeScale(viewport.ScaleFactor);
+            var viewportSettings = WithViewportScale(
+                settings,
+                viewportScale,
+                settings.PaperSpaceLineTypeScalingOverride,
+                settings.AnnotationScaleFactor);
+            var viewportContext = new RenderBuildContext(
+                document,
+                viewportSettings,
+                _styleResolver,
+                _linePatternResolver,
+                _shapeResolver,
+                _textShaper,
+                _visibilityResolver,
+                _geometrySampler,
+                _orderResolver,
+                _dispatcher,
+                diagnostics,
+                context.Stats);
+
+            var transform = BuildViewportTransform(viewport);
+            var viewportBlock = ResolveViewportBlock(document, viewport);
+            AppendEntities(ResolveViewportEntities(document, viewport), viewportBlock, transform, viewportContext);
+
+            var clipLoops = BuildViewportClip(viewport, settings);
+            foreach (var entry in viewportContext.Layers.Entries)
+            {
+                var builder = entry.Value;
+                if (builder.Primitives.Count == 0)
+                {
+                    continue;
+                }
+
+                var targetBuilder = context.Layers.GetLayerBuilder(entry.Key);
+                targetBuilder.Add(new RenderClipGroup(clipLoops, builder.Primitives));
+            }
+        }
+
+        AppendEntities(paperSpace.Entities, paperSpace, IdentityTransform, context);
+    }
+
+    private void AppendEntities(
+        IEnumerable<Entity> entities,
+        BlockRecord? block,
+        Transform transform,
+        RenderBuildContext context)
+    {
+        var ordered = context.EntityOrderResolver.OrderEntities(entities, block);
+        foreach (var entity in ordered)
+        {
+            AppendEntity(entity, transform, context);
+        }
+    }
+
+    private void AppendEntity(Entity entity, Transform transform, RenderBuildContext context)
+    {
+        if (entity is null)
+        {
+            return;
+        }
+
+        var shouldRender = context.VisibilityResolver.ShouldRender(entity, context.Settings);
+        context.Stats.TrackEntity(shouldRender);
+        if (!shouldRender)
+        {
+            return;
+        }
+
+        context.Dispatcher.Append(entity, transform, context);
+    }
+
+    private static RenderScene BuildScene(
+        RenderBuildContext context,
+        RenderStatsAccumulator stats,
+        Stopwatch stopwatch)
+    {
+        var builders = new List<RenderLayerBuilder>(context.Layers.Count);
+        foreach (var builder in context.Layers.Builders)
+        {
+            builders.Add(builder);
+        }
+
+        builders.Sort(static (left, right) =>
+            string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
+
+        var layers = new List<RenderLayer>(builders.Count);
+        var sceneBounds = RenderBounds.Empty;
+        foreach (var builder in builders)
+        {
+            var layer = new RenderLayer(builder.Name, builder.Color, builder.IsVisible, builder.Primitives, builder.Bounds);
+            layers.Add(layer);
+            sceneBounds = sceneBounds.Expand(builder.Bounds);
+        }
+
+        stopwatch.Stop();
+        var renderStats = RenderStats.Build(stats, layers, stopwatch.Elapsed, context.Settings.PerformanceBudget);
+        return new RenderScene(
+            layers,
+            sceneBounds,
+            context.Settings.Background,
+            context.Settings.VisualStyle,
+            context.Diagnostics,
+            renderStats);
+    }
+
+    private static Layout? ResolvePaperSpaceLayout(CadDocument document)
+    {
+        if (document.Layouts is null)
+        {
+            return document.PaperSpace?.Layout;
+        }
+
+        Layout? best = null;
+        foreach (var layout in document.Layouts)
+        {
+            if (!layout.IsPaperSpace)
+            {
+                continue;
+            }
+
+            if (best is null || layout.TabOrder < best.TabOrder)
+            {
+                best = layout;
+            }
+        }
+
+        return best ?? document.PaperSpace?.Layout;
+    }
+
+    private static BlockRecord? ResolvePaperSpaceBlock(CadDocument document, Layout? layout)
+    {
+        if (layout?.AssociatedBlock is not null)
+        {
+            return layout.AssociatedBlock;
+        }
+
+        return document.PaperSpace;
+    }
+
+    private static List<Viewport> ResolveViewports(Layout? layout, BlockRecord? paperSpace)
+    {
+        var result = new List<Viewport>();
+        IEnumerable<Viewport> candidates = Array.Empty<Viewport>();
+        if (layout?.Viewports is not null)
+        {
+            candidates = layout.Viewports;
+        }
+        else if (paperSpace is not null)
+        {
+            candidates = paperSpace.Viewports;
+        }
+
+        foreach (var viewport in candidates)
+        {
+            result.Add(viewport);
+        }
+
+        return result;
+    }
+
+    private static SpaceLineTypeScaling? ResolvePaperSpaceLineTypeScaling(Layout? layout)
+    {
+        if (layout is null)
+        {
+            return null;
+        }
+
+        return layout.LayoutFlags.HasFlag(LayoutFlags.PaperSpaceLinetypeScaling)
+            ? SpaceLineTypeScaling.Normal
+            : SpaceLineTypeScaling.Viewport;
+    }
+
+    private static bool ShouldRenderViewport(Viewport viewport)
+    {
+        if (viewport.RepresentsPaper)
+        {
+            return false;
+        }
+
+        if (viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
+        {
+            return false;
+        }
+
+        return viewport.Width > 0 && viewport.Height > 0 && viewport.ViewHeight > 0;
+    }
+
+    private static IEnumerable<Entity> ResolveViewportEntities(CadDocument document, Viewport viewport)
+    {
+        if (viewport.Document is not null)
+        {
+            return viewport.SelectEntities();
+        }
+
+        return document.Entities;
+    }
+
+    private static BlockRecord? ResolveViewportBlock(CadDocument document, Viewport viewport)
+    {
+        if (viewport.Document is not null)
+        {
+            return viewport.Document.ModelSpace;
+        }
+
+        return document.ModelSpace;
+    }
+
+    private static Transform BuildViewportTransform(Viewport viewport)
+    {
+        var viewHeight = viewport.ViewHeight;
+        var viewWidth = viewport.ViewWidth;
+        var scaleX = viewWidth > 0.0 ? viewport.Width / viewWidth : 1.0;
+        var scaleY = viewHeight > 0.0 ? viewport.Height / viewHeight : 1.0;
+        var twist = -viewport.TwistAngle;
+
+        var matrix = Matrix4.CreateTranslation(new XYZ(-viewport.ViewCenter.X, -viewport.ViewCenter.Y, 0));
+        if (Math.Abs(twist) > 0.0001)
+        {
+            matrix = Matrix4.CreateRotationMatrix(0, 0, twist) * matrix;
+        }
+
+        matrix = Matrix4.CreateScalingMatrix(scaleX, scaleY, 1.0) * matrix;
+        matrix = Matrix4.CreateTranslation(new XYZ(viewport.Center.X, viewport.Center.Y, 0)) * matrix;
+        return new Transform(matrix);
+    }
+
+    private IReadOnlyList<IReadOnlyList<Vector2>> BuildViewportClip(Viewport viewport, CadRenderSceneSettings settings)
+    {
+        if (viewport.Boundary is not null)
+        {
+            var boundaryLoops = BuildBoundaryLoops(viewport.Boundary, settings);
+            if (boundaryLoops.Count > 0)
+            {
+                return boundaryLoops;
+            }
+        }
+
+        return BuildRectangleClip(viewport);
+    }
+
+    private IReadOnlyList<IReadOnlyList<Vector2>> BuildBoundaryLoops(Entity boundary, CadRenderSceneSettings settings)
+    {
+        IReadOnlyList<XYZ>? points = boundary switch
+        {
+            IPolyline polyline => _geometrySampler.SamplePolyline(polyline, settings.ResolvePolylineArcPrecision()),
+            Circle circle => _geometrySampler.SampleCircle(circle, settings.ResolveCirclePrecision()),
+            Ellipse ellipse => _geometrySampler.SampleEllipse(ellipse, settings.ResolveCirclePrecision()),
+            Spline spline => _geometrySampler.SampleSpline(spline, settings.ResolveSplinePrecision()),
+            _ => null
+        };
+
+        if (points is null || points.Count < 3)
+        {
+            return Array.Empty<IReadOnlyList<Vector2>>();
+        }
+
+        var loop = new List<Vector2>(points.Count);
+        foreach (var point in points)
+        {
+            loop.Add(RenderTransformUtils.ToVector2(point));
+        }
+
+        return new[] { loop };
+    }
+
+    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildRectangleClip(Viewport viewport)
+    {
+        var width = (float)viewport.Width;
+        var height = (float)viewport.Height;
+        if (width <= 0f || height <= 0f)
+        {
+            return Array.Empty<IReadOnlyList<Vector2>>();
+        }
+
+        var center = viewport.Center;
+        var halfW = width * 0.5f;
+        var halfH = height * 0.5f;
+        var loop = new List<Vector2>
+        {
+            new Vector2((float)(center.X - halfW), (float)(center.Y - halfH)),
+            new Vector2((float)(center.X + halfW), (float)(center.Y - halfH)),
+            new Vector2((float)(center.X + halfW), (float)(center.Y + halfH)),
+            new Vector2((float)(center.X - halfW), (float)(center.Y + halfH))
+        };
+
+        return new[] { loop };
+    }
+
+    private static CadRenderSceneSettings WithViewportScale(
+        CadRenderSceneSettings settings,
+        float viewportScale,
+        SpaceLineTypeScaling? paperSpaceScaling,
+        float annotationScaleFactor)
+    {
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = settings.SupportPaths,
+            Quality = settings.Quality,
+            VisualStyle = settings.VisualStyle,
+            Lighting = settings.Lighting,
+            EnableHatchFills = settings.EnableHatchFills,
+            EnableHatchPatterns = settings.EnableHatchPatterns,
+            EnableHatchGradients = settings.EnableHatchGradients,
+            Background = settings.Background,
+            FallbackColor = settings.FallbackColor,
+            MillimetersPerUnit = settings.MillimetersPerUnit,
+            DefaultLineWeightMm = settings.DefaultLineWeightMm,
+            MinLineWeightMm = settings.MinLineWeightMm,
+            LineTypeDotLengthMm = settings.LineTypeDotLengthMm,
+            PolylineArcPrecision = settings.PolylineArcPrecision,
+            SplinePrecision = settings.SplinePrecision,
+            CirclePrecision = settings.CirclePrecision,
+            TextWidthFactor = settings.TextWidthFactor,
+            IsPaperSpace = settings.IsPaperSpace,
+            PaperSpaceLineTypeScalingOverride = paperSpaceScaling ?? settings.PaperSpaceLineTypeScalingOverride,
+            ViewportScale = viewportScale,
+            ModelSpaceLineTypeScaling = settings.ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = annotationScaleFactor,
+            IncludeInvisible = settings.IncludeInvisible,
+            IncludeOffLayers = settings.IncludeOffLayers,
+            IncludeUnsupportedAsPoints = settings.IncludeUnsupportedAsPoints,
+            PerformanceBudget = settings.PerformanceBudget
+        };
+    }
+
+    private static float NormalizeScale(double scale)
+    {
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0)
+        {
+            return 1f;
+        }
+
+        return (float)scale;
+    }
+}

@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             xmlns:edit="using:AvaloniaEdit"
+             xmlns:i="using:Avalonia.Xaml.Interactivity"
+             xmlns:behaviors="using:ACadInspector.Behaviors"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadScriptingView"
+             x:DataType="vm:CadScriptingViewModel">
+  <Grid RowDefinitions="Auto,*"
+        RowSpacing="8"
+        Margin="16">
+    <StackPanel Orientation="Horizontal"
+                Spacing="8">
+      <Button Content="Run"
+              Command="{CompiledBinding RunCommand}" />
+      <Button Content="Cancel"
+              Command="{CompiledBinding CancelCommand}" />
+      <Button Content="Clear Output"
+              Command="{CompiledBinding ClearOutputCommand}" />
+      <Button Content="Reset Template"
+              Command="{CompiledBinding ResetTemplateCommand}" />
+      <TextBlock Text="{CompiledBinding StatusMessage}"
+                 VerticalAlignment="Center"
+                 Margin="12,0,0,0" />
+    </StackPanel>
+
+    <Grid Grid.Row="1"
+          ColumnDefinitions="*,Auto,*"
+          ColumnSpacing="8">
+      <Border BorderThickness="1"
+              CornerRadius="6"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}">
+        <edit:TextEditor Document="{CompiledBinding ScriptDocument}"
+                         ShowLineNumbers="True"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto">
+          <i:Interaction.Behaviors>
+            <behaviors:TextMateBehavior GrammarExtension=".cs" Theme="Dark" />
+          </i:Interaction.Behaviors>
+        </edit:TextEditor>
+      </Border>
+
+      <GridSplitter Grid.Column="1"
+                    Width="6"
+                    Background="{DynamicResource ThemeBorderLowBrush}" />
+
+      <Border Grid.Column="2"
+              BorderThickness="1"
+              CornerRadius="6"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}">
+        <edit:TextEditor Document="{CompiledBinding OutputDocument}"
+                         IsReadOnly="True"
+                         ShowLineNumbers="False"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto" />
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

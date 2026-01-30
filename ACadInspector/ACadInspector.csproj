@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <EnableAvaloniaXamlCompilation>true</EnableAvaloniaXamlCompilation>
   </PropertyGroup>
   
   <ItemGroup>
@@ -14,15 +15,39 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Include="Avalonia.Diagnostics">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="ReactiveUI.Avalonia" />
+    <PackageReference Include="ReactiveUI.SourceGenerators" PrivateAssets="all" />
+    <PackageReference Include="Dock.Avalonia" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" />
+    <PackageReference Include="Dock.Model" />
+    <PackageReference Include="Dock.Model.ReactiveUI" />
+    <PackageReference Include="ProDataGrid" />
+    <PackageReference Include="AvaloniaEdit.TextMate" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\external\ACadSharp\src\ACadSharp\ACadSharp.csproj" />
+    <ProjectReference Include="..\ACadInspector.Core\ACadInspector.Core.csproj" />
+    <ProjectReference Include="..\ACadInspector.IO\ACadInspector.IO.csproj" />
+    <ProjectReference Include="..\ACadInspector.Rendering\ACadInspector.Rendering.csproj" />
+    <ProjectReference Include="..\ACadInspector.Scripting\ACadInspector.Scripting.csproj" />
   </ItemGroup>
+
+  <Target Name="CopyAvaloniaCompiledXamlOutput" AfterTargets="CompileAvaloniaXaml">
+    <ItemGroup>
+      <_AvaloniaCompiledXamlOutput Include="$(IntermediateOutputPath)$(AssemblyName).dll" />
+      <_AvaloniaCompiledXamlOutput Include="$(IntermediateOutputPath)$(AssemblyName).pdb"
+                                   Condition="Exists('$(IntermediateOutputPath)$(AssemblyName).pdb')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_AvaloniaCompiledXamlOutput)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="false" />
+  </Target>
 </Project>

@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             xmlns:views="using:ACadInspector.Views"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadDocumentView"
+             x:DataType="vm:CadDocumentViewModel">
+  <Grid RowDefinitions="Auto,*"
+        Margin="16"
+        RowSpacing="12">
+    <Border Padding="12"
+            CornerRadius="10"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1">
+      <Grid RowDefinitions="Auto,Auto,Auto">
+        <TextBlock Text="{CompiledBinding Title}"
+                   FontSize="20"
+                   FontWeight="SemiBold" />
+        <TextBlock Grid.Row="1"
+                   Text="{CompiledBinding Format}"
+                   Margin="0,6,0,0" />
+        <TextBlock Grid.Row="2"
+                   Text="{CompiledBinding Path}"
+                   Margin="0,2,0,0"
+                   TextTrimming="CharacterEllipsis" />
+      </Grid>
+    </Border>
+    <Border Grid.Row="1"
+            CornerRadius="12"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}">
+      <views:CadRenderView DataContext="{CompiledBinding Render}" />
+    </Border>
+  </Grid>
+</UserControl>

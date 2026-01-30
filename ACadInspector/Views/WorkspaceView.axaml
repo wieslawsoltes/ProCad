@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             xmlns:dock="using:Dock.Avalonia.Controls"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="ACadInspector.Views.WorkspaceView"
+             x:DataType="vm:WorkspaceViewModel">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Background="{DynamicResource ThemeControlLowBrush}"
+            Padding="8">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <Button Content="Open"
+                Command="{CompiledBinding OpenCommand}" />
+        <Button Content="Save"
+                Command="{CompiledBinding SaveCommand}" />
+        <Button Content="Save As"
+                Command="{CompiledBinding SaveAsCommand}" />
+        <Button Content="Compare"
+                Command="{CompiledBinding CompareCommand}" />
+        <ToggleSwitch Content="Diagnostics"
+                      IsChecked="{CompiledBinding FastPathDiagnostics.IsEnabled}" />
+      </StackPanel>
+    </Border>
+    <dock:DockControl Grid.Row="1"
+                      Layout="{Binding Layout}"
+                      Factory="{Binding Factory}"
+                      InitializeLayout="False"
+                      InitializeFactory="False" />
+    <Border Grid.Row="2"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            Padding="8"
+            IsVisible="{CompiledBinding FastPathDiagnostics.IsEnabled}">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <TextBlock Text="FastPath warnings:"
+                   FontWeight="SemiBold" />
+        <TextBlock Text="{CompiledBinding FastPathDiagnostics.StatusText}"
+                   TextTrimming="CharacterEllipsis" />
+        <Button Content="Clear"
+                Command="{CompiledBinding ClearDiagnosticsCommand}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

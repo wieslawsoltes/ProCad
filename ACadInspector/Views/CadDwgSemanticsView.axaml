@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadDwgSemanticsView"
+             x:DataType="vm:CadDwgSemanticsViewModel">
+  <Grid RowDefinitions="Auto,*"
+        Margin="12">
+    <TextBlock Text="{CompiledBinding DwgDocumentTitle}"
+               FontWeight="SemiBold" />
+    <TabControl Grid.Row="1"
+                Margin="0,8,0,0">
+      <TabItem Header="Header">
+        <DataGrid ItemsSource="{CompiledBinding HeaderRowsView}"
+                  ColumnDefinitionsSource="{CompiledBinding HeaderColumnDefinitions}"
+                  SortingModel="{CompiledBinding HeaderSortingModel}"
+                  FilteringModel="{CompiledBinding HeaderFilteringModel}"
+                  SearchModel="{CompiledBinding HeaderSearchModel}"
+                  AutoGenerateColumns="False"
+                  CanUserSortColumns="True"
+                  CanUserReorderColumns="True"
+                  CanUserResizeColumns="True"
+                  GridLinesVisibility="All"
+                  IsReadOnly="True" />
+      </TabItem>
+      <TabItem Header="Classes">
+        <DataGrid ItemsSource="{CompiledBinding ClassRowsView}"
+                  ColumnDefinitionsSource="{CompiledBinding ClassColumnDefinitions}"
+                  SortingModel="{CompiledBinding ClassSortingModel}"
+                  FilteringModel="{CompiledBinding ClassFilteringModel}"
+                  SearchModel="{CompiledBinding ClassSearchModel}"
+                  AutoGenerateColumns="False"
+                  CanUserSortColumns="True"
+                  CanUserReorderColumns="True"
+                  CanUserResizeColumns="True"
+                  GridLinesVisibility="All"
+                  IsReadOnly="True" />
+      </TabItem>
+      <TabItem Header="Summary">
+        <DataGrid ItemsSource="{CompiledBinding SummaryRowsView}"
+                  ColumnDefinitionsSource="{CompiledBinding SummaryColumnDefinitions}"
+                  SortingModel="{CompiledBinding SummarySortingModel}"
+                  FilteringModel="{CompiledBinding SummaryFilteringModel}"
+                  SearchModel="{CompiledBinding SummarySearchModel}"
+                  AutoGenerateColumns="False"
+                  CanUserSortColumns="True"
+                  CanUserReorderColumns="True"
+                  CanUserResizeColumns="True"
+                  GridLinesVisibility="All"
+                  IsReadOnly="True" />
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

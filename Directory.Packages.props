@@ -12,7 +12,32 @@
         <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.11" />
         <PackageVersion Include="Avalonia.Desktop" Version="11.3.11" />
         <PackageVersion Include="Avalonia.Browser" Version="11.3.11" />
+        <PackageVersion Include="Avalonia.Headless" Version="11.3.11" />
+        <PackageVersion Include="Avalonia.Headless.XUnit" Version="11.3.11" />
+        <PackageVersion Include="Avalonia.Skia" Version="11.3.11" />
+        <PackageVersion Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
+        <PackageVersion Include="AvaloniaEdit.TextMate" Version="11.3.0" />
+        <PackageVersion Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
 
-        <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+        <PackageVersion Include="ReactiveUI.Avalonia" Version="11.3.8" />
+        <PackageVersion Include="ReactiveUI.SourceGenerators" Version="2.6.1" />
+
+        <PackageVersion Include="Dock.Avalonia" Version="11.3.9" />
+        <PackageVersion Include="Dock.Avalonia.Themes.Fluent" Version="11.3.9" />
+        <PackageVersion Include="Dock.Model" Version="11.3.9" />
+        <PackageVersion Include="Dock.Model.ReactiveUI" Version="11.3.9" />
+        <PackageVersion Include="ProDataGrid" Version="11.3.9-preview.29" />
+
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.14.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="4.14.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+
+        <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageVersion Include="xunit" Version="2.9.3" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
     </ItemGroup>
 </Project>

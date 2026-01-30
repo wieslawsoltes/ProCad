@@ -1,0 +1,166 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadCompareView"
+             x:DataType="vm:CadCompareViewModel">
+  <Grid RowDefinitions="Auto,Auto,Auto,*"
+        ColumnDefinitions="*,*"
+        RowSpacing="12"
+        ColumnSpacing="12"
+        Margin="16">
+    <Grid Grid.ColumnSpan="2"
+          ColumnDefinitions="*,Auto">
+      <TextBlock Text="Compare Documents"
+                 FontSize="20"
+                 FontWeight="SemiBold" />
+      <Button Grid.Column="1"
+              Content="Refresh"
+              Command="{CompiledBinding RefreshCommand}" />
+    </Grid>
+
+    <TextBlock Grid.Row="1"
+               Grid.ColumnSpan="2"
+               Text="{CompiledBinding StatusMessage}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+
+    <Border Grid.Row="2"
+            BorderThickness="1"
+            CornerRadius="8"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            Padding="12">
+      <StackPanel Spacing="6">
+        <TextBlock Text="{CompiledBinding Left.Label}"
+                   FontWeight="SemiBold" />
+        <StackPanel Orientation="Horizontal"
+                    Spacing="6">
+          <Button Content="Load"
+                  Command="{CompiledBinding LoadLeftCommand}" />
+          <Button Content="Use Active"
+                  Command="{CompiledBinding UseActiveAsLeftCommand}" />
+        </StackPanel>
+        <TextBlock Text="{CompiledBinding Left.DisplayName}"
+                   FontWeight="SemiBold" />
+        <TextBlock Text="{CompiledBinding Left.FormatText}" />
+        <TextBlock Text="{CompiledBinding Left.PathText}"
+                   TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Grid.Column="1"
+            BorderThickness="1"
+            CornerRadius="8"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            Padding="12">
+      <StackPanel Spacing="6">
+        <TextBlock Text="{CompiledBinding Right.Label}"
+                   FontWeight="SemiBold" />
+        <StackPanel Orientation="Horizontal"
+                    Spacing="6">
+          <Button Content="Load"
+                  Command="{CompiledBinding LoadRightCommand}" />
+          <Button Content="Use Active"
+                  Command="{CompiledBinding UseActiveAsRightCommand}" />
+        </StackPanel>
+        <TextBlock Text="{CompiledBinding Right.DisplayName}"
+                   FontWeight="SemiBold" />
+        <TextBlock Text="{CompiledBinding Right.FormatText}" />
+        <TextBlock Text="{CompiledBinding Right.PathText}"
+                   TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="3"
+          Grid.ColumnSpan="2"
+          RowDefinitions="Auto,Auto,*"
+          ColumnDefinitions="*,*"
+          RowSpacing="8"
+          ColumnSpacing="12">
+      <TextBlock Grid.ColumnSpan="2"
+                 Text="Diff Summary"
+                 FontWeight="SemiBold" />
+      <DataGrid Grid.Row="1"
+                Grid.ColumnSpan="2"
+                ItemsSource="{CompiledBinding SummaryView}"
+                ColumnDefinitionsSource="{CompiledBinding SummaryColumnDefinitions}"
+                SortingModel="{CompiledBinding SummarySortingModel}"
+                FilteringModel="{CompiledBinding SummaryFilteringModel}"
+                SearchModel="{CompiledBinding SummarySearchModel}"
+                AutoGenerateColumns="False"
+                CanUserSortColumns="True"
+                CanUserReorderColumns="True"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="All"
+                IsReadOnly="True" />
+
+      <TabControl Grid.Row="2"
+                  Grid.ColumnSpan="2">
+        <TabItem Header="Object Model">
+          <Grid RowDefinitions="Auto,*"
+                ColumnDefinitions="*,*"
+                RowSpacing="8"
+                ColumnSpacing="12">
+            <TextBlock Text="Object Changes"
+                       FontWeight="SemiBold" />
+            <TextBlock Grid.Column="1"
+                       Text="{CompiledBinding SelectedDiffTitle}"
+                       FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis" />
+
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{CompiledBinding ObjectDiffsView}"
+                      ColumnDefinitionsSource="{CompiledBinding ObjectDiffColumnDefinitions}"
+                      SortingModel="{CompiledBinding ObjectSortingModel}"
+                      FilteringModel="{CompiledBinding ObjectFilteringModel}"
+                      SearchModel="{CompiledBinding ObjectSearchModel}"
+                      SelectedItem="{CompiledBinding SelectedObjectDiff}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      CanUserReorderColumns="True"
+                      CanUserResizeColumns="True"
+                      GridLinesVisibility="All"
+                      IsReadOnly="True" />
+
+            <DataGrid Grid.Row="1"
+                      Grid.Column="1"
+                      ItemsSource="{CompiledBinding PropertyDiffsView}"
+                      ColumnDefinitionsSource="{CompiledBinding PropertyDiffColumnDefinitions}"
+                      SortingModel="{CompiledBinding PropertySortingModel}"
+                      FilteringModel="{CompiledBinding PropertyFilteringModel}"
+                      SearchModel="{CompiledBinding PropertySearchModel}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      CanUserReorderColumns="True"
+                      CanUserResizeColumns="True"
+                      GridLinesVisibility="All"
+                      IsReadOnly="True" />
+          </Grid>
+        </TabItem>
+        <TabItem Header="DXF Text">
+          <Grid RowDefinitions="Auto,*"
+                RowSpacing="8">
+            <TextBlock Text="{CompiledBinding DxfTextStatusMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{CompiledBinding DxfTextDiffsView}"
+                      ColumnDefinitionsSource="{CompiledBinding DxfTextColumnDefinitions}"
+                      SortingModel="{CompiledBinding DxfTextSortingModel}"
+                      FilteringModel="{CompiledBinding DxfTextFilteringModel}"
+                      SearchModel="{CompiledBinding DxfTextSearchModel}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      CanUserReorderColumns="True"
+                      CanUserResizeColumns="True"
+                      GridLinesVisibility="All"
+                      IsReadOnly="True" />
+          </Grid>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </Grid>
+</UserControl>

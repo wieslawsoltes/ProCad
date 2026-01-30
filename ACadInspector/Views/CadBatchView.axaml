@@ -1,0 +1,152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadBatchView"
+             x:DataType="vm:CadBatchViewModel">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+        RowSpacing="8"
+        Margin="16">
+    <TextBlock Text="Batch Processing"
+               FontSize="20"
+               FontWeight="SemiBold" />
+
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                Spacing="8">
+      <Button Content="Add Files"
+              Command="{CompiledBinding AddFilesCommand}" />
+      <Button Content="Add Folder"
+              Command="{CompiledBinding AddFolderCommand}" />
+      <Button Content="Start"
+              Command="{CompiledBinding StartCommand}" />
+      <Button Content="Cancel"
+              Command="{CompiledBinding CancelCommand}" />
+      <Button Content="Remove"
+              Command="{CompiledBinding RemoveSelectedCommand}" />
+      <Button Content="Clear"
+              Command="{CompiledBinding ClearCommand}" />
+    </StackPanel>
+
+    <Grid Grid.Row="2"
+          ColumnDefinitions="Auto,*,Auto"
+          ColumnSpacing="8">
+      <TextBlock Text="Progress"
+                 VerticalAlignment="Center" />
+      <ProgressBar Grid.Column="1"
+                   Minimum="0"
+                   Maximum="1"
+                   Value="{CompiledBinding ProgressValue}"
+                   Height="6" />
+      <TextBlock Grid.Column="2"
+                 Text="{CompiledBinding ProgressText}"
+                 VerticalAlignment="Center" />
+    </Grid>
+
+    <Grid Grid.Row="3"
+          ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8">
+      <TextBlock Text="Query"
+                 VerticalAlignment="Center" />
+      <TextBox Grid.Column="1"
+               Text="{CompiledBinding QueryText, Mode=TwoWay}"
+               Watermark="type:Line layer:0 name:MyBlock"
+               VerticalContentAlignment="Center" />
+      <Button Grid.Column="2"
+              Content="Search"
+              Command="{CompiledBinding RunSearchCommand}" />
+      <Button Grid.Column="3"
+              Content="Clear Results"
+              Command="{CompiledBinding ClearResultsCommand}" />
+      <Button Grid.Column="4"
+              Content="Export CSV"
+              Command="{CompiledBinding ExportCsvCommand}" />
+      <Button Grid.Column="5"
+              Content="Export JSON"
+              Command="{CompiledBinding ExportJsonCommand}" />
+    </Grid>
+
+    <Grid Grid.Row="4"
+          ColumnDefinitions="Auto,*,Auto,Auto"
+          ColumnSpacing="8">
+      <TextBlock Text="Script"
+                 VerticalAlignment="Center" />
+      <TextBlock Grid.Column="1"
+                 Text="Uses the script from the Scripting tool."
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+      <Button Grid.Column="2"
+              Content="Run Script"
+              Command="{CompiledBinding RunScriptCommand}" />
+      <Button Grid.Column="3"
+              Content="Clear Script Results"
+              Command="{CompiledBinding ClearScriptResultsCommand}" />
+    </Grid>
+
+    <TabControl Grid.Row="5">
+      <TabItem Header="Queue">
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="8">
+          <TextBlock Text="{CompiledBinding StatusMessage}"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding ItemsView}"
+                    ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
+                    SortingModel="{CompiledBinding SortingModel}"
+                    FilteringModel="{CompiledBinding FilteringModel}"
+                    SearchModel="{CompiledBinding SearchModel}"
+                    SelectedItem="{CompiledBinding SelectedItem}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
+      </TabItem>
+      <TabItem Header="Results">
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="8">
+          <TextBlock Text="{CompiledBinding ResultsStatusMessage}"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding ResultsView}"
+                    ColumnDefinitionsSource="{CompiledBinding ResultColumnDefinitions}"
+                    SortingModel="{CompiledBinding ResultSortingModel}"
+                    FilteringModel="{CompiledBinding ResultFilteringModel}"
+                    SearchModel="{CompiledBinding ResultSearchModel}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
+      </TabItem>
+      <TabItem Header="Script Results">
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="8">
+          <TextBlock Text="{CompiledBinding ScriptResultsStatusMessage}"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource ThemeForegroundLowBrush}" />
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding ScriptResultsView}"
+                    ColumnDefinitionsSource="{CompiledBinding ScriptResultColumnDefinitions}"
+                    SortingModel="{CompiledBinding ScriptResultSortingModel}"
+                    FilteringModel="{CompiledBinding ScriptResultFilteringModel}"
+                    SearchModel="{CompiledBinding ScriptResultSearchModel}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

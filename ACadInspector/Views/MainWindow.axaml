@@ -7,6 +7,11 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="ACadInspector.Views.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
-        Title="ACadInspector">
+        Title="ACadInspector"
+        Width="1280"
+        Height="800"
+        MinWidth="960"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
         <views:MainView />
 </Window>
