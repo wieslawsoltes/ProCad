@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using System.Numerics;
 using ACadSharp.Entities;
+using ACadSharp.Extensions;
 using CSMath;
 
 namespace ACadInspector.Rendering;
@@ -20,10 +20,26 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
         var pattern = context.ResolveLinePattern(entity);
 
         var points = context.GeometrySampler.SamplePolyline(polyline, context.Settings.ResolvePolylineArcPrecision());
-        if (polyline.IsClosed && context.Document.Header.FillMode)
+        if (context.Document.Header.FillMode)
         {
-            AddSolidFill(builder, points, transform, color);
+            WidePolylineTessellator.TryAddWidePolylineFill(
+                builder,
+                polyline,
+                transform,
+                color,
+                context.Settings.ResolvePolylineArcPrecision());
         }
+
+        if (!pattern.IsContinuous && ShouldRestartLinePattern(polyline))
+        {
+            foreach (var segment in polyline.Explode())
+            {
+                context.Dispatcher.Append(segment, transform, context);
+            }
+
+            return;
+        }
+
         RenderPrimitiveBuilder.AddSampled(
             builder,
             points,
@@ -38,51 +54,14 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
             context.Settings);
     }
 
-    private static void AddSolidFill(
-        RenderLayerBuilder builder,
-        IReadOnlyList<XYZ> points,
-        Transform transform,
-        RenderColor color)
+    private static bool ShouldRestartLinePattern(IPolyline polyline)
     {
-        if (points.Count < 3)
+        return polyline switch
         {
-            return;
-        }
-
-        var fillPoints = new List<Vector2>(points.Count);
-        foreach (var point in points)
-        {
-            fillPoints.Add(RenderTransformUtils.Apply(transform, point));
-        }
-
-        TrimDuplicateEnd(fillPoints);
-        if (fillPoints.Count < 3)
-        {
-            return;
-        }
-
-        builder.Add(new RenderFill(fillPoints, color));
-    }
-
-    private static void TrimDuplicateEnd(List<Vector2> points)
-    {
-        if (points.Count < 2)
-        {
-            return;
-        }
-
-        var first = points[0];
-        for (var i = points.Count - 1; i > 0; i--)
-        {
-            var delta = points[i] - first;
-            if (delta.LengthSquared() <= 0.0001f * 0.0001f)
-            {
-                points.RemoveAt(i);
-            }
-            else
-            {
-                break;
-            }
-        }
+            LwPolyline lw => !lw.Flags.HasFlag(LwPolylineFlags.Plinegen),
+            Polyline<Vertex2D> poly2d => !poly2d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern),
+            Polyline<Vertex3D> poly3d => !poly3d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern),
+            _ => true
+        };
     }
 }

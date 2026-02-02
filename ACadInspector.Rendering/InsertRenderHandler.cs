@@ -31,6 +31,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
         }
 
         var insertTransform = insert.GetTransform();
+        insertTransform = ApplyBlockBasePoint(insert, insertTransform);
         var baseTransform = RenderTransformUtils.Combine(transform, insertTransform);
 
         var rowCount = insert.RowCount < 1 ? 1 : insert.RowCount;
@@ -52,6 +53,19 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
                 AppendBlockInstance(insert, combined, context);
             }
         }
+    }
+
+    private static Transform ApplyBlockBasePoint(Insert insert, Transform transform)
+    {
+        var basePoint = insert.Block?.BlockEntity?.BasePoint ?? XYZ.Zero;
+        if (basePoint.Equals(XYZ.Zero))
+        {
+            return transform;
+        }
+
+        var offset = new XYZ(-basePoint.X, -basePoint.Y, -basePoint.Z);
+        var baseTransform = new Transform(Matrix4.CreateTranslation(offset));
+        return RenderTransformUtils.Combine(transform, baseTransform);
     }
 
     private void AppendBlockInstance(Insert insert, Transform transform, RenderBuildContext context)

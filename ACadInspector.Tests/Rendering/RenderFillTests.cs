@@ -29,7 +29,7 @@ public sealed class RenderFillTests
     }
 
     [Fact]
-    public void BuildScene_AddsFillForClosedPolyline()
+    public void BuildScene_DoesNotAddFillForClosedPolyline()
     {
         var document = new ACadSharp.CadDocument();
         var polyline = new LwPolyline(new[]
@@ -47,7 +47,50 @@ public sealed class RenderFillTests
         var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
         var fills = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderFill>().ToArray();
 
-        Assert.True(fills.Length > 0);
+        Assert.Empty(fills);
+    }
+
+    [Fact]
+    public void BuildScene_AddsFillForWidePolyline()
+    {
+        var document = new ACadSharp.CadDocument();
+        var polyline = new LwPolyline(new[]
+        {
+            new XY(0, 0),
+            new XY(4, 0),
+            new XY(4, 3)
+        })
+        {
+            ConstantWidth = 0.5
+        };
+        document.Entities.Add(polyline);
+
+        var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
+        var fills = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderFill>().ToArray();
+
+        Assert.NotEmpty(fills);
+    }
+
+    [Fact]
+    public void BuildScene_DoesNotAddFillForWidePolylineWhenFillModeDisabled()
+    {
+        var document = new ACadSharp.CadDocument();
+        document.Header.FillMode = false;
+        var polyline = new LwPolyline(new[]
+        {
+            new XY(0, 0),
+            new XY(4, 0),
+            new XY(4, 3)
+        })
+        {
+            ConstantWidth = 0.5
+        };
+        document.Entities.Add(polyline);
+
+        var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
+        var fills = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderFill>().ToArray();
+
+        Assert.Empty(fills);
     }
 
     [Fact]
