@@ -1,18 +1,21 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
+using Avalonia.Rendering;
+using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ACadInspector.Rendering;
+using SkiaSharp;
 using AvaloniaVector = Avalonia.Vector;
 
 namespace ACadInspector.Controls;
@@ -65,21 +68,21 @@ public sealed class CadRenderControl : Control
     private double _baseScale = 1.0;
     private Matrix3x2 _viewTransform = Matrix3x2.Identity;
     private double _cachedZoom = 1.0;
-    private readonly Dictionary<PenKey, Pen> _penCache = new();
-    private readonly Dictionary<RenderColor, SolidColorBrush> _brushCache = new();
-    private readonly Dictionary<TypefaceKey, Typeface> _typefaceCache = new();
-    private readonly ConditionalWeakTable<RenderPolyline, StreamGeometry> _polylineGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderFill, StreamGeometry> _fillGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderTriangle, StreamGeometry> _triangleGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderArc, StreamGeometry> _arcGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderClipGroup, StreamGeometry> _clipGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderHatchFill, StreamGeometry> _hatchFillGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderHatchPattern, StreamGeometry> _hatchPatternGeometryCache = new();
-    private readonly ConditionalWeakTable<RenderHatchPattern, StreamGeometry> _hatchPatternStrokeCache = new();
-    private readonly ConditionalWeakTable<RenderHatchFill, IBrush> _hatchBrushCache = new();
-    private readonly ConditionalWeakTable<RenderText, FormattedText> _textCache = new();
+    private readonly Dictionary<PenKey, SKPaint> _strokePaintCache = new();
+    private readonly Dictionary<RenderColor, SKPaint> _fillPaintCache = new();
+    private readonly Dictionary<TypefaceKey, SKTypeface> _typefaceCache = new();
+    private readonly ConditionalWeakTable<RenderPolyline, SKPath> _polylineGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderFill, SKPath> _fillGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderTriangle, SKPath> _triangleGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderArc, SKPath> _arcGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderClipGroup, SKPath> _clipGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderHatchFill, SKPath> _hatchFillGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderHatchPattern, SKPath> _hatchPatternGeometryCache = new();
+    private readonly ConditionalWeakTable<RenderHatchPattern, SKPath> _hatchPatternStrokeCache = new();
+    private readonly ConditionalWeakTable<RenderHatchFill, SKPaint> _hatchPaintCache = new();
+    private readonly ConditionalWeakTable<RenderText, SKTextBlob> _textCache = new();
     private readonly ConditionalWeakTable<RenderLayer, LayerDrawCache> _layerDrawCache = new();
-    private readonly Dictionary<string, Bitmap?> _imageCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SKBitmap?> _imageCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly RenderDepthBuffer _hiddenLineDepth = new();
     private readonly List<RenderDepthBuffer> _hiddenLineClipPool = new();
     private readonly Dictionary<RenderClipGroup, RenderDepthBuffer> _hiddenLineClipDepths = new();
@@ -93,6 +96,7 @@ public sealed class CadRenderControl : Control
     private DateTime _interactionUntilUtc;
     private DispatcherTimer? _interactionTimer;
     private static readonly TimeSpan InteractionHold = TimeSpan.FromMilliseconds(150);
+    private RenderState _renderState = RenderState.Empty;
 
     public RenderScene? Scene
     {
@@ -175,58 +179,72 @@ public sealed class CadRenderControl : Control
     public CadRenderControl()
     {
         ClipToBounds = true;
+        UpdateRenderState();
     }
 
     public override void Render(DrawingContext context)
     {
         var size = Bounds.Size;
-        var background = Scene?.Background ?? RenderColor.DefaultBackground;
-        context.FillRectangle(GetSolidBrush(background), new Rect(size));
-
-        if (Scene is null || size.Width <= 0 || size.Height <= 0 || Scene.Bounds.IsEmpty)
+        if (size.Width <= 0 || size.Height <= 0)
         {
             return;
         }
 
-        UpdateViewTransform();
+        context.Custom(new SkiaRenderOp(this, size));
+    }
+
+    private void RenderSkia(SKCanvas canvas, Size size)
+    {
+        var state = Volatile.Read(ref _renderState);
+        var scene = state.Scene;
+        var background = scene?.Background ?? RenderColor.DefaultBackground;
+        canvas.Clear(ToSkiaColor(background));
+
+        if (scene is null || scene.Bounds.IsEmpty)
+        {
+            return;
+        }
+
         var isInteractive = _isInteracting;
-        var renderStyle = isInteractive ? RenderVisualStyle.Wireframe : Scene.VisualStyle;
-        var matrix = ToAvaloniaMatrix(_viewTransform);
-        var hasViewport = TryGetWorldViewport(out var viewport);
+        var renderStyle = isInteractive ? RenderVisualStyle.Wireframe : scene.VisualStyle;
+        var hasViewport = TryGetWorldViewport(size, state.ViewTransform, out var viewport);
         if (hasViewport)
         {
-            var padding = GetViewportPadding();
+            var padding = GetViewportPadding(state);
             viewport = ExpandBounds(viewport, padding);
         }
 
-        using (context.PushTransform(matrix))
+        var matrix = ToSkiaMatrix(state.ViewTransform);
+        canvas.Save();
+        canvas.Concat(ref matrix);
+
+        if (state.ShowGrid && !isInteractive)
         {
-            if (ShowGrid && !isInteractive)
-            {
-                DrawGrid(context);
-            }
-
-            if (ShowAxes && !isInteractive)
-            {
-                DrawAxes(context);
-            }
-
-            HiddenLineContext? hiddenLine = null;
-            if (!isInteractive && renderStyle == RenderVisualStyle.HiddenLine)
-            {
-                hiddenLine = ResolveHiddenLineContext(Scene, size);
-            }
-
-            foreach (var layer in Scene.Layers)
-            {
-                if (!IsLayerVisible(layer))
-                {
-                    continue;
-                }
-
-                DrawLayer(context, layer, renderStyle, hiddenLine, hasViewport, viewport, isInteractive);
-            }
+            DrawGrid(canvas, size, state);
         }
+
+        if (state.ShowAxes && !isInteractive)
+        {
+            DrawAxes(canvas, size, state);
+        }
+
+        HiddenLineContext? hiddenLine = null;
+        if (!isInteractive && renderStyle == RenderVisualStyle.HiddenLine)
+        {
+            hiddenLine = ResolveHiddenLineContext(scene, size, state.ViewTransform);
+        }
+
+        foreach (var layer in scene.Layers)
+        {
+            if (!IsLayerVisible(layer, state.LayerVisibilityOverrides))
+            {
+                continue;
+            }
+
+            DrawLayer(canvas, layer, renderStyle, hiddenLine, hasViewport, viewport, isInteractive, state);
+        }
+
+        canvas.Restore();
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -249,6 +267,7 @@ public sealed class CadRenderControl : Control
             {
                 FitToScene();
             }
+            UpdateRenderState();
             InvalidateVisual();
             return;
         }
@@ -269,8 +288,18 @@ public sealed class CadRenderControl : Control
             change.Property == PanProperty ||
             change.Property == ShowGridProperty ||
             change.Property == ShowAxesProperty ||
-            change.Property == LayerVisibilityOverridesProperty)
+            change.Property == LayerVisibilityOverridesProperty ||
+            change.Property == MinPixelThicknessProperty)
         {
+            if (change.Property == ZoomProperty || change.Property == PanProperty)
+            {
+                UpdateViewTransform();
+            }
+            if (change.Property == MinPixelThicknessProperty)
+            {
+                _strokePaintCache.Clear();
+            }
+            UpdateRenderState();
             InvalidateVisual();
         }
     }
@@ -459,7 +488,64 @@ public sealed class CadRenderControl : Control
         if (Math.Abs(_cachedZoom - Zoom) > 0.0001)
         {
             _cachedZoom = Zoom;
-            _penCache.Clear();
+            _strokePaintCache.Clear();
+        }
+
+        UpdateRenderState();
+    }
+
+    private void UpdateRenderState()
+    {
+        _renderState = new RenderState(
+            Scene,
+            ShowGrid,
+            ShowAxes,
+            LayerVisibilityOverrides,
+            Zoom,
+            MinPixelThickness,
+            _baseScale,
+            _viewTransform);
+    }
+
+    private sealed class RenderState
+    {
+        public static readonly RenderState Empty = new(
+            scene: null,
+            showGrid: true,
+            showAxes: true,
+            layerVisibilityOverrides: null,
+            zoom: 1.0,
+            minPixelThickness: 0.6,
+            baseScale: 1.0,
+            viewTransform: Matrix3x2.Identity);
+
+        public RenderScene? Scene { get; }
+        public bool ShowGrid { get; }
+        public bool ShowAxes { get; }
+        public IReadOnlyDictionary<string, bool>? LayerVisibilityOverrides { get; }
+        public double Zoom { get; }
+        public double MinPixelThickness { get; }
+        public double BaseScale { get; }
+        public Matrix3x2 ViewTransform { get; }
+
+        public RenderState(
+            RenderScene? scene,
+            bool showGrid,
+            bool showAxes,
+            IReadOnlyDictionary<string, bool>? layerVisibilityOverrides,
+            double zoom,
+            double minPixelThickness,
+            double baseScale,
+            Matrix3x2 viewTransform)
+        {
+            Scene = scene;
+            ShowGrid = showGrid;
+            ShowAxes = showAxes;
+            LayerVisibilityOverrides = layerVisibilityOverrides;
+            Zoom = zoom;
+            MinPixelThickness = minPixelThickness;
+            BaseScale = baseScale;
+            ViewTransform = viewTransform;
         }
     }
 
@@ -487,13 +573,14 @@ public sealed class CadRenderControl : Control
     }
 
     private void DrawLayer(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderLayer layer,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
         bool hasViewport,
         RenderBounds viewport,
-        bool isInteractive)
+        bool isInteractive,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(layer.Bounds, viewport))
         {
@@ -504,7 +591,7 @@ public sealed class CadRenderControl : Control
         {
             foreach (var primitive in layer.Primitives)
             {
-                DrawPrimitive(context, primitive, style, hiddenLine, hasViewport, viewport, isInteractive);
+                DrawPrimitive(canvas, primitive, style, hiddenLine, hasViewport, viewport, isInteractive, state);
             }
 
             return;
@@ -515,38 +602,37 @@ public sealed class CadRenderControl : Control
         {
             if (op.LineBatch is not null)
             {
-                DrawLineBatch(context, op.LineBatch, hasViewport, viewport);
+                DrawLineBatch(canvas, op.LineBatch, hasViewport, viewport, state);
                 continue;
             }
 
             if (op.PolylineBatch is not null)
             {
-                DrawPolylineBatch(context, op.PolylineBatch, hasViewport, viewport);
+                DrawPolylineBatch(canvas, op.PolylineBatch, hasViewport, viewport, state);
                 continue;
             }
 
             if (op.ArcBatch is not null)
             {
-                DrawArcBatch(context, op.ArcBatch, hasViewport, viewport);
+                DrawArcBatch(canvas, op.ArcBatch, hasViewport, viewport, state);
                 continue;
             }
 
             if (op.CircleBatch is not null)
             {
-                DrawCircleBatch(context, op.CircleBatch, hasViewport, viewport);
+                DrawCircleBatch(canvas, op.CircleBatch, hasViewport, viewport, state);
                 continue;
             }
 
             if (op.Primitive is not null)
             {
-                DrawPrimitive(context, op.Primitive, style, hiddenLine, hasViewport, viewport, isInteractive);
+                DrawPrimitive(canvas, op.Primitive, style, hiddenLine, hasViewport, viewport, isInteractive, state);
             }
         }
     }
 
-    private bool IsLayerVisible(RenderLayer layer)
+    private static bool IsLayerVisible(RenderLayer layer, IReadOnlyDictionary<string, bool>? overrides)
     {
-        var overrides = LayerVisibilityOverrides;
         if (overrides is not null && overrides.TryGetValue(layer.Name, out var isVisible))
         {
             return isVisible;
@@ -556,13 +642,14 @@ public sealed class CadRenderControl : Control
     }
 
     private void DrawPrimitive(
-        DrawingContext context,
+        SKCanvas canvas,
         IRenderPrimitive primitive,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
         bool hasViewport,
         RenderBounds viewport,
-        bool isInteractive)
+        bool isInteractive,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(primitive.Bounds, viewport))
         {
@@ -571,7 +658,7 @@ public sealed class CadRenderControl : Control
 
         if (primitive is RenderClipGroup clipGroup)
         {
-            DrawClipGroup(context, clipGroup, style, hiddenLine, hasViewport, viewport, isInteractive);
+            DrawClipGroup(canvas, clipGroup, style, hiddenLine, hasViewport, viewport, isInteractive, state);
             return;
         }
 
@@ -584,76 +671,77 @@ public sealed class CadRenderControl : Control
         {
             case RenderLine line:
                 {
-                    var pen = GetPen(line.Color, line.Thickness, line.LineCap, line.LineJoin);
+                    var paint = GetStrokePaint(line.Color, line.Thickness, line.LineCap, line.LineJoin, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
-                        DrawHiddenLine(context, pen, line, hiddenLine.Value);
+                        DrawHiddenLine(canvas, paint, line, hiddenLine.Value);
                     }
                     else
                     {
-                        context.DrawLine(pen, ToPoint(line.Start), ToPoint(line.End));
+                        canvas.DrawLine(line.Start.X, line.Start.Y, line.End.X, line.End.Y, paint);
                     }
                     break;
                 }
             case RenderPolyline polyline:
                 {
-                    var pen = GetPen(polyline.Color, polyline.Thickness, polyline.LineCap, polyline.LineJoin);
+                    var paint = GetStrokePaint(polyline.Color, polyline.Thickness, polyline.LineCap, polyline.LineJoin, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
-                        DrawHiddenPolyline(context, pen, polyline, hiddenLine.Value);
+                        DrawHiddenPolyline(canvas, paint, polyline, hiddenLine.Value);
                     }
                     else
                     {
-                        DrawPolyline(context, pen, polyline);
+                        DrawPolyline(canvas, paint, polyline);
                     }
                     break;
                 }
             case RenderFill fill:
-                DrawFill(context, fill);
+                DrawFill(canvas, fill);
                 break;
             case RenderTriangle triangle:
-                DrawTriangle(context, triangle);
+                DrawTriangle(canvas, triangle);
                 break;
             case RenderHatchFill hatchFill:
-                DrawHatchFill(context, hatchFill);
+                DrawHatchFill(canvas, hatchFill);
                 break;
             case RenderHatchPattern hatchPattern:
                 {
-                    DrawHatchPattern(context, hatchPattern);
+                    DrawHatchPattern(canvas, hatchPattern, state);
                     break;
                 }
             case RenderImage image:
-                DrawImage(context, image);
+                DrawImage(canvas, image, state);
                 break;
             case RenderCircle circle:
                 {
-                    var pen = GetPen(circle.Color, circle.Thickness, circle.LineCap, circle.LineJoin);
-                    context.DrawEllipse(null, pen, ToPoint(circle.Center), circle.Radius, circle.Radius);
+                    var paint = GetStrokePaint(circle.Color, circle.Thickness, circle.LineCap, circle.LineJoin, state);
+                    canvas.DrawCircle(circle.Center.X, circle.Center.Y, circle.Radius, paint);
                     break;
                 }
             case RenderArc arc:
                 {
-                    var pen = GetPen(arc.Color, arc.Thickness, arc.LineCap, arc.LineJoin);
-                    DrawArc(context, pen, arc);
+                    var paint = GetStrokePaint(arc.Color, arc.Thickness, arc.LineCap, arc.LineJoin, state);
+                    DrawArc(canvas, paint, arc);
                     break;
                 }
             case RenderPoint point:
                 {
-                    var pen = GetPen(point.Color, point.Thickness, point.LineCap, point.LineJoin);
-                    DrawPoint(context, pen, point);
+                    var paint = GetStrokePaint(point.Color, point.Thickness, point.LineCap, point.LineJoin, state);
+                    DrawPoint(canvas, paint, point, state);
                     break;
                 }
             case RenderText text:
-                DrawText(context, text);
+                DrawText(canvas, text);
                 break;
         }
     }
 
     private void DrawLineBatch(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderLineBatch batch,
         bool hasViewport,
-        RenderBounds viewport)
+        RenderBounds viewport,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(batch.Bounds, viewport))
         {
@@ -661,15 +749,16 @@ public sealed class CadRenderControl : Control
         }
 
         var key = batch.Key;
-        var pen = GetPen(key.Color, key.Thickness, key.LineCap, key.LineJoin);
-        context.DrawGeometry(null, pen, batch.Geometry);
+        var paint = GetStrokePaint(key.Color, key.Thickness, key.LineCap, key.LineJoin, state);
+        canvas.DrawPath(batch.Geometry, paint);
     }
 
     private void DrawPolylineBatch(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderPolylineBatch batch,
         bool hasViewport,
-        RenderBounds viewport)
+        RenderBounds viewport,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(batch.Bounds, viewport))
         {
@@ -677,15 +766,16 @@ public sealed class CadRenderControl : Control
         }
 
         var key = batch.Key;
-        var pen = GetPen(key.Color, key.Thickness, key.LineCap, key.LineJoin);
-        context.DrawGeometry(null, pen, batch.Geometry);
+        var paint = GetStrokePaint(key.Color, key.Thickness, key.LineCap, key.LineJoin, state);
+        canvas.DrawPath(batch.Geometry, paint);
     }
 
     private void DrawArcBatch(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderArcBatch batch,
         bool hasViewport,
-        RenderBounds viewport)
+        RenderBounds viewport,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(batch.Bounds, viewport))
         {
@@ -693,15 +783,16 @@ public sealed class CadRenderControl : Control
         }
 
         var key = batch.Key;
-        var pen = GetPen(key.Color, key.Thickness, key.LineCap, key.LineJoin);
-        context.DrawGeometry(null, pen, batch.Geometry);
+        var paint = GetStrokePaint(key.Color, key.Thickness, key.LineCap, key.LineJoin, state);
+        canvas.DrawPath(batch.Geometry, paint);
     }
 
     private void DrawCircleBatch(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderCircleBatch batch,
         bool hasViewport,
-        RenderBounds viewport)
+        RenderBounds viewport,
+        RenderState state)
     {
         if (hasViewport && !BoundsIntersects(batch.Bounds, viewport))
         {
@@ -709,18 +800,19 @@ public sealed class CadRenderControl : Control
         }
 
         var key = batch.Key;
-        var pen = GetPen(key.Color, key.Thickness, key.LineCap, key.LineJoin);
-        context.DrawGeometry(null, pen, batch.Geometry);
+        var paint = GetStrokePaint(key.Color, key.Thickness, key.LineCap, key.LineJoin, state);
+        canvas.DrawPath(batch.Geometry, paint);
     }
 
     private void DrawClipGroup(
-        DrawingContext context,
+        SKCanvas canvas,
         RenderClipGroup clipGroup,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
         bool hasViewport,
         RenderBounds viewport,
-        bool isInteractive)
+        bool isInteractive,
+        RenderState state)
     {
         HiddenLineContext? clipHidden = hiddenLine;
         if (style == RenderVisualStyle.HiddenLine &&
@@ -734,7 +826,7 @@ public sealed class CadRenderControl : Control
         {
             foreach (var child in clipGroup.Primitives)
             {
-                DrawPrimitive(context, child, style, clipHidden, hasViewport, viewport, isInteractive);
+                DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
             }
             return;
         }
@@ -744,17 +836,18 @@ public sealed class CadRenderControl : Control
         {
             foreach (var child in clipGroup.Primitives)
             {
-                DrawPrimitive(context, child, style, clipHidden, hasViewport, viewport, isInteractive);
+                DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
             }
             return;
         }
-        using (context.PushGeometryClip(geometry))
+
+        canvas.Save();
+        canvas.ClipPath(geometry, SKClipOperation.Intersect, antialias: true);
+        foreach (var child in clipGroup.Primitives)
         {
-            foreach (var child in clipGroup.Primitives)
-            {
-                DrawPrimitive(context, child, style, clipHidden, hasViewport, viewport, isInteractive);
-            }
+            DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
         }
+        canvas.Restore();
     }
 
     private static bool ShouldRenderPrimitive(
@@ -785,14 +878,14 @@ public sealed class CadRenderControl : Control
     }
 
     private void DrawHiddenLine(
-        DrawingContext context,
-        Pen pen,
+        SKCanvas canvas,
+        SKPaint paint,
         RenderLine line,
         HiddenLineContext hidden)
     {
         if (!line.HasDepth)
         {
-            context.DrawLine(pen, ToPoint(line.Start), ToPoint(line.End));
+            canvas.DrawLine(line.Start.X, line.Start.Y, line.End.X, line.End.Y, paint);
             return;
         }
 
@@ -809,19 +902,19 @@ public sealed class CadRenderControl : Control
 
         foreach (var segment in _hiddenLineSegments)
         {
-            context.DrawLine(pen, ToPoint(segment.Start), ToPoint(segment.End));
+            canvas.DrawLine(segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y, paint);
         }
     }
 
     private void DrawHiddenPolyline(
-        DrawingContext context,
-        Pen pen,
+        SKCanvas canvas,
+        SKPaint paint,
         RenderPolyline polyline,
         HiddenLineContext hidden)
     {
         if (!polyline.HasDepths)
         {
-            DrawPolyline(context, pen, polyline);
+            DrawPolyline(canvas, paint, polyline);
             return;
         }
 
@@ -849,12 +942,12 @@ public sealed class CadRenderControl : Control
 
             foreach (var segment in _hiddenLineSegments)
             {
-                context.DrawLine(pen, ToPoint(segment.Start), ToPoint(segment.End));
+                canvas.DrawLine(segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y, paint);
             }
         }
     }
 
-    private HiddenLineContext? BuildHiddenLineContext(RenderScene scene, Size size)
+    private HiddenLineContext? BuildHiddenLineContext(RenderScene scene, Size size, Matrix3x2 viewTransform)
     {
         var width = (int)Math.Ceiling(size.Width);
         var height = (int)Math.Ceiling(size.Height);
@@ -877,7 +970,7 @@ public sealed class CadRenderControl : Control
 
         var hasDepth = RenderHiddenLineUtils.TryBuildDepthBuffer(
             depthPrimitives,
-            _viewTransform,
+            viewTransform,
             _hiddenLineDepth,
             width,
             height);
@@ -894,7 +987,7 @@ public sealed class CadRenderControl : Control
             var buffer = ResolveClipDepthBuffer(clipIndex++);
             var hasClipDepth = RenderHiddenLineUtils.TryBuildDepthBuffer(
                 clipGroup.Primitives,
-                _viewTransform,
+                viewTransform,
                 buffer,
                 width,
                 height,
@@ -913,30 +1006,30 @@ public sealed class CadRenderControl : Control
 
         return new HiddenLineContext(
             _hiddenLineDepth,
-            _viewTransform,
+            viewTransform,
             RenderHiddenLineUtils.DefaultDepthEpsilon,
             _hiddenLineClipDepths);
     }
 
-    private HiddenLineContext? ResolveHiddenLineContext(RenderScene scene, Size size)
+    private HiddenLineContext? ResolveHiddenLineContext(RenderScene scene, Size size, Matrix3x2 viewTransform)
     {
         if (_hiddenLineCacheValid &&
             ReferenceEquals(_hiddenLineCacheScene, scene) &&
             SizeEquals(_hiddenLineCacheSize, size) &&
-            MatrixEquals(_hiddenLineCacheTransform, _viewTransform))
+            MatrixEquals(_hiddenLineCacheTransform, viewTransform))
         {
             return _hiddenLineCache;
         }
 
-        _hiddenLineCache = BuildHiddenLineContext(scene, size);
+        _hiddenLineCache = BuildHiddenLineContext(scene, size, viewTransform);
         _hiddenLineCacheScene = scene;
         _hiddenLineCacheSize = size;
-        _hiddenLineCacheTransform = _viewTransform;
+        _hiddenLineCacheTransform = viewTransform;
         _hiddenLineCacheValid = true;
         return _hiddenLineCache;
     }
 
-    private void DrawPolyline(DrawingContext context, Pen pen, RenderPolyline polyline)
+    private void DrawPolyline(SKCanvas canvas, SKPaint paint, RenderPolyline polyline)
     {
         if (polyline.Points.Count < 2)
         {
@@ -944,10 +1037,10 @@ public sealed class CadRenderControl : Control
         }
 
         var geometry = GetPolylineGeometry(polyline);
-        context.DrawGeometry(null, pen, geometry);
+        canvas.DrawPath(geometry, paint);
     }
 
-    private void DrawFill(DrawingContext context, RenderFill fill)
+    private void DrawFill(SKCanvas canvas, RenderFill fill)
     {
         if (fill.Points.Count < 3)
         {
@@ -955,16 +1048,16 @@ public sealed class CadRenderControl : Control
         }
 
         var geometry = GetFillGeometry(fill);
-        var brush = GetSolidBrush(fill.Color);
-        context.DrawGeometry(brush, null, geometry);
+        var paint = GetFillPaint(fill.Color);
+        canvas.DrawPath(geometry, paint);
     }
 
-    private void DrawTriangle(DrawingContext context, RenderTriangle triangle)
+    private void DrawTriangle(SKCanvas canvas, RenderTriangle triangle)
     {
         var geometry = GetTriangleGeometry(triangle);
         var shaded = ApplyShade(triangle.Color, triangle.Shade);
-        var brush = GetSolidBrush(shaded);
-        context.DrawGeometry(brush, null, geometry);
+        var paint = GetFillPaint(shaded);
+        canvas.DrawPath(geometry, paint);
     }
 
     private static RenderColor ApplyShade(RenderColor color, float shade)
@@ -981,7 +1074,7 @@ public sealed class CadRenderControl : Control
         return new RenderColor(r, g, b, color.A);
     }
 
-    private void DrawHatchFill(DrawingContext context, RenderHatchFill fill)
+    private void DrawHatchFill(SKCanvas canvas, RenderHatchFill fill)
     {
         if (fill.Loops.Count == 0)
         {
@@ -989,16 +1082,16 @@ public sealed class CadRenderControl : Control
         }
 
         var geometry = GetHatchGeometry(fill);
-        var brush = GetHatchBrush(fill);
-        if (brush is null)
+        var paint = GetHatchPaint(fill);
+        if (paint is null)
         {
             return;
         }
 
-        context.DrawGeometry(brush, null, geometry);
+        canvas.DrawPath(geometry, paint);
     }
 
-    private void DrawHatchPattern(DrawingContext context, RenderHatchPattern pattern)
+    private void DrawHatchPattern(SKCanvas canvas, RenderHatchPattern pattern, RenderState state)
     {
         if (pattern.Loops.Count == 0 || pattern.Segments.Count == 0)
         {
@@ -1007,14 +1100,14 @@ public sealed class CadRenderControl : Control
 
         var clipGeometry = GetHatchGeometry(pattern);
         var strokeGeometry = GetHatchPatternStrokeGeometry(pattern);
-        using (context.PushGeometryClip(clipGeometry))
-        {
-            var pen = GetPen(pattern.Color, pattern.Thickness, pattern.LineCap, pattern.LineJoin);
-            context.DrawGeometry(null, pen, strokeGeometry);
-        }
+        canvas.Save();
+        canvas.ClipPath(clipGeometry, SKClipOperation.Intersect, antialias: true);
+        var paint = GetStrokePaint(pattern.Color, pattern.Thickness, pattern.LineCap, pattern.LineJoin, state);
+        canvas.DrawPath(strokeGeometry, paint);
+        canvas.Restore();
     }
 
-    private void DrawImage(DrawingContext context, RenderImage image)
+    private void DrawImage(SKCanvas canvas, RenderImage image, RenderState state)
     {
         if (image.Size.X <= 0 || image.Size.Y <= 0)
         {
@@ -1024,26 +1117,35 @@ public sealed class CadRenderControl : Control
         var bitmap = ResolveBitmap(image.SourcePath);
         if (bitmap is null)
         {
-            DrawImagePlaceholder(context, image);
+            DrawImagePlaceholder(canvas, image, state);
             return;
         }
 
-        var matrix = new Matrix(
-            image.UVector.X,
-            image.UVector.Y,
-            image.VVector.X,
-            image.VVector.Y,
-            image.Origin.X,
-            image.Origin.Y);
-
-        using (context.PushOpacity(Math.Clamp(image.Opacity, 0f, 1f)))
-        using (context.PushTransform(matrix))
+        var alpha = (byte)Math.Clamp((int)Math.Round(255f * Math.Clamp(image.Opacity, 0f, 1f)), 0, 255);
+        using var paint = new SKPaint
         {
-            context.DrawImage(bitmap, new Rect(0, 0, image.Size.X, image.Size.Y));
-        }
+            Color = new SKColor(255, 255, 255, alpha),
+            IsAntialias = true
+        };
+
+        var matrix = new SKMatrix
+        {
+            ScaleX = image.UVector.X,
+            SkewY = image.UVector.Y,
+            SkewX = image.VVector.X,
+            ScaleY = image.VVector.Y,
+            TransX = image.Origin.X,
+            TransY = image.Origin.Y
+        };
+
+        canvas.Save();
+        canvas.Concat(ref matrix);
+        var dest = new SKRect(0, 0, image.Size.X, image.Size.Y);
+        canvas.DrawBitmap(bitmap, dest, paint);
+        canvas.Restore();
     }
 
-    private void DrawImagePlaceholder(DrawingContext context, RenderImage image)
+    private void DrawImagePlaceholder(SKCanvas canvas, RenderImage image, RenderState state)
     {
         var corners = GetImageCorners(image);
         if (corners.Length != 4)
@@ -1051,16 +1153,19 @@ public sealed class CadRenderControl : Control
             return;
         }
 
-        using (context.PushOpacity(Math.Clamp(image.Opacity, 0f, 1f)))
-        {
-            var pen = GetPen(image.Color, 0f, RenderLineCap.Round, RenderLineJoin.Round);
-            context.DrawLine(pen, ToPoint(corners[0]), ToPoint(corners[1]));
-            context.DrawLine(pen, ToPoint(corners[1]), ToPoint(corners[2]));
-            context.DrawLine(pen, ToPoint(corners[2]), ToPoint(corners[3]));
-            context.DrawLine(pen, ToPoint(corners[3]), ToPoint(corners[0]));
-            context.DrawLine(pen, ToPoint(corners[0]), ToPoint(corners[2]));
-            context.DrawLine(pen, ToPoint(corners[1]), ToPoint(corners[3]));
-        }
+        var paint = GetStrokePaint(image.Color, 0f, RenderLineCap.Round, RenderLineJoin.Round, state);
+        var alpha = (byte)Math.Clamp((int)Math.Round(255f * Math.Clamp(image.Opacity, 0f, 1f)), 0, 255);
+        var prevColor = paint.Color;
+        paint.Color = new SKColor(prevColor.Red, prevColor.Green, prevColor.Blue, alpha);
+
+        canvas.DrawLine(corners[0].X, corners[0].Y, corners[1].X, corners[1].Y, paint);
+        canvas.DrawLine(corners[1].X, corners[1].Y, corners[2].X, corners[2].Y, paint);
+        canvas.DrawLine(corners[2].X, corners[2].Y, corners[3].X, corners[3].Y, paint);
+        canvas.DrawLine(corners[3].X, corners[3].Y, corners[0].X, corners[0].Y, paint);
+        canvas.DrawLine(corners[0].X, corners[0].Y, corners[2].X, corners[2].Y, paint);
+        canvas.DrawLine(corners[1].X, corners[1].Y, corners[3].X, corners[3].Y, paint);
+
+        paint.Color = prevColor;
     }
 
     private static Vector2[] GetImageCorners(RenderImage image)
@@ -1077,7 +1182,7 @@ public sealed class CadRenderControl : Control
         };
     }
 
-    private void DrawArc(DrawingContext context, Pen pen, RenderArc arc)
+    private void DrawArc(SKCanvas canvas, SKPaint paint, RenderArc arc)
     {
         if (arc.Radius <= 0f)
         {
@@ -1085,40 +1190,59 @@ public sealed class CadRenderControl : Control
         }
 
         var geometry = GetArcGeometry(arc);
-        context.DrawGeometry(null, pen, geometry);
+        canvas.DrawPath(geometry, paint);
     }
 
-    private void DrawPoint(DrawingContext context, Pen pen, RenderPoint point)
+    private void DrawPoint(SKCanvas canvas, SKPaint paint, RenderPoint point, RenderState state)
     {
-        var scale = (float)(_baseScale * Zoom);
+        var scale = (float)(state.BaseScale * state.Zoom);
         var size = (float)Math.Max(3.0, 6.0 / Math.Max(scale, 0.0001f));
         var center = point.Point;
-        var left = new Point(center.X - size, center.Y);
-        var right = new Point(center.X + size, center.Y);
-        var top = new Point(center.X, center.Y - size);
-        var bottom = new Point(center.X, center.Y + size);
-        context.DrawLine(pen, left, right);
-        context.DrawLine(pen, top, bottom);
+        var leftX = center.X - size;
+        var rightX = center.X + size;
+        var topY = center.Y - size;
+        var bottomY = center.Y + size;
+        canvas.DrawLine(leftX, center.Y, rightX, center.Y, paint);
+        canvas.DrawLine(center.X, topY, center.X, bottomY, paint);
     }
 
-    private void DrawText(DrawingContext context, RenderText text)
+    private void DrawText(SKCanvas canvas, RenderText text)
     {
         if (string.IsNullOrWhiteSpace(text.Text) || text.FontSize <= 0)
         {
             return;
         }
 
-        var formatted = GetFormattedText(text);
-
-        var scaleX = text.WidthFactor * (text.MirrorX ? -1 : 1);
-        var scaleY = text.MirrorY ? 1 : -1;
-        using (context.PushTransform(Matrix.CreateScale(scaleX, scaleY)))
-        using (context.PushTransform(Matrix.CreateSkew(text.ObliqueAngle, 0)))
-        using (context.PushTransform(Matrix.CreateRotation(text.Rotation)))
-        using (context.PushTransform(Matrix.CreateTranslation(text.Anchor.X, text.Anchor.Y)))
+        var paint = GetTextPaint(text);
+        var blob = GetTextBlob(text, paint);
+        if (blob is null)
         {
-            context.DrawText(formatted, new Point(text.Offset.X, text.Offset.Y));
+            return;
         }
+
+        var scaleX = text.WidthFactor * (text.MirrorX ? -1f : 1f);
+        var scaleY = text.MirrorY ? 1f : -1f;
+        var skewX = MathF.Tan(text.ObliqueAngle);
+
+        canvas.Save();
+        canvas.Translate(text.Anchor.X, text.Anchor.Y);
+        if (MathF.Abs(text.Rotation) > 0.0001f)
+        {
+            canvas.RotateRadians(text.Rotation);
+        }
+        if (MathF.Abs(skewX) > 0.0001f)
+        {
+            canvas.Skew(skewX, 0f);
+        }
+        if (MathF.Abs(scaleX - 1f) > 0.0001f || MathF.Abs(scaleY - 1f) > 0.0001f)
+        {
+            canvas.Scale(scaleX, scaleY);
+        }
+
+        var metrics = paint.FontMetrics;
+        var baseline = text.Offset.Y - metrics.Ascent;
+        canvas.DrawText(blob, text.Offset.X, baseline, paint);
+        canvas.Restore();
     }
 
     private LayerDrawCache GetLayerDrawCache(RenderLayer layer)
@@ -1291,17 +1415,13 @@ public sealed class CadRenderControl : Control
 
     private static RenderLineBatch BuildLineBatch(LineBatchKey key, List<RenderLine> lines)
     {
-        var geometry = new StreamGeometry();
+        var geometry = new SKPath();
         var bounds = RenderBounds.Empty;
-        using (var geo = geometry.Open())
+        foreach (var line in lines)
         {
-            foreach (var line in lines)
-            {
-                geo.BeginFigure(ToPoint(line.Start), isFilled: false);
-                geo.LineTo(ToPoint(line.End));
-                geo.EndFigure(isClosed: false);
-                bounds = bounds.Expand(line.Start).Expand(line.End);
-            }
+            geometry.MoveTo(line.Start.X, line.Start.Y);
+            geometry.LineTo(line.End.X, line.End.Y);
+            bounds = bounds.Expand(line.Start).Expand(line.End);
         }
 
         return new RenderLineBatch(key, geometry, bounds);
@@ -1309,28 +1429,28 @@ public sealed class CadRenderControl : Control
 
     private static RenderPolylineBatch BuildPolylineBatch(LineBatchKey key, List<RenderPolyline> polylines)
     {
-        var geometry = new StreamGeometry();
+        var geometry = new SKPath();
         var bounds = RenderBounds.Empty;
-        using (var geo = geometry.Open())
+        foreach (var polyline in polylines)
         {
-            foreach (var polyline in polylines)
+            if (polyline.Points.Count < 2)
             {
-                if (polyline.Points.Count < 2)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                geo.BeginFigure(ToPoint(polyline.Points[0]), isFilled: false);
-                for (var i = 1; i < polyline.Points.Count; i++)
-                {
-                    geo.LineTo(ToPoint(polyline.Points[i]));
-                }
-                geo.EndFigure(polyline.IsClosed);
+            geometry.MoveTo(polyline.Points[0].X, polyline.Points[0].Y);
+            for (var i = 1; i < polyline.Points.Count; i++)
+            {
+                geometry.LineTo(polyline.Points[i].X, polyline.Points[i].Y);
+            }
+            if (polyline.IsClosed)
+            {
+                geometry.Close();
+            }
 
-                foreach (var point in polyline.Points)
-                {
-                    bounds = bounds.Expand(point);
-                }
+            foreach (var point in polyline.Points)
+            {
+                bounds = bounds.Expand(point);
             }
         }
 
@@ -1339,16 +1459,13 @@ public sealed class CadRenderControl : Control
 
     private static RenderArcBatch BuildArcBatch(LineBatchKey key, List<RenderArc> arcs)
     {
-        var geometry = new StreamGeometry();
+        var geometry = new SKPath();
         var bounds = RenderBounds.Empty;
-        using (var geo = geometry.Open())
+        foreach (var arc in arcs)
         {
-            foreach (var arc in arcs)
+            if (TryAppendArcFigure(geometry, arc.Center, arc.Radius, arc.StartAngle, arc.EndAngle))
             {
-                if (TryAppendArcFigure(geo, arc.Center, arc.Radius, arc.StartAngle, arc.EndAngle))
-                {
-                    bounds = bounds.Expand(arc.Bounds);
-                }
+                bounds = bounds.Expand(arc.Bounds);
             }
         }
 
@@ -1357,43 +1474,40 @@ public sealed class CadRenderControl : Control
 
     private static RenderCircleBatch BuildCircleBatch(LineBatchKey key, List<RenderCircle> circles)
     {
-        var geometry = new StreamGeometry();
+        var geometry = new SKPath();
         var bounds = RenderBounds.Empty;
-        using (var geo = geometry.Open())
+        foreach (var circle in circles)
         {
-            foreach (var circle in circles)
+            if (TryAppendCircleFigure(geometry, circle.Center, circle.Radius))
             {
-                if (TryAppendCircleFigure(geo, circle.Center, circle.Radius))
-                {
-                    bounds = bounds.Expand(circle.Bounds);
-                }
+                bounds = bounds.Expand(circle.Bounds);
             }
         }
 
         return new RenderCircleBatch(key, geometry, bounds);
     }
 
-    private StreamGeometry GetPolylineGeometry(RenderPolyline polyline)
+    private SKPath GetPolylineGeometry(RenderPolyline polyline)
     {
         return _polylineGeometryCache.GetValue(polyline, BuildPolylineGeometry);
     }
 
-    private StreamGeometry GetFillGeometry(RenderFill fill)
+    private SKPath GetFillGeometry(RenderFill fill)
     {
         return _fillGeometryCache.GetValue(fill, BuildFillGeometry);
     }
 
-    private StreamGeometry GetTriangleGeometry(RenderTriangle triangle)
+    private SKPath GetTriangleGeometry(RenderTriangle triangle)
     {
         return _triangleGeometryCache.GetValue(triangle, BuildTriangleGeometry);
     }
 
-    private StreamGeometry GetArcGeometry(RenderArc arc)
+    private SKPath GetArcGeometry(RenderArc arc)
     {
         return _arcGeometryCache.GetValue(arc, BuildArcGeometry);
     }
 
-    private StreamGeometry? GetClipGeometry(RenderClipGroup clipGroup)
+    private SKPath? GetClipGeometry(RenderClipGroup clipGroup)
     {
         if (clipGroup.Loops.Count == 0)
         {
@@ -1403,56 +1517,60 @@ public sealed class CadRenderControl : Control
         return _clipGeometryCache.GetValue(clipGroup, BuildClipGeometry);
     }
 
-    private StreamGeometry GetHatchGeometry(RenderHatchFill fill)
+    private SKPath GetHatchGeometry(RenderHatchFill fill)
     {
         return _hatchFillGeometryCache.GetValue(fill, BuildHatchFillGeometry);
     }
 
-    private StreamGeometry GetHatchGeometry(RenderHatchPattern pattern)
+    private SKPath GetHatchGeometry(RenderHatchPattern pattern)
     {
         return _hatchPatternGeometryCache.GetValue(pattern, BuildHatchPatternGeometry);
     }
 
-    private StreamGeometry GetHatchPatternStrokeGeometry(RenderHatchPattern pattern)
+    private SKPath GetHatchPatternStrokeGeometry(RenderHatchPattern pattern)
     {
         return _hatchPatternStrokeCache.GetValue(pattern, BuildHatchPatternStrokeGeometry);
     }
 
-    private FormattedText GetFormattedText(RenderText text)
+    private SKTextBlob? GetTextBlob(RenderText text, SKPaint paint)
     {
-        return _textCache.GetValue(text, BuildFormattedText);
+        return _textCache.GetValue(text, _ =>
+        {
+            using var font = new SKFont(paint.Typeface, paint.TextSize);
+            return SKTextBlob.Create(text.Text, font);
+        });
     }
 
-    private IBrush? GetHatchBrush(RenderHatchFill fill)
+    private SKPaint? GetHatchPaint(RenderHatchFill fill)
     {
         if (fill.Gradient is null)
         {
-            return GetSolidBrush(fill.Color);
+            return GetFillPaint(fill.Color);
         }
 
-        if (_hatchBrushCache.TryGetValue(fill, out var brush))
+        if (_hatchPaintCache.TryGetValue(fill, out var paint))
         {
-            return brush;
+            return paint;
         }
 
-        var created = CreateHatchBrush(fill);
+        var created = CreateHatchPaint(fill);
         if (created is null)
         {
             return null;
         }
 
-        _hatchBrushCache.Add(fill, created);
+        _hatchPaintCache.Add(fill, created);
         return created;
     }
 
-    private void DrawGrid(DrawingContext context)
+    private void DrawGrid(SKCanvas canvas, Size size, RenderState state)
     {
-        if (!TryGetWorldViewport(out var viewport))
+        if (!TryGetWorldViewport(size, state.ViewTransform, out var viewport))
         {
             return;
         }
 
-        var scale = (float)(_baseScale * Zoom);
+        var scale = (float)(state.BaseScale * state.Zoom);
         if (scale <= 0)
         {
             return;
@@ -1467,57 +1585,57 @@ public sealed class CadRenderControl : Control
         }
 
         var gridColor = new RenderColor(90, 96, 110, 80);
-        var pen = GetPen(gridColor, (float)(1.0 / scale), RenderLineCap.Round, RenderLineJoin.Round);
+        var paint = GetStrokePaint(gridColor, (float)(1.0 / scale), RenderLineCap.Round, RenderLineJoin.Round, state);
 
         var startX = MathF.Floor(viewport.Min.X / step) * step;
         var endX = viewport.Max.X;
         for (var x = startX; x <= endX; x += step)
         {
-            context.DrawLine(pen, new Point(x, viewport.Min.Y), new Point(x, viewport.Max.Y));
+            canvas.DrawLine(x, viewport.Min.Y, x, viewport.Max.Y, paint);
         }
 
         var startY = MathF.Floor(viewport.Min.Y / step) * step;
         var endY = viewport.Max.Y;
         for (var y = startY; y <= endY; y += step)
         {
-            context.DrawLine(pen, new Point(viewport.Min.X, y), new Point(viewport.Max.X, y));
+            canvas.DrawLine(viewport.Min.X, y, viewport.Max.X, y, paint);
         }
     }
 
-    private void DrawAxes(DrawingContext context)
+    private void DrawAxes(SKCanvas canvas, Size size, RenderState state)
     {
-        if (!TryGetWorldViewport(out var viewport))
+        if (!TryGetWorldViewport(size, state.ViewTransform, out var viewport))
         {
             return;
         }
 
-        var scale = (float)(_baseScale * Zoom);
-        var pen = GetPen(
+        var scale = (float)(state.BaseScale * state.Zoom);
+        var paint = GetStrokePaint(
             new RenderColor(140, 150, 170, 160),
             (float)(1.2 / Math.Max(scale, 0.0001f)),
             RenderLineCap.Round,
-            RenderLineJoin.Round);
+            RenderLineJoin.Round,
+            state);
 
         if (viewport.Min.X <= 0 && viewport.Max.X >= 0)
         {
-            context.DrawLine(pen, new Point(0, viewport.Min.Y), new Point(0, viewport.Max.Y));
+            canvas.DrawLine(0, viewport.Min.Y, 0, viewport.Max.Y, paint);
         }
 
         if (viewport.Min.Y <= 0 && viewport.Max.Y >= 0)
         {
-            context.DrawLine(pen, new Point(viewport.Min.X, 0), new Point(viewport.Max.X, 0));
+            canvas.DrawLine(viewport.Min.X, 0, viewport.Max.X, 0, paint);
         }
     }
 
-    private bool TryGetWorldViewport(out RenderBounds viewport)
+    private static bool TryGetWorldViewport(Size size, Matrix3x2 viewTransform, out RenderBounds viewport)
     {
-        if (!Matrix3x2.Invert(_viewTransform, out var inverse))
+        if (!Matrix3x2.Invert(viewTransform, out var inverse))
         {
             viewport = RenderBounds.Empty;
             return false;
         }
 
-        var size = Bounds.Size;
         var corners = new[]
         {
             Vector2.Transform(Vector2.Zero, inverse),
@@ -1536,27 +1654,36 @@ public sealed class CadRenderControl : Control
         return true;
     }
 
-    private Pen GetPen(RenderColor color, float thickness, RenderLineCap lineCap, RenderLineJoin lineJoin)
+    private SKPaint GetStrokePaint(
+        RenderColor color,
+        float thickness,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        RenderState state)
     {
-        var scale = (float)(_baseScale * Zoom);
-        var minWorld = (float)(MinPixelThickness / Math.Max(scale, 0.0001f));
+        var scale = (float)(state.BaseScale * state.Zoom);
+        var minWorld = (float)(state.MinPixelThickness / Math.Max(scale, 0.0001f));
         var worldThickness = MathF.Max(thickness, minWorld);
         var key = new PenKey(color, worldThickness, lineCap, lineJoin);
-        if (_penCache.TryGetValue(key, out var pen))
+        if (_strokePaintCache.TryGetValue(key, out var paint))
         {
-            return pen;
+            return paint;
         }
 
-        pen = new Pen(GetSolidBrush(color), worldThickness)
+        paint = new SKPaint
         {
-            LineCap = ToAvaloniaLineCap(lineCap),
-            LineJoin = ToAvaloniaLineJoin(lineJoin)
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = worldThickness,
+            StrokeCap = ToSkiaLineCap(lineCap),
+            StrokeJoin = ToSkiaLineJoin(lineJoin),
+            Color = ToSkiaColor(color)
         };
-        _penCache[key] = pen;
-        return pen;
+        _strokePaintCache[key] = paint;
+        return paint;
     }
 
-    private Bitmap? ResolveBitmap(string? path)
+    private SKBitmap? ResolveBitmap(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -1576,7 +1703,7 @@ public sealed class CadRenderControl : Control
 
         try
         {
-            var bitmap = new Bitmap(path);
+            var bitmap = SKBitmap.Decode(path);
             _imageCache[path] = bitmap;
             return bitmap;
         }
@@ -1621,16 +1748,14 @@ public sealed class CadRenderControl : Control
         return magnitude;
     }
 
-    private static Point ToPoint(Vector2 value) => new(value.X, value.Y);
-
-    private static Color ToAvaloniaColor(RenderColor color)
+    private static SKColor ToSkiaColor(RenderColor color)
     {
-        return Color.FromArgb(color.A, color.R, color.G, color.B);
+        return new SKColor(color.R, color.G, color.B, color.A);
     }
 
-    private float GetViewportPadding()
+    private static float GetViewportPadding(RenderState state)
     {
-        var scale = (float)(_baseScale * Zoom);
+        var scale = (float)(state.BaseScale * state.Zoom);
         if (scale <= 0)
         {
             return 0f;
@@ -1682,97 +1807,115 @@ public sealed class CadRenderControl : Control
             && MathF.Abs(left.M32 - right.M32) <= epsilon;
     }
 
-    private SolidColorBrush GetSolidBrush(RenderColor color)
+    private SKPaint GetFillPaint(RenderColor color)
     {
-        if (_brushCache.TryGetValue(color, out var brush))
+        if (_fillPaintCache.TryGetValue(color, out var paint))
         {
-            return brush;
+            return paint;
         }
 
-        brush = new SolidColorBrush(ToAvaloniaColor(color));
-        _brushCache[color] = brush;
-        return brush;
+        paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = ToSkiaColor(color)
+        };
+        _fillPaintCache[color] = paint;
+        return paint;
     }
 
-    private static PenLineCap ToAvaloniaLineCap(RenderLineCap lineCap)
+    private SKPaint GetTextPaint(RenderText text)
+    {
+        var typeface = ResolveTypeface(text.FontFamily, text.IsItalic, text.IsBold);
+        return new SKPaint
+        {
+            IsAntialias = true,
+            TextSize = text.FontSize,
+            Typeface = typeface,
+            Color = ToSkiaColor(text.Color),
+            IsStroke = false
+        };
+    }
+
+    private static SKStrokeCap ToSkiaLineCap(RenderLineCap lineCap)
     {
         return lineCap switch
         {
-            RenderLineCap.Round => PenLineCap.Round,
-            RenderLineCap.Square => PenLineCap.Square,
-            _ => PenLineCap.Flat
+            RenderLineCap.Round => SKStrokeCap.Round,
+            RenderLineCap.Square => SKStrokeCap.Square,
+            _ => SKStrokeCap.Butt
         };
     }
 
-    private static PenLineJoin ToAvaloniaLineJoin(RenderLineJoin lineJoin)
+    private static SKStrokeJoin ToSkiaLineJoin(RenderLineJoin lineJoin)
     {
         return lineJoin switch
         {
-            RenderLineJoin.Round => PenLineJoin.Round,
-            RenderLineJoin.Bevel => PenLineJoin.Bevel,
-            _ => PenLineJoin.Miter
+            RenderLineJoin.Round => SKStrokeJoin.Round,
+            RenderLineJoin.Bevel => SKStrokeJoin.Bevel,
+            _ => SKStrokeJoin.Miter
         };
     }
 
-    private static StreamGeometry BuildPolylineGeometry(RenderPolyline polyline)
+    private static SKPath BuildPolylineGeometry(RenderPolyline polyline)
     {
-        var geometry = new StreamGeometry();
-        using (var geo = geometry.Open())
+        var geometry = new SKPath();
+        if (polyline.Points.Count == 0)
         {
-            geo.BeginFigure(ToPoint(polyline.Points[0]), isFilled: false);
-            for (var i = 1; i < polyline.Points.Count; i++)
-            {
-                geo.LineTo(ToPoint(polyline.Points[i]));
-            }
-            geo.EndFigure(polyline.IsClosed);
+            return geometry;
+        }
+
+        geometry.MoveTo(polyline.Points[0].X, polyline.Points[0].Y);
+        for (var i = 1; i < polyline.Points.Count; i++)
+        {
+            geometry.LineTo(polyline.Points[i].X, polyline.Points[i].Y);
+        }
+        if (polyline.IsClosed)
+        {
+            geometry.Close();
         }
 
         return geometry;
     }
 
-    private static StreamGeometry BuildFillGeometry(RenderFill fill)
+    private static SKPath BuildFillGeometry(RenderFill fill)
     {
-        var geometry = new StreamGeometry();
-        using (var geo = geometry.Open())
+        var geometry = new SKPath();
+        if (fill.Points.Count == 0)
         {
-            geo.BeginFigure(ToPoint(fill.Points[0]), isFilled: true);
-            for (var i = 1; i < fill.Points.Count; i++)
-            {
-                geo.LineTo(ToPoint(fill.Points[i]));
-            }
-            geo.EndFigure(isClosed: true);
+            return geometry;
         }
 
+        geometry.MoveTo(fill.Points[0].X, fill.Points[0].Y);
+        for (var i = 1; i < fill.Points.Count; i++)
+        {
+            geometry.LineTo(fill.Points[i].X, fill.Points[i].Y);
+        }
+        geometry.Close();
+        geometry.FillType = SKPathFillType.EvenOdd;
         return geometry;
     }
 
-    private static StreamGeometry BuildTriangleGeometry(RenderTriangle triangle)
+    private static SKPath BuildTriangleGeometry(RenderTriangle triangle)
     {
-        var geometry = new StreamGeometry();
-        using (var geo = geometry.Open())
-        {
-            geo.BeginFigure(ToPoint(triangle.A), isFilled: true);
-            geo.LineTo(ToPoint(triangle.B));
-            geo.LineTo(ToPoint(triangle.C));
-            geo.EndFigure(isClosed: true);
-        }
-
+        var geometry = new SKPath();
+        geometry.MoveTo(triangle.A.X, triangle.A.Y);
+        geometry.LineTo(triangle.B.X, triangle.B.Y);
+        geometry.LineTo(triangle.C.X, triangle.C.Y);
+        geometry.Close();
+        geometry.FillType = SKPathFillType.Winding;
         return geometry;
     }
 
-    private static StreamGeometry BuildArcGeometry(RenderArc arc)
+    private static SKPath BuildArcGeometry(RenderArc arc)
     {
-        var geometry = new StreamGeometry();
-        using (var geo = geometry.Open())
-        {
-            TryAppendArcFigure(geo, arc.Center, arc.Radius, arc.StartAngle, arc.EndAngle);
-        }
-
+        var geometry = new SKPath();
+        TryAppendArcFigure(geometry, arc.Center, arc.Radius, arc.StartAngle, arc.EndAngle);
         return geometry;
     }
 
     private static bool TryAppendArcFigure(
-        StreamGeometryContext geo,
+        SKPath geo,
         Vector2 center,
         float radius,
         float startAngle,
@@ -1801,23 +1944,15 @@ public sealed class CadRenderControl : Control
         {
             return false;
         }
-
-        var startPoint = new Point(
-            center.X + radius * MathF.Cos(start),
-            center.Y + radius * MathF.Sin(start));
-        var endPoint = new Point(
-            center.X + radius * MathF.Cos(end),
-            center.Y + radius * MathF.Sin(end));
-        var isLargeArc = sweep > MathF.PI;
-
-        geo.BeginFigure(startPoint, isFilled: false);
-        geo.ArcTo(endPoint, new Size(radius, radius), 0, isLargeArc, SweepDirection.CounterClockwise);
-        geo.EndFigure(isClosed: false);
+        var rect = new SKRect(center.X - radius, center.Y - radius, center.X + radius, center.Y + radius);
+        var startDegrees = start * (180f / MathF.PI);
+        var sweepDegrees = sweep * (180f / MathF.PI);
+        geo.AddArc(rect, startDegrees, sweepDegrees);
         return true;
     }
 
     private static bool TryAppendCircleFigure(
-        StreamGeometryContext geo,
+        SKPath geo,
         Vector2 center,
         float radius)
     {
@@ -1825,99 +1960,78 @@ public sealed class CadRenderControl : Control
         {
             return false;
         }
-
-        var startPoint = new Point(center.X + radius, center.Y);
-        var midPoint = new Point(center.X - radius, center.Y);
-        var size = new Size(radius, radius);
-
-        geo.BeginFigure(startPoint, isFilled: false);
-        geo.ArcTo(midPoint, size, 0, isLargeArc: false, SweepDirection.CounterClockwise);
-        geo.ArcTo(startPoint, size, 0, isLargeArc: false, SweepDirection.CounterClockwise);
-        geo.EndFigure(isClosed: false);
+        geo.AddCircle(center.X, center.Y, radius);
         return true;
     }
 
-    private static StreamGeometry BuildClipGeometry(RenderClipGroup clipGroup)
+    private static SKPath BuildClipGeometry(RenderClipGroup clipGroup)
     {
         return BuildLoopGeometry(clipGroup.Loops);
     }
 
-    private static StreamGeometry BuildHatchFillGeometry(RenderHatchFill fill)
+    private static SKPath BuildHatchFillGeometry(RenderHatchFill fill)
     {
         return BuildLoopGeometry(fill.Loops);
     }
 
-    private static StreamGeometry BuildHatchPatternGeometry(RenderHatchPattern pattern)
+    private static SKPath BuildHatchPatternGeometry(RenderHatchPattern pattern)
     {
         return BuildLoopGeometry(pattern.Loops);
     }
 
-    private static StreamGeometry BuildHatchPatternStrokeGeometry(RenderHatchPattern pattern)
+    private static SKPath BuildHatchPatternStrokeGeometry(RenderHatchPattern pattern)
     {
-        var geometry = new StreamGeometry();
-        using (var geo = geometry.Open())
+        var geometry = new SKPath();
+        foreach (var segment in pattern.Segments)
         {
-            foreach (var segment in pattern.Segments)
-            {
-                geo.BeginFigure(ToPoint(segment.Start), isFilled: false);
-                geo.LineTo(ToPoint(segment.End));
-                geo.EndFigure(isClosed: false);
-            }
+            geometry.MoveTo(segment.Start.X, segment.Start.Y);
+            geometry.LineTo(segment.End.X, segment.End.Y);
         }
 
         return geometry;
     }
 
-    private FormattedText BuildFormattedText(RenderText text)
+    private static SKPath BuildLoopGeometry(IReadOnlyList<IReadOnlyList<Vector2>> loops)
     {
-        var typeface = ResolveTypeface(text.FontFamily, text.IsItalic, text.IsBold);
-        var brush = GetSolidBrush(text.Color);
-        return new FormattedText(
-            text.Text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            text.FontSize,
-            brush);
-    }
-
-    private static StreamGeometry BuildLoopGeometry(IReadOnlyList<IReadOnlyList<Vector2>> loops)
-    {
-        var geometry = new StreamGeometry();
-
-        using (var geo = geometry.Open())
+        var geometry = new SKPath
         {
-            geo.SetFillRule(FillRule.EvenOdd);
-            foreach (var loop in loops)
-            {
-                if (loop.Count < 3)
-                {
-                    continue;
-                }
+            FillType = SKPathFillType.EvenOdd
+        };
 
-                geo.BeginFigure(ToPoint(loop[0]), isFilled: true);
-                for (var i = 1; i < loop.Count; i++)
-                {
-                    geo.LineTo(ToPoint(loop[i]));
-                }
-                geo.EndFigure(isClosed: true);
+        foreach (var loop in loops)
+        {
+            if (loop.Count < 3)
+            {
+                continue;
             }
+
+            geometry.MoveTo(loop[0].X, loop[0].Y);
+            for (var i = 1; i < loop.Count; i++)
+            {
+                geometry.LineTo(loop[i].X, loop[i].Y);
+            }
+            geometry.Close();
         }
 
         return geometry;
     }
 
-    private static IBrush? CreateHatchBrush(RenderHatchFill fill)
+    private static SKPaint? CreateHatchPaint(RenderHatchFill fill)
     {
         if (fill.Gradient is null)
         {
-            return new SolidColorBrush(ToAvaloniaColor(fill.Color));
+            return new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = ToSkiaColor(fill.Color)
+            };
         }
 
-        return CreateLinearGradient(fill);
+        return CreateLinearGradientPaint(fill);
     }
 
-    private static IBrush CreateLinearGradient(RenderHatchFill fill)
+    private static SKPaint CreateLinearGradientPaint(RenderHatchFill fill)
     {
         var bounds = fill.Bounds;
         var center = new Vector2((bounds.Min.X + bounds.Max.X) * 0.5f, (bounds.Min.Y + bounds.Max.Y) * 0.5f);
@@ -1927,64 +2041,59 @@ public sealed class CadRenderControl : Control
         var start = center - direction * half;
         var end = center + direction * half;
 
-        return new LinearGradientBrush
+        var colors = new SKColor[fill.Gradient.Stops.Count];
+        var positions = new float[fill.Gradient.Stops.Count];
+        for (var i = 0; i < fill.Gradient.Stops.Count; i++)
         {
-            StartPoint = new RelativePoint(new Point(start.X, start.Y), RelativeUnit.Absolute),
-            EndPoint = new RelativePoint(new Point(end.X, end.Y), RelativeUnit.Absolute),
-            GradientStops = CreateGradientStops(fill.Gradient)
+            var stop = fill.Gradient.Stops[i];
+            colors[i] = ToSkiaColor(stop.Color);
+            positions[i] = stop.Offset;
+        }
+
+        var shader = SKShader.CreateLinearGradient(
+            new SKPoint(start.X, start.Y),
+            new SKPoint(end.X, end.Y),
+            colors,
+            positions,
+            SKShaderTileMode.Clamp);
+
+        return new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Shader = shader
         };
     }
 
-    private static GradientStops CreateGradientStops(RenderHatchGradient gradient)
+    private static SKMatrix ToSkiaMatrix(Matrix3x2 matrix)
     {
-        var stops = new GradientStops();
-        foreach (var stop in gradient.Stops)
+        return new SKMatrix
         {
-            stops.Add(new GradientStop(ToAvaloniaColor(stop.Color), stop.Offset));
-        }
-
-        return stops;
+            ScaleX = matrix.M11,
+            SkewY = matrix.M12,
+            SkewX = matrix.M21,
+            ScaleY = matrix.M22,
+            TransX = matrix.M31,
+            TransY = matrix.M32,
+            Persp0 = 0,
+            Persp1 = 0,
+            Persp2 = 1
+        };
     }
 
-    private static Matrix ToAvaloniaMatrix(Matrix3x2 matrix)
+    private SKTypeface ResolveTypeface(string? fontFamily, bool isItalic, bool isBold)
     {
-        return new Matrix(
-            matrix.M11,
-            matrix.M12,
-            matrix.M21,
-            matrix.M22,
-            matrix.M31,
-            matrix.M32);
-    }
-
-    private Typeface ResolveTypeface(string? fontFamily, bool isItalic, bool isBold)
-    {
-        var fontStyle = isItalic ? FontStyle.Italic : FontStyle.Normal;
-        var fontWeight = isBold ? FontWeight.Bold : FontWeight.Normal;
-        var family = string.IsNullOrWhiteSpace(fontFamily) ? string.Empty : fontFamily;
-        var key = new TypefaceKey(family, fontStyle, fontWeight);
+        var family = string.IsNullOrWhiteSpace(fontFamily) ? SKTypeface.Default.FamilyName : fontFamily!;
+        var weight = isBold ? (int)SKFontStyleWeight.Bold : (int)SKFontStyleWeight.Normal;
+        var slant = isItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+        var key = new TypefaceKey(family, weight, (int)slant);
         if (_typefaceCache.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
-        Typeface resolved;
-        if (family.Length == 0)
-        {
-            resolved = new Typeface(FontFamily.Default, fontStyle, fontWeight);
-        }
-        else
-        {
-            try
-            {
-                resolved = new Typeface(new FontFamily(family), fontStyle, fontWeight);
-            }
-            catch (Exception)
-            {
-                resolved = new Typeface(FontFamily.Default, fontStyle, fontWeight);
-            }
-        }
-
+        var style = new SKFontStyle(weight, (int)SKFontStyleWidth.Normal, slant);
+        var resolved = SKTypeface.FromFamilyName(family, style) ?? SKTypeface.Default;
         _typefaceCache[key] = resolved;
         return resolved;
     }
@@ -2044,6 +2153,51 @@ public sealed class CadRenderControl : Control
         }
     }
 
+    private sealed class SkiaRenderOp : ICustomDrawOperation
+    {
+        private readonly CadRenderControl _owner;
+        private readonly Rect _bounds;
+        private readonly Size _size;
+
+        public SkiaRenderOp(CadRenderControl owner, Size size)
+        {
+            _owner = owner;
+            _size = size;
+            _bounds = new Rect(size);
+        }
+
+        public Rect Bounds => _bounds;
+
+        public void Render(ImmediateDrawingContext context)
+        {
+            var leaseFeature = context.TryGetFeature(typeof(ISkiaSharpApiLeaseFeature)) as ISkiaSharpApiLeaseFeature;
+            if (leaseFeature == null)
+            {
+                return;
+            }
+
+            using var lease = leaseFeature.Lease();
+            var canvas = lease.SkCanvas;
+            if (canvas is null)
+            {
+                return;
+            }
+
+            _owner.RenderSkia(canvas, _size);
+        }
+
+        public bool HitTest(Point p) => _bounds.Contains(p);
+
+        public void Dispose()
+        {
+        }
+
+        public bool Equals(ICustomDrawOperation? other)
+        {
+            return ReferenceEquals(this, other);
+        }
+    }
+
     private sealed class LayerDrawCache
     {
         public IReadOnlyList<LayerDrawOp> Ops { get; }
@@ -2091,10 +2245,10 @@ public sealed class CadRenderControl : Control
     private sealed class RenderLineBatch
     {
         public LineBatchKey Key { get; }
-        public StreamGeometry Geometry { get; }
+        public SKPath Geometry { get; }
         public RenderBounds Bounds { get; }
 
-        public RenderLineBatch(LineBatchKey key, StreamGeometry geometry, RenderBounds bounds)
+        public RenderLineBatch(LineBatchKey key, SKPath geometry, RenderBounds bounds)
         {
             Key = key;
             Geometry = geometry;
@@ -2105,10 +2259,10 @@ public sealed class CadRenderControl : Control
     private sealed class RenderPolylineBatch
     {
         public LineBatchKey Key { get; }
-        public StreamGeometry Geometry { get; }
+        public SKPath Geometry { get; }
         public RenderBounds Bounds { get; }
 
-        public RenderPolylineBatch(LineBatchKey key, StreamGeometry geometry, RenderBounds bounds)
+        public RenderPolylineBatch(LineBatchKey key, SKPath geometry, RenderBounds bounds)
         {
             Key = key;
             Geometry = geometry;
@@ -2119,10 +2273,10 @@ public sealed class CadRenderControl : Control
     private sealed class RenderArcBatch
     {
         public LineBatchKey Key { get; }
-        public StreamGeometry Geometry { get; }
+        public SKPath Geometry { get; }
         public RenderBounds Bounds { get; }
 
-        public RenderArcBatch(LineBatchKey key, StreamGeometry geometry, RenderBounds bounds)
+        public RenderArcBatch(LineBatchKey key, SKPath geometry, RenderBounds bounds)
         {
             Key = key;
             Geometry = geometry;
@@ -2133,10 +2287,10 @@ public sealed class CadRenderControl : Control
     private sealed class RenderCircleBatch
     {
         public LineBatchKey Key { get; }
-        public StreamGeometry Geometry { get; }
+        public SKPath Geometry { get; }
         public RenderBounds Bounds { get; }
 
-        public RenderCircleBatch(LineBatchKey key, StreamGeometry geometry, RenderBounds bounds)
+        public RenderCircleBatch(LineBatchKey key, SKPath geometry, RenderBounds bounds)
         {
             Key = key;
             Geometry = geometry;
@@ -2146,8 +2300,8 @@ public sealed class CadRenderControl : Control
 
     private readonly record struct TypefaceKey(
         string Family,
-        FontStyle Style,
-        FontWeight Weight);
+        int Weight,
+        int Slant);
 
     private readonly record struct LineBatchKey(
         RenderColor Color,
