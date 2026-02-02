@@ -5,7 +5,6 @@ using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.Tables;
 using ACadSharp.XData;
-using Avalonia.Headless.XUnit;
 using CSMath;
 using Xunit;
 
@@ -177,8 +176,8 @@ public sealed class RenderTextTests
         Assert.InRange(renderText.ObliqueAngle, 0.25f, 0.27f);
     }
 
-    [AvaloniaFact]
-    public void AvaloniaRenderTextShaper_UsesFormattedText()
+    [Fact]
+    public void SkiaRenderTextShaper_UsesSkiaMetrics()
     {
         var text = new TextEntity
         {
@@ -187,7 +186,7 @@ public sealed class RenderTextTests
             InsertPoint = new XYZ(0, 0, 0)
         };
 
-        var layout = new AvaloniaRenderTextShaper().Shape(text, new CadRenderSceneSettings());
+        var layout = new SkiaRenderTextShaper().Shape(text, new CadRenderSceneSettings());
 
         Assert.False(string.IsNullOrWhiteSpace(layout.Text));
         Assert.True(layout.Width > 0f);

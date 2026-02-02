@@ -111,12 +111,12 @@ public sealed class UiSmokeTests
         services.AddSingleton<IRenderEntityOrderResolver, DefaultRenderEntityOrderResolver>();
         services.AddSingleton<IRenderXRefResolver, DefaultRenderXRefResolver>();
         services.AddSingleton<IShxFontResolver, DefaultShxFontResolver>();
-        services.AddSingleton<AvaloniaRenderTextShaper>();
+        services.AddSingleton<SkiaRenderTextShaper>();
         services.AddSingleton<IRenderTextShaper>(provider =>
             new CachedRenderTextShaper(
                 new ShxRenderTextShaper(
                     provider.GetRequiredService<IShxFontResolver>(),
-                    provider.GetRequiredService<AvaloniaRenderTextShaper>()),
+                    provider.GetRequiredService<SkiaRenderTextShaper>()),
                 provider.GetRequiredService<IRenderCache>()));
         services.AddSingleton<IRenderEntityVisibilityResolver, DefaultRenderEntityVisibilityResolver>();
         services.AddSingleton<DefaultRenderGeometrySampler>();
