@@ -1,0 +1,6 @@
+<Project>
+  <!-- Workaround: ACadSharp uses Encoding.Latin1 which is unavailable on net48/netstandard2.x. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ACadSharp'">
+    <TargetFrameworks>net5.0;net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+  </PropertyGroup>
+</Project>
