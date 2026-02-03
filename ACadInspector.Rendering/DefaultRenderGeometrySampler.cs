@@ -91,7 +91,7 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
     private static bool TrySampleSplineAdaptive(Spline spline, int maxPoints, out List<XYZ> points)
     {
         points = new List<XYZ>(maxPoints);
-        if (!spline.TryPointOnSpline(0, out var start) || !spline.TryPointOnSpline(1, out var end))
+        if (!spline.TryPointOnSpline(0, out var start) || !TryResolveSplineEnd(spline, out var end))
         {
             return false;
         }
@@ -138,6 +138,31 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
         TrimSplineClosure(points, maxPoints, spline, tolerance);
 
         return points.Count >= 2;
+    }
+
+    private static bool TryResolveSplineEnd(Spline spline, out XYZ end)
+    {
+        end = XYZ.NaN;
+        if (!spline.TryPointOnSpline(1, out end))
+        {
+            return false;
+        }
+
+        if (IsInvalidPoint(end) || IsNearZero(end))
+        {
+            const double epsilon = 1e-6;
+            var t = 1d - epsilon;
+            if (t > 0d && spline.TryPointOnSpline(t, out var candidate) && !IsInvalidPoint(candidate) && !IsNearZero(candidate))
+            {
+                end = candidate;
+            }
+            else if (IsInvalidPoint(end))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static float EstimateSplineTolerance(Spline spline, int maxPoints)
@@ -236,6 +261,24 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
         var ey = point.Y - projY;
         var ez = point.Z - projZ;
         return (float)Math.Sqrt(ex * ex + ey * ey + ez * ez);
+    }
+
+    private static bool IsInvalidPoint(XYZ point)
+    {
+        return double.IsNaN(point.X)
+               || double.IsNaN(point.Y)
+               || double.IsNaN(point.Z)
+               || double.IsInfinity(point.X)
+               || double.IsInfinity(point.Y)
+               || double.IsInfinity(point.Z);
+    }
+
+    private static bool IsNearZero(XYZ point)
+    {
+        const double epsilon = 1e-6;
+        return Math.Abs(point.X) <= epsilon
+               && Math.Abs(point.Y) <= epsilon
+               && Math.Abs(point.Z) <= epsilon;
     }
 
     private static void EnsureSplineEnd(List<XYZ> points, XYZ end, int maxPoints)
