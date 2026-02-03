@@ -59,6 +59,24 @@ public sealed class CadRenderControl : Control
     public static readonly StyledProperty<double> MinPixelThicknessProperty =
         AvaloniaProperty.Register<CadRenderControl, double>(nameof(MinPixelThickness), 0.6);
 
+    public static readonly StyledProperty<bool> ShowDebugOverlayProperty =
+        AvaloniaProperty.Register<CadRenderControl, bool>(nameof(ShowDebugOverlay), false);
+
+    public static readonly StyledProperty<RenderBounds?> HoverBoundsProperty =
+        AvaloniaProperty.Register<CadRenderControl, RenderBounds?>(nameof(HoverBounds));
+
+    public static readonly StyledProperty<RenderBounds?> SelectionBoundsProperty =
+        AvaloniaProperty.Register<CadRenderControl, RenderBounds?>(nameof(SelectionBounds));
+
+    public static readonly StyledProperty<RenderAnnotation?> HoverAnnotationProperty =
+        AvaloniaProperty.Register<CadRenderControl, RenderAnnotation?>(nameof(HoverAnnotation));
+
+    public static readonly StyledProperty<RenderAnnotation?> SelectionAnnotationProperty =
+        AvaloniaProperty.Register<CadRenderControl, RenderAnnotation?>(nameof(SelectionAnnotation));
+
+    public static readonly StyledProperty<IReadOnlyList<RenderBounds>?> DebugBvhBoundsProperty =
+        AvaloniaProperty.Register<CadRenderControl, IReadOnlyList<RenderBounds>?>(nameof(DebugBvhBounds));
+
     private bool _isPanning;
     private Point _panStart;
     private AvaloniaVector _panOrigin;
@@ -151,6 +169,42 @@ public sealed class CadRenderControl : Control
         set => SetValue(MinPixelThicknessProperty, value);
     }
 
+    public bool ShowDebugOverlay
+    {
+        get => GetValue(ShowDebugOverlayProperty);
+        set => SetValue(ShowDebugOverlayProperty, value);
+    }
+
+    public RenderBounds? HoverBounds
+    {
+        get => GetValue(HoverBoundsProperty);
+        set => SetValue(HoverBoundsProperty, value);
+    }
+
+    public RenderBounds? SelectionBounds
+    {
+        get => GetValue(SelectionBoundsProperty);
+        set => SetValue(SelectionBoundsProperty, value);
+    }
+
+    public RenderAnnotation? HoverAnnotation
+    {
+        get => GetValue(HoverAnnotationProperty);
+        set => SetValue(HoverAnnotationProperty, value);
+    }
+
+    public RenderAnnotation? SelectionAnnotation
+    {
+        get => GetValue(SelectionAnnotationProperty);
+        set => SetValue(SelectionAnnotationProperty, value);
+    }
+
+    public IReadOnlyList<RenderBounds>? DebugBvhBounds
+    {
+        get => GetValue(DebugBvhBoundsProperty);
+        set => SetValue(DebugBvhBoundsProperty, value);
+    }
+
     public CadRenderControl()
     {
         ClipToBounds = true;
@@ -215,7 +269,13 @@ public sealed class CadRenderControl : Control
             change.Property == ShowGridProperty ||
             change.Property == ShowAxesProperty ||
             change.Property == LayerVisibilityOverridesProperty ||
-            change.Property == MinPixelThicknessProperty)
+            change.Property == MinPixelThicknessProperty ||
+            change.Property == ShowDebugOverlayProperty ||
+            change.Property == HoverBoundsProperty ||
+            change.Property == SelectionBoundsProperty ||
+            change.Property == HoverAnnotationProperty ||
+            change.Property == SelectionAnnotationProperty ||
+            change.Property == DebugBvhBoundsProperty)
         {
             if (change.Property == ZoomProperty || change.Property == PanProperty)
             {
@@ -310,7 +370,10 @@ public sealed class CadRenderControl : Control
         }
 
         var pointer = e.GetPosition(this);
-        var world = ScreenToWorld(pointer);
+        if (!TryScreenToWorld(pointer, out var world))
+        {
+            return;
+        }
         var nextPan = ComputePanForZoom(world, pointer, nextZoom);
 
         SetCurrentValue(ZoomProperty, nextZoom);
@@ -430,7 +493,13 @@ public sealed class CadRenderControl : Control
             Zoom,
             MinPixelThickness,
             _baseScale,
-            _viewTransform);
+            _viewTransform,
+            ShowDebugOverlay,
+            HoverBounds,
+            SelectionBounds,
+            HoverAnnotation,
+            SelectionAnnotation,
+            DebugBvhBounds);
         Volatile.Write(ref _renderState, snapshot);
     }
 
@@ -447,14 +516,27 @@ public sealed class CadRenderControl : Control
         return new AvaloniaVector(pan.X, pan.Y);
     }
 
-    private Vector2 ScreenToWorld(Point point)
+    public bool TryScreenToWorld(Point point, out Vector2 world)
     {
         if (!Matrix3x2.Invert(_viewTransform, out var inverse))
         {
-            return Vector2.Zero;
+            world = Vector2.Zero;
+            return false;
         }
 
-        return Vector2.Transform(new Vector2((float)point.X, (float)point.Y), inverse);
+        world = Vector2.Transform(new Vector2((float)point.X, (float)point.Y), inverse);
+        return true;
+    }
+
+    public float PixelsToWorld(float pixels)
+    {
+        var scale = (float)(_baseScale * Zoom);
+        if (scale <= 0f || float.IsNaN(scale) || float.IsInfinity(scale))
+        {
+            return pixels;
+        }
+
+        return pixels / scale;
     }
 
     private sealed class SkiaRenderOp : ICustomDrawOperation

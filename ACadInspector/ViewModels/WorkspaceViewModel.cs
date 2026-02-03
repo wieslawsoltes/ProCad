@@ -118,6 +118,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             _renderSceneSettings,
             selection,
             result.Path,
+            _selectionService,
             _statsExportService,
             statsFileName);
         var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);

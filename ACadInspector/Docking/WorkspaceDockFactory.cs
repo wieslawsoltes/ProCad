@@ -2,6 +2,7 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.ReactiveUI;
 using Dock.Model.ReactiveUI.Controls;
+using ACadInspector.Services;
 using ACadInspector.ViewModels;
 
 namespace ACadInspector.Docking;
@@ -18,6 +19,8 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadPreviewViewModel _preview;
     private readonly CadBatchViewModel _batch;
     private readonly CadScriptingViewModel _scripting;
+    private readonly CadSelectionService _selectionService;
+    private readonly CadDocumentContextService _documentContext;
 
     public WorkspaceDockFactory(
         PropertyGridViewModel propertyGrid,
@@ -29,7 +32,9 @@ public sealed class WorkspaceDockFactory : Factory
         CadDwgSemanticsViewModel dwgSemantics,
         CadPreviewViewModel preview,
         CadBatchViewModel batch,
-        CadScriptingViewModel scripting)
+        CadScriptingViewModel scripting,
+        CadSelectionService selectionService,
+        CadDocumentContextService documentContext)
     {
         _propertyGrid = propertyGrid;
         _ioOptions = ioOptions;
@@ -41,6 +46,8 @@ public sealed class WorkspaceDockFactory : Factory
         _preview = preview;
         _batch = batch;
         _scripting = scripting;
+        _selectionService = selectionService;
+        _documentContext = documentContext;
     }
 
     public override IRootDock CreateLayout()
@@ -168,6 +175,13 @@ public sealed class WorkspaceDockFactory : Factory
         if (dockable is not null)
         {
             SetDockableActive(dockable, true);
+        }
+
+        if (dockable is CadDocumentViewModel document)
+        {
+            _selectionService.SelectedObject = document.Document;
+            _documentTree.LoadDocument(document);
+            _documentContext.ActiveDocument = document;
         }
     }
 

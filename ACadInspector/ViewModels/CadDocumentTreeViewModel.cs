@@ -23,8 +23,11 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
     private readonly Dictionary<object, CadDocumentTreeNode> _nodeMap = new();
+    private readonly Dictionary<string, CadDocumentTreeNode> _handleMap = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<CadDocumentTreeNode> _roots = Array.Empty<CadDocumentTreeNode>();
     private bool _suppressSelection;
+    private bool _isSwitchingDocument;
+    private CadDocumentViewModel? _currentDocument;
 
     public HierarchicalModel<CadDocumentTreeNode> TreeModel { get; }
     public DataGridColumnDefinitionList ColumnDefinitions { get; }
@@ -80,6 +83,7 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
             .Subscribe(OnSelectedItemChanged);
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
+            .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(OnSelectedObjectChanged);
 
         SearchModel.ResultsChanged += (_, _) => UpdateSearchSummary();
@@ -107,7 +111,9 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         {
             TreeModel.SetRoots(Array.Empty<CadDocumentTreeNode>());
             _nodeMap.Clear();
+            _handleMap.Clear();
             _roots = Array.Empty<CadDocumentTreeNode>();
+            _currentDocument = null;
             ApplyFilter();
             return;
         }
@@ -117,6 +123,7 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         TreeModel.SetRoots(roots);
         RebuildNodeMap(roots);
         _roots = roots;
+        _currentDocument = document;
         ApplyFilter();
         SelectFromService();
     }
@@ -140,6 +147,19 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
             return;
         }
 
+        if (_isSwitchingDocument)
+        {
+            return;
+        }
+
+        var document = _documentContext.ResolveViewModel(selected);
+        if (document is not null && !ReferenceEquals(document, _currentDocument))
+        {
+            _isSwitchingDocument = true;
+            LoadDocument(document);
+            _isSwitchingDocument = false;
+        }
+
         _suppressSelection = true;
         SelectedItem = ResolveItemForSelection(selected);
         _suppressSelection = false;
@@ -153,6 +173,7 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
     private void RebuildNodeMap(IReadOnlyList<CadDocumentTreeNode> roots)
     {
         _nodeMap.Clear();
+        _handleMap.Clear();
         foreach (var root in roots)
         {
             AddNode(root);
@@ -164,6 +185,10 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         if (node.Source is not null)
         {
             _nodeMap[node.Source] = node;
+        }
+        if (!string.IsNullOrWhiteSpace(node.Handle))
+        {
+            _handleMap[node.Handle] = node;
         }
 
         foreach (var child in node.Children)
@@ -197,7 +222,24 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
 
         if (!_nodeMap.TryGetValue(selected, out var node))
         {
-            return null;
+            if (selected is ACadSharp.IHandledCadObject handled)
+            {
+                var handle = handled.Handle.ToString("X");
+                if (!_handleMap.TryGetValue(handle, out node))
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        if (TreeModel is IHierarchicalModelExpander expander &&
+            expander.TryExpandToItem(node, out var expanded))
+        {
+            return expanded;
         }
 
         var hierNode = ((HierarchicalModel)TreeModel).FindNode(node);

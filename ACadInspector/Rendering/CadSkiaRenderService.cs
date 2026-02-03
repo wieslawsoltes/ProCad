@@ -106,6 +106,13 @@ public sealed class CadSkiaRenderService
             DrawLayer(canvas, layer, renderStyle, hiddenLine, hiddenLineSettings, hasViewport, viewport, isInteractive, state);
         }
 
+        DrawAnnotations(canvas, state);
+
+        if (state.ShowDebugOverlay)
+        {
+            DrawDebugOverlay(canvas, state);
+        }
+
         canvas.Restore();
     }
 
@@ -1744,17 +1751,17 @@ public sealed class CadSkiaRenderService
 
     private static SKPath BuildClipGeometry(RenderClipGroup clipGroup)
     {
-        return BuildLoopGeometry(clipGroup.Loops);
+        return BuildLoopGeometry(clipGroup.Loops, clipGroup.FillMode);
     }
 
     private static SKPath BuildHatchFillGeometry(RenderHatchFill fill)
     {
-        return BuildLoopGeometry(fill.Loops);
+        return BuildLoopGeometry(fill.Loops, fill.FillMode);
     }
 
     private static SKPath BuildHatchPatternGeometry(RenderHatchPattern pattern)
     {
-        return BuildLoopGeometry(pattern.Loops);
+        return BuildLoopGeometry(pattern.Loops, pattern.FillMode);
     }
 
     private static SKPath BuildHatchPatternStrokeGeometry(RenderHatchPattern pattern)
@@ -1769,14 +1776,15 @@ public sealed class CadSkiaRenderService
         return geometry;
     }
 
-    private static SKPath BuildLoopGeometry(IReadOnlyList<IReadOnlyList<Vector2>> loops)
+    private static SKPath BuildLoopGeometry(IReadOnlyList<IReadOnlyList<Vector2>> loops, RenderLoopFillMode fillMode)
     {
-        var geometry = new SKPath
-        {
-            FillType = SKPathFillType.EvenOdd
-        };
+        var prepared = RenderLoopUtils.NormalizeLoopsForFill(loops, fillMode);
+        var fillType = fillMode == RenderLoopFillMode.EvenOdd
+            ? SKPathFillType.EvenOdd
+            : SKPathFillType.Winding;
+        var geometry = new SKPath { FillType = fillType };
 
-        foreach (var loop in loops)
+        foreach (var loop in prepared)
         {
             if (loop.Count < 3)
             {
@@ -1792,6 +1800,172 @@ public sealed class CadSkiaRenderService
         }
 
         return geometry;
+    }
+
+    private void DrawDebugOverlay(SKCanvas canvas, CadRenderStateSnapshot state)
+    {
+        var worldThickness = ResolveWorldThickness(0f, state);
+
+        if (state.DebugBvhBounds is { Count: > 0 })
+        {
+            var bvhPaint = new SKPaint
+            {
+                IsAntialias = false,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                Color = new SKColor(180, 80, 200, 160)
+            };
+
+            foreach (var bounds in state.DebugBvhBounds)
+            {
+                if (bounds.IsEmpty)
+                {
+                    continue;
+                }
+
+                DrawBounds(canvas, bounds, bvhPaint);
+            }
+        }
+
+        if (state.SelectionBounds.HasValue && !state.SelectionBounds.Value.IsEmpty)
+        {
+            var selectionPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                Color = new SKColor(0, 200, 255, 220)
+            };
+            DrawBounds(canvas, state.SelectionBounds.Value, selectionPaint);
+        }
+
+        if (state.HoverBounds.HasValue && !state.HoverBounds.Value.IsEmpty)
+        {
+            var hoverPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                Color = new SKColor(255, 200, 40, 220)
+            };
+            DrawBounds(canvas, state.HoverBounds.Value, hoverPaint);
+        }
+    }
+
+    private void DrawAnnotations(SKCanvas canvas, CadRenderStateSnapshot state)
+    {
+        if (state.SelectionAnnotation.HasValue)
+        {
+            DrawAnnotation(canvas, state.SelectionAnnotation.Value, state);
+        }
+
+        if (state.HoverAnnotation.HasValue)
+        {
+            DrawAnnotation(canvas, state.HoverAnnotation.Value, state);
+        }
+    }
+
+    private void DrawAnnotation(SKCanvas canvas, RenderAnnotation annotation, CadRenderStateSnapshot state)
+    {
+        var bounds = annotation.Bounds;
+        if (bounds.IsEmpty)
+        {
+            return;
+        }
+
+        var style = annotation.Style;
+        var minSize = PixelsToWorld(6f, state);
+        var size = bounds.Size;
+        if (size.X <= 0f || size.Y <= 0f)
+        {
+            bounds = bounds.Inflate(minSize);
+        }
+        var strokeWidth = PixelsToWorld(style.StrokeWidthPixels, state);
+
+        if (style.FillColor.HasValue)
+        {
+            using var fillPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = ToSkiaColor(style.FillColor.Value)
+            };
+            DrawBounds(canvas, bounds, fillPaint);
+        }
+
+        using (var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = strokeWidth,
+            Color = ToSkiaColor(style.StrokeColor)
+        })
+        {
+            DrawBounds(canvas, bounds, strokePaint);
+        }
+
+        if (!annotation.HasLabel)
+        {
+            return;
+        }
+
+        var textSize = PixelsToWorld(style.LabelTextSizePixels, state);
+        var padding = PixelsToWorld(style.LabelPaddingPixels, state);
+        var gap = PixelsToWorld(style.LabelGapPixels, state);
+
+        using var textPaint = new SKPaint
+        {
+            IsAntialias = true,
+            TextSize = textSize,
+            Color = ToSkiaColor(style.LabelTextColor)
+        };
+
+        var label = annotation.Label;
+        var textWidth = textPaint.MeasureText(label);
+        var metrics = textPaint.FontMetrics;
+        var textHeight = metrics.Descent - metrics.Ascent;
+
+        var rectWidth = textWidth + 2f * padding;
+        var rectHeight = textHeight + 2f * padding;
+        var rectLeft = bounds.Min.X;
+        var rectBottom = bounds.Max.Y + gap;
+
+        var rect = new SKRect(rectLeft, rectBottom, rectLeft + rectWidth, rectBottom + rectHeight);
+
+        using (var backgroundPaint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = ToSkiaColor(style.LabelBackgroundColor)
+        })
+        {
+            canvas.DrawRect(rect, backgroundPaint);
+        }
+
+        var baselineY = rect.Bottom - padding - metrics.Descent;
+        canvas.DrawText(label, rect.Left + padding, baselineY, textPaint);
+    }
+
+    private static float PixelsToWorld(float pixels, CadRenderStateSnapshot state)
+    {
+        var scale = (float)(state.BaseScale * state.Zoom);
+        if (scale <= 0f || float.IsNaN(scale) || float.IsInfinity(scale))
+        {
+            return pixels;
+        }
+
+        return pixels / scale;
+    }
+
+    private static void DrawBounds(SKCanvas canvas, RenderBounds bounds, SKPaint paint)
+    {
+        var size = bounds.Size;
+        if (size.X <= 0f || size.Y <= 0f)
+        {
+            return;
+        }
+
+        canvas.DrawRect(bounds.Min.X, bounds.Min.Y, size.X, size.Y, paint);
     }
 
     private static SKPaint? CreateHatchPaint(RenderHatchFill fill)

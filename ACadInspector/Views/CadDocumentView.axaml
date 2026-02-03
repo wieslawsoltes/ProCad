@@ -7,29 +7,8 @@
              mc:Ignorable="d"
              x:Class="ACadInspector.Views.CadDocumentView"
              x:DataType="vm:CadDocumentViewModel">
-  <Grid RowDefinitions="Auto,*"
-        Margin="16"
-        RowSpacing="12">
-    <Border Padding="12"
-            CornerRadius="10"
-            Background="{DynamicResource ThemeControlLowBrush}"
-            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
-            BorderThickness="1">
-      <Grid RowDefinitions="Auto,Auto,Auto">
-        <TextBlock Text="{CompiledBinding Title}"
-                   FontSize="20"
-                   FontWeight="SemiBold" />
-        <TextBlock Grid.Row="1"
-                   Text="{CompiledBinding Format}"
-                   Margin="0,6,0,0" />
-        <TextBlock Grid.Row="2"
-                   Text="{CompiledBinding Path}"
-                   Margin="0,2,0,0"
-                   TextTrimming="CharacterEllipsis" />
-      </Grid>
-    </Border>
-    <Border Grid.Row="1"
-            CornerRadius="12"
+  <Grid Margin="16">
+    <Border CornerRadius="12"
             BorderThickness="1"
             BorderBrush="{DynamicResource ThemeBorderLowBrush}">
       <views:CadRenderView DataContext="{CompiledBinding Render}" />
