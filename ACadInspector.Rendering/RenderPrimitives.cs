@@ -39,7 +39,8 @@ public sealed class RenderLine : IRenderPrimitive
         LineJoin = lineJoin;
         StartDepth = startDepth;
         EndDepth = endDepth;
-        Bounds = RenderBounds.Empty.Expand(start).Expand(end);
+        var bounds = RenderBounds.Empty.Expand(start).Expand(end);
+        Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 
     public bool HasDepth => StartDepth.HasValue && EndDepth.HasValue;
@@ -78,7 +79,7 @@ public sealed class RenderPolyline : IRenderPrimitive
         {
             bounds = bounds.Expand(point);
         }
-        Bounds = bounds;
+        Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 
     public bool HasDepths => Depths is not null && Depths.Count == Points.Count;
@@ -200,17 +201,20 @@ public sealed class RenderHatchFill : IRenderPrimitive
     public IReadOnlyList<IReadOnlyList<Vector2>> Loops { get; }
     public RenderColor Color { get; }
     public RenderHatchGradient? Gradient { get; }
+    public RenderLoopFillMode FillMode { get; }
     public float Thickness { get; }
     public RenderBounds Bounds { get; }
 
     public RenderHatchFill(
         IReadOnlyList<IReadOnlyList<Vector2>> loops,
         RenderColor color,
-        RenderHatchGradient? gradient)
+        RenderHatchGradient? gradient,
+        RenderLoopFillMode fillMode)
     {
         Loops = loops;
         Color = color;
         Gradient = gradient;
+        FillMode = fillMode;
         Thickness = 0f;
         Bounds = ComputeBounds(loops);
     }
@@ -241,6 +245,7 @@ public sealed class RenderHatchPattern : IRenderPrimitive
     public float Thickness { get; }
     public RenderLineCap LineCap { get; }
     public RenderLineJoin LineJoin { get; }
+    public RenderLoopFillMode FillMode { get; }
     public RenderBounds Bounds { get; }
 
     public RenderHatchPattern(
@@ -249,7 +254,8 @@ public sealed class RenderHatchPattern : IRenderPrimitive
         RenderColor color,
         float thickness,
         RenderLineCap lineCap,
-        RenderLineJoin lineJoin)
+        RenderLineJoin lineJoin,
+        RenderLoopFillMode fillMode)
     {
         Loops = loops;
         Segments = segments;
@@ -257,7 +263,9 @@ public sealed class RenderHatchPattern : IRenderPrimitive
         Thickness = thickness;
         LineCap = lineCap;
         LineJoin = lineJoin;
-        Bounds = ComputeBounds(loops);
+        FillMode = fillMode;
+        var bounds = ComputeBounds(loops);
+        Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 
     private static RenderBounds ComputeBounds(IReadOnlyList<IReadOnlyList<Vector2>> loops)
@@ -282,16 +290,19 @@ public sealed class RenderClipGroup : IRenderPrimitive
 {
     public IReadOnlyList<IReadOnlyList<Vector2>> Loops { get; }
     public IReadOnlyList<IRenderPrimitive> Primitives { get; }
+    public RenderLoopFillMode FillMode { get; }
     public RenderColor Color { get; }
     public float Thickness { get; }
     public RenderBounds Bounds { get; }
 
     public RenderClipGroup(
         IReadOnlyList<IReadOnlyList<Vector2>> loops,
-        IReadOnlyList<IRenderPrimitive> primitives)
+        IReadOnlyList<IRenderPrimitive> primitives,
+        RenderLoopFillMode fillMode)
     {
         Loops = loops;
         Primitives = primitives;
+        FillMode = fillMode;
         Color = new RenderColor(0, 0, 0, 0);
         Thickness = 0f;
         Bounds = ComputeBounds(loops, primitives);
@@ -411,7 +422,8 @@ public sealed class RenderCircle : IRenderPrimitive
         LineJoin = lineJoin;
         var min = center - new Vector2(radius, radius);
         var max = center + new Vector2(radius, radius);
-        Bounds = new RenderBounds(min, max);
+        var bounds = new RenderBounds(min, max);
+        Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 }
 
@@ -445,9 +457,8 @@ public sealed class RenderArc : IRenderPrimitive
         Thickness = thickness;
         LineCap = lineCap;
         LineJoin = lineJoin;
-        var min = center - new Vector2(radius, radius);
-        var max = center + new Vector2(radius, radius);
-        Bounds = new RenderBounds(min, max);
+        var bounds = RenderBoundsUtils.ComputeArcBounds(center, radius, startAngle, endAngle);
+        Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 }
 
@@ -482,11 +493,11 @@ public sealed class RenderPoint : IRenderPrimitive
         {
             var extent = (float)(displaySize * 0.5);
             var delta = new Vector2(extent, extent);
-            Bounds = new RenderBounds(point - delta, point + delta);
+            Bounds = RenderBoundsUtils.InflateForStroke(new RenderBounds(point - delta, point + delta), thickness);
         }
         else
         {
-            Bounds = RenderBounds.Empty.Expand(point);
+            Bounds = RenderBoundsUtils.InflateForStroke(RenderBounds.Empty.Expand(point), thickness);
         }
     }
 }

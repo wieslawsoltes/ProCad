@@ -129,6 +129,7 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
                 viewportScale,
                 settings.PaperSpaceLineTypeScalingOverride,
                 settings.AnnotationScaleFactor);
+            var layerOverrides = ViewportLayerOverrideResolver.Resolve(document, viewport);
             var viewportContext = new RenderBuildContext(
                 document,
                 viewportSettings,
@@ -141,7 +142,8 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
                 _orderResolver,
                 _dispatcher,
                 diagnostics,
-                context.Stats);
+                context.Stats,
+                layerOverrides);
 
             var transform = BuildViewportTransform(viewport);
             var viewportBlock = ResolveViewportBlock(document, viewport);
@@ -164,7 +166,11 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
                 }
 
                 var targetBuilder = context.Layers.GetLayerBuilder(entry.Key);
-                targetBuilder.Add(new RenderClipGroup(clipLoops, builder.Primitives));
+                targetBuilder.Add(new RenderClipGroup(clipLoops, builder.Primitives, RenderLoopFillMode.NonZero));
+                foreach (var kvp in builder.Metadata)
+                {
+                    targetBuilder.AddMetadata(kvp.Key, kvp.Value);
+                }
             }
         }
 
@@ -217,13 +223,20 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
 
         var layers = new List<RenderLayer>(builders.Count);
         var sceneBounds = RenderBounds.Empty;
+        var metadata = new Dictionary<IRenderPrimitive, RenderPrimitiveMetadata>(ReferenceEqualityComparer.Instance);
         foreach (var builder in builders)
         {
             var layer = new RenderLayer(builder.Name, builder.Color, builder.IsVisible, builder.Primitives, builder.Bounds);
             layers.Add(layer);
             sceneBounds = sceneBounds.Expand(builder.Bounds);
+
+            foreach (var kvp in builder.Metadata)
+            {
+                metadata[kvp.Key] = kvp.Value;
+            }
         }
 
+        var spatialIndex = RenderSpatialIndex.Build(layers);
         stopwatch.Stop();
         var renderStats = RenderStats.Build(stats, layers, stopwatch.Elapsed, context.Settings.PerformanceBudget);
         return new RenderScene(
@@ -232,6 +245,8 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
             context.Settings.Background,
             context.Settings.VisualStyle,
             context.Settings.HiddenLineSettings,
+            spatialIndex,
+            metadata,
             context.Diagnostics,
             renderStats);
     }

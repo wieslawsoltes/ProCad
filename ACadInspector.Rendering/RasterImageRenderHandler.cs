@@ -53,7 +53,7 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
         var loops = BuildClipLoops(image, transform, size);
         if (loops.Count > 0)
         {
-            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }));
+            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }, RenderLoopFillMode.NonZero));
         }
         else
         {

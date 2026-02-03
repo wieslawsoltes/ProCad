@@ -4,6 +4,7 @@ using System.Reactive.Threading.Tasks;
 using System.Threading;
 using ACadInspector.Core;
 using ACadInspector.Rendering;
+using ACadInspector.Services;
 using ACadInspector.ViewModels;
 using ACadSharp.Entities;
 using CSMath;
@@ -50,6 +51,7 @@ public sealed class RenderStatsTests
                 new CadRenderSceneSettings(),
                 CadRenderLayoutSelection.ModelSpace,
                 documentPath: null,
+                new CadSelectionService(),
                 service,
                 "render-stats.json");
 

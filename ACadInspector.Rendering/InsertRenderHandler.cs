@@ -87,6 +87,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             return;
         }
 
+        using var ownerScope = context.SelectionContext.EnterOwnerOverride(insert);
         var clipLoops = BuildClipLoops(insert, transform);
         var hasClip = clipLoops.Count > 0;
         var useXref = TryResolveXRef(insert.Block, context.Settings, out var xrefInfo);
@@ -100,7 +101,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
 
         var targetDocument = useXref ? xrefInfo.Document : context.Document;
         var settings = useXref ? WithSupportPaths(context.Settings, xrefInfo.Path) : context.Settings;
-        var subContext = CreateSubContext(targetDocument, settings, context);
+        var subContext = CreateSubContext(targetDocument, settings, context, context.SelectionContext);
 
         if (useXref)
         {
@@ -124,7 +125,8 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
     private static RenderBuildContext CreateSubContext(
         CadDocument document,
         CadRenderSceneSettings settings,
-        RenderBuildContext context)
+        RenderBuildContext context,
+        RenderSelectionContext selectionContext)
     {
         return new RenderBuildContext(
             document,
@@ -138,7 +140,9 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             context.EntityOrderResolver,
             context.Dispatcher,
             context.Diagnostics,
-            context.Stats);
+            context.Stats,
+            context.ViewportOverrides,
+            selectionContext);
     }
 
     private static void MergeLayerPrimitives(
@@ -158,13 +162,24 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             var targetBuilder = target.Layers.GetLayerBuilder(entry.Key);
             if (hasClip)
             {
-                targetBuilder.Add(new RenderClipGroup(clipLoops, builder.Primitives));
+                targetBuilder.Add(new RenderClipGroup(clipLoops, builder.Primitives, RenderLoopFillMode.NonZero));
+                foreach (var kvp in builder.Metadata)
+                {
+                    targetBuilder.AddMetadata(kvp.Key, kvp.Value);
+                }
                 continue;
             }
 
             foreach (var primitive in builder.Primitives)
             {
-                targetBuilder.Add(primitive);
+                if (builder.TryGetMetadata(primitive, out var metadata))
+                {
+                    targetBuilder.Add(primitive, metadata);
+                }
+                else
+                {
+                    targetBuilder.Add(primitive);
+                }
             }
         }
     }
@@ -633,19 +648,24 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
         }
 
         var representationBlock = dynamicInfo?.RepresentationData?.Block;
+        if (representationBlock is not null && representationBlock.IsAnonymous)
+        {
+            if (block.Source is not null && !ReferenceEquals(block.Source, representationBlock))
+            {
+                context.Diagnostics.TrackDynamicBlockMappingMismatch(insert, block.Source, representationBlock);
+            }
+
+            return representationBlock;
+        }
+
         if (block.IsAnonymous && block.Source is not null)
         {
-            if (representationBlock is not null && !ReferenceEquals(block.Source, representationBlock))
+            if (representationBlock is not null && !ReferenceEquals(block, representationBlock))
             {
                 context.Diagnostics.TrackDynamicBlockMappingMismatch(insert, block.Source, representationBlock);
             }
 
             return block;
-        }
-
-        if (representationBlock is not null && representationBlock.IsAnonymous)
-        {
-            return representationBlock;
         }
 
         return block;

@@ -22,11 +22,22 @@ public sealed class RenderLayer
 
 public sealed class RenderScene
 {
+    private static readonly IReadOnlyDictionary<IRenderPrimitive, RenderPrimitiveMetadata> EmptyMetadata =
+        new Dictionary<IRenderPrimitive, RenderPrimitiveMetadata>(ReferenceEqualityComparer.Instance);
+
     public RenderColor Background { get; }
     public RenderVisualStyle VisualStyle { get; }
     public RenderHiddenLineSettings HiddenLineSettings { get; }
     public RenderBounds Bounds { get; }
     public IReadOnlyList<RenderLayer> Layers { get; }
+    /// <summary>
+    /// Gets the spatial index for fast hit testing.
+    /// </summary>
+    public RenderSpatialIndex SpatialIndex { get; }
+    /// <summary>
+    /// Gets the metadata map for render primitives.
+    /// </summary>
+    public IReadOnlyDictionary<IRenderPrimitive, RenderPrimitiveMetadata> PrimitiveMetadata { get; }
     public RenderDiagnostics Diagnostics { get; }
     public RenderStats Stats { get; }
 
@@ -36,6 +47,8 @@ public sealed class RenderScene
         RenderColor background,
         RenderVisualStyle visualStyle,
         RenderHiddenLineSettings hiddenLineSettings,
+        RenderSpatialIndex spatialIndex,
+        IReadOnlyDictionary<IRenderPrimitive, RenderPrimitiveMetadata>? primitiveMetadata,
         RenderDiagnostics diagnostics,
         RenderStats stats)
     {
@@ -44,6 +57,8 @@ public sealed class RenderScene
         Background = background;
         VisualStyle = visualStyle;
         HiddenLineSettings = hiddenLineSettings;
+        SpatialIndex = spatialIndex ?? RenderSpatialIndex.Empty;
+        PrimitiveMetadata = primitiveMetadata ?? EmptyMetadata;
         Diagnostics = diagnostics;
         Stats = stats;
     }

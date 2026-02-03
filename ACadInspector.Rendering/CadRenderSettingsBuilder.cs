@@ -62,6 +62,7 @@ public static class CadRenderSettingsBuilder
         var wipeoutFrameVisibility = ResolveWipeoutFrameVisibility(document, baseSettings.WipeoutFrameVisibility);
         var underlayFrameVisibility = ResolveUnderlayFrameVisibility(document, header, baseSettings.UnderlayFrameVisibility);
         var layoutScaling = ResolvePaperSpaceLineTypeScaling(layout);
+        var plotStyleTable = ResolvePlotStyleTable(document, documentPath, layout, selection, supportPaths);
 
         return new CadRenderSceneSettings
         {
@@ -105,6 +106,8 @@ public static class CadRenderSettingsBuilder
             IncludeOffLayers = baseSettings.IncludeOffLayers,
             IncludeUnsupportedAsPoints = baseSettings.IncludeUnsupportedAsPoints,
             PerformanceBudget = baseSettings.PerformanceBudget
+            ,
+            PlotStyleTable = plotStyleTable
         };
     }
 
@@ -265,6 +268,53 @@ public static class CadRenderSettingsBuilder
         }
 
         return fallback;
+    }
+
+    private static RenderPlotStyleTable? ResolvePlotStyleTable(
+        CadDocument document,
+        string? documentPath,
+        Layout? layout,
+        CadRenderLayoutSelection selection,
+        IReadOnlyList<string> supportPaths)
+    {
+        var styleSheet = layout?.StyleSheet;
+        if (string.IsNullOrWhiteSpace(styleSheet))
+        {
+            return null;
+        }
+
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(documentPath))
+        {
+            var directory = System.IO.Path.GetDirectoryName(documentPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                candidates.Add(System.IO.Path.Combine(directory, styleSheet));
+            }
+        }
+
+        foreach (var path in supportPaths)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            candidates.Add(System.IO.Path.Combine(path, styleSheet));
+        }
+
+        candidates.Add(styleSheet);
+
+        foreach (var candidate in candidates)
+        {
+            var table = RenderPlotStyleTable.TryLoad(candidate);
+            if (table is not null)
+            {
+                return table;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryParseFrameVisibility(string? value, out RenderFrameVisibility visibility)

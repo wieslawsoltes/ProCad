@@ -57,7 +57,7 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
         var loops = BuildClipLoops(underlay, transform, vertices, axis);
         if (underlay.Flags.HasFlag(UnderlayDisplayFlags.ClippingOn) && vertices.Count >= 3)
         {
-            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }));
+            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }, RenderLoopFillMode.NonZero));
         }
         else
         {

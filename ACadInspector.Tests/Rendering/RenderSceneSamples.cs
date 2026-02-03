@@ -45,12 +45,15 @@ internal static class RenderSceneSamples
         }
 
         var layer = new RenderLayer("Baseline", RenderColor.DefaultForeground, isVisible: true, primitives, bounds);
+        var spatialIndex = RenderSpatialIndex.Build(new[] { layer });
         return new RenderScene(
             new[] { layer },
             bounds,
             RenderColor.DefaultBackground,
             RenderVisualStyle.Wireframe,
             RenderHiddenLineSettings.Default,
+            spatialIndex,
+            null,
             new RenderDiagnostics(),
             RenderStats.Empty);
     }

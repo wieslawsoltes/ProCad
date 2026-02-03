@@ -40,6 +40,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
 
         var worldLoops = TransformLoops(localLoops, hatchTransform);
         var gradient = BuildGradient(hatch.GradientColor, color.A);
+        var fillMode = ResolveFillMode(hatch.Style);
         var enableFills = settings.EnableHatchFills && settings.FillMode;
         var enablePatterns = settings.EnableHatchPatterns && settings.Quality != RenderQuality.Draft && settings.FillMode;
         var enableGradients = settings.EnableHatchGradients && settings.Quality == RenderQuality.High && settings.FillMode;
@@ -48,7 +49,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         {
             if (enableFills)
             {
-                builder.Add(new RenderHatchFill(worldLoops, color, enableGradients ? gradient : null));
+                builder.Add(new RenderHatchFill(worldLoops, color, enableGradients ? gradient : null, fillMode));
             }
             else
             {
@@ -62,7 +63,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         {
             if (enableFills)
             {
-                builder.Add(new RenderHatchFill(worldLoops, color, null));
+                builder.Add(new RenderHatchFill(worldLoops, color, null, fillMode));
             }
             else
             {
@@ -85,7 +86,17 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
             return;
         }
 
-        builder.Add(new RenderHatchPattern(worldLoops, segments, color, thickness, lineCap, lineJoin));
+        builder.Add(new RenderHatchPattern(worldLoops, segments, color, thickness, lineCap, lineJoin, fillMode));
+    }
+
+    private static RenderLoopFillMode ResolveFillMode(HatchStyleType style)
+    {
+        return style switch
+        {
+            HatchStyleType.Outer => RenderLoopFillMode.Outer,
+            HatchStyleType.Ignore => RenderLoopFillMode.Ignore,
+            _ => RenderLoopFillMode.EvenOdd
+        };
     }
 
     private static List<List<Vector2>> BuildLocalLoops(Hatch hatch, int precision)

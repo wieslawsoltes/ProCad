@@ -6,6 +6,7 @@ using System.Text;
 using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.Tables;
+using ACadSharp.Text;
 using CSMath;
 
 namespace ACadInspector.Rendering;
@@ -51,16 +52,15 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var blockWidth = 0f;
-        var blockHeight = 0f;
-        foreach (var line in lineLayouts)
+        var columns = BuildColumns(lineLayouts, text, scale, out var columnGutter);
+        if (columns.Count == 0)
         {
-            blockWidth = MathF.Max(blockWidth, line.Width);
-            blockHeight += line.Height;
+            return;
         }
 
+        var blockWidth = ComputeBlockWidth(columns, columnGutter);
+        var blockHeight = ComputeBlockHeight(columns);
         var baseOffset = ResolveAttachmentOffset(text.AttachmentPoint, blockWidth, blockHeight);
-        var horizontalAdjustMode = ResolveHorizontalAdjustment(text.AttachmentPoint);
 
         if (context.Settings.QuickTextMode)
         {
@@ -108,47 +108,92 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             }
         }
 
-        var y = 0f;
-        foreach (var line in lineLayouts)
+        var columnOffset = 0f;
+        foreach (var column in columns)
         {
-            var lineAdjust = horizontalAdjustMode switch
+            var y = 0f;
+            foreach (var line in column.Lines)
             {
-                HorizontalAdjustment.Center => (blockWidth - line.Width) * 0.5f,
-                HorizontalAdjustment.Right => blockWidth - line.Width,
-                _ => 0f
-            };
-
-            var x = 0f;
-            foreach (var run in line.Runs)
-            {
-                if (string.IsNullOrWhiteSpace(run.Layout.Text))
+                var lineAdjust = line.Alignment switch
                 {
-                    x += run.Advance;
-                    continue;
+                    MTextAlignment.Center => (column.Width - line.Width) * 0.5f,
+                    MTextAlignment.Right => column.Width - line.Width,
+                    _ => 0f
+                };
+
+                var extraSpace = line.Alignment == MTextAlignment.Justify && line.SpaceCount > 0
+                    ? (column.Width - line.Width) / line.SpaceCount
+                    : 0f;
+
+                var x = 0f;
+                foreach (var run in line.Runs)
+                {
+                    var offset = new Vector2(baseOffset.X + columnOffset + lineAdjust + x, baseOffset.Y - y);
+
+                    if (run.BackgroundColor.HasValue && run.Advance > 0f && !string.IsNullOrWhiteSpace(run.Layout.Text))
+                    {
+                        var padding = run.BackgroundPadding * scale;
+                        var backgroundOffset = new Vector2(offset.X - padding, offset.Y - padding);
+                        var backgroundWidth = run.Advance + padding * 2f;
+                        var backgroundHeight = run.Layout.Height * scale + padding * 2f;
+                        var quad = RenderTextUtils.BuildTextQuad(
+                            anchor,
+                            backgroundOffset,
+                            backgroundWidth,
+                            backgroundHeight,
+                            widthFactor: 1f,
+                            rotation,
+                            run.ObliqueAngle,
+                            mirrorX,
+                            mirrorY);
+                        builder.Add(new RenderFill(quad, run.BackgroundColor.Value));
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(run.Layout.Text))
+                    {
+                        var runStyle = ResolveRunTextStyle(text.Style, run);
+                        var runHeight = run.FontSize * scale;
+                        if (!ShxTextGeometryBuilder.TryAddText(
+                                builder,
+                                run.Layout.Text,
+                                runStyle,
+                                context,
+                                anchor,
+                                offset,
+                                runHeight,
+                                run.WidthFactor,
+                                rotation,
+                                run.ObliqueAngle,
+                                mirrorX,
+                                mirrorY,
+                                run.Color))
+                        {
+                            builder.Add(new RenderText(
+                                run.Layout.Text,
+                                anchor,
+                                offset,
+                                run.Layout.Width * scale,
+                                run.Layout.Height * scale,
+                                runHeight,
+                                run.WidthFactor,
+                                rotation,
+                                run.ObliqueAngle,
+                                run.IsBold,
+                                run.IsItalic,
+                                mirrorX,
+                                mirrorY,
+                                run.Color,
+                                run.FontFamily));
+                        }
+                    }
+
+                    x += run.Advance + extraSpace * run.SpaceCount;
                 }
 
-                var offset = new Vector2(baseOffset.X + lineAdjust + x, baseOffset.Y - y);
-                builder.Add(new RenderText(
-                    run.Layout.Text,
-                    anchor,
-                    offset,
-                    run.Layout.Width * scale,
-                    run.Layout.Height * scale,
-                    run.FontSize * scale,
-                    run.WidthFactor,
-                    rotation,
-                    run.ObliqueAngle,
-                    run.IsBold,
-                    run.IsItalic,
-                    mirrorX,
-                    mirrorY,
-                    run.Color,
-                    run.FontFamily));
-
-                x += run.Advance;
+                y += line.Height + line.ExtraSpacingAfter;
             }
 
-            y += line.Height;
+            columnOffset += column.Width + columnGutter;
         }
     }
 
@@ -191,6 +236,121 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             AttachmentPointType.BottomRight => HorizontalAdjustment.Right,
             _ => HorizontalAdjustment.Left
         };
+    }
+
+    private static IReadOnlyList<MTextColumnLayout> BuildColumns(
+        IReadOnlyList<MTextLineLayout> lines,
+        MText text,
+        float scale,
+        out float columnGutter)
+    {
+        columnGutter = 0f;
+        if (lines.Count == 0)
+        {
+            return Array.Empty<MTextColumnLayout>();
+        }
+
+        var column = text.Column;
+        if (column is null || column.ColumnType == ColumnType.NoColumns)
+        {
+            var width = MaxLineWidth(lines);
+            var height = SumLineHeight(lines);
+            return new[] { new MTextColumnLayout(lines, width, height) };
+        }
+
+        var columnWidth = column.ColumnWidth > 0 ? (float)column.ColumnWidth * scale : 0f;
+        columnGutter = MathF.Max(0f, (float)column.ColumnGutter * scale);
+        var columnCount = column.ColumnCount > 0 ? column.ColumnCount : 1;
+        var useHeights = column.ColumnHeights.Count >= columnCount;
+        var columns = new List<MTextColumnLayout>(columnCount);
+
+        var currentLines = new List<MTextLineLayout>();
+        var currentHeight = 0f;
+        var columnIndex = 0;
+        var maxHeight = useHeights ? (float)column.ColumnHeights[columnIndex] * scale : float.PositiveInfinity;
+
+        foreach (var line in lines)
+        {
+            var lineHeight = line.Height + line.ExtraSpacingAfter;
+            if (currentLines.Count > 0 && currentHeight + lineHeight > maxHeight && columnIndex + 1 < columnCount)
+            {
+                var width = columnWidth > 0f ? columnWidth : MaxLineWidth(currentLines);
+                columns.Add(new MTextColumnLayout(currentLines.ToArray(), width, currentHeight));
+                columnIndex++;
+                currentLines = new List<MTextLineLayout>();
+                currentHeight = 0f;
+                maxHeight = useHeights ? (float)column.ColumnHeights[columnIndex] * scale : float.PositiveInfinity;
+            }
+
+            currentLines.Add(line);
+            currentHeight += lineHeight;
+        }
+
+        if (currentLines.Count > 0)
+        {
+            var width = columnWidth > 0f ? columnWidth : MaxLineWidth(currentLines);
+            columns.Add(new MTextColumnLayout(currentLines.ToArray(), width, currentHeight));
+        }
+
+        if (column.ColumnFlowReversed || text.DrawingDirection == DrawingDirectionType.RightToLeft)
+        {
+            columns.Reverse();
+        }
+
+        return columns;
+    }
+
+    private static float MaxLineWidth(IReadOnlyList<MTextLineLayout> lines)
+    {
+        var width = 0f;
+        foreach (var line in lines)
+        {
+            width = MathF.Max(width, line.Width);
+        }
+
+        return width;
+    }
+
+    private static float SumLineHeight(IReadOnlyList<MTextLineLayout> lines)
+    {
+        var height = 0f;
+        foreach (var line in lines)
+        {
+            height += line.Height + line.ExtraSpacingAfter;
+        }
+
+        return height;
+    }
+
+    private static float ComputeBlockWidth(IReadOnlyList<MTextColumnLayout> columns, float gutter)
+    {
+        if (columns.Count == 0)
+        {
+            return 0f;
+        }
+
+        var width = 0f;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            width += columns[i].Width;
+            if (i < columns.Count - 1)
+            {
+                width += gutter;
+            }
+        }
+
+        return width;
+    }
+
+    private static float ComputeBlockHeight(IReadOnlyList<MTextColumnLayout> columns)
+    {
+        var height = 0f;
+        foreach (var column in columns)
+        {
+            height = MathF.Max(height, column.Height);
+        }
+
+        return height;
     }
 
     private static (Vector2 Anchor, float Rotation, float Scale) ResolveTransform(Transform transform, XYZ anchorPoint, float rotation)
@@ -336,7 +496,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
 
     private static MTextLayout ParseFormattedText(string value)
     {
-        var lines = new List<MTextLine> { new() };
+        var lines = new List<MTextLine> { new MTextLine(null) };
         var buffer = new StringBuilder();
         var state = MTextFormatState.Default;
         var stack = new Stack<MTextFormatState>();
@@ -348,13 +508,33 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                 return;
             }
 
-            lines[^1].Runs.Add(new MTextRun(buffer.ToString(), state));
+            lines[^1].Runs.Add(new MTextRun(buffer.ToString(), state, isTab: false));
             buffer.Clear();
+        }
+
+        void NewLine(MTextLineBreakKind breakKind)
+        {
+            Flush();
+            lines[^1].BreakKind = breakKind;
+            lines.Add(new MTextLine(state.Alignment));
         }
 
         for (var i = 0; i < value.Length; i++)
         {
             var current = value[i];
+            if (current == '%' && i + 1 < value.Length && value[i + 1] == '<')
+            {
+                Flush();
+                var field = ReadFieldValue(value, i + 2, out var fieldEnd);
+                if (!string.IsNullOrEmpty(field))
+                {
+                    buffer.Append(field);
+                }
+
+                i = fieldEnd - 1;
+                continue;
+            }
+
             if (current == '\\' && i + 1 < value.Length)
             {
                 var code = value[i + 1];
@@ -367,14 +547,22 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         i++;
                         continue;
                     case 'P':
+                        NewLine(MTextLineBreakKind.Paragraph);
+                        i++;
+                        continue;
                     case 'n':
                     case 'N':
-                        Flush();
-                        lines.Add(new MTextLine());
+                        NewLine(MTextLineBreakKind.Line);
                         i++;
                         continue;
                     case '~':
                         buffer.Append(' ');
+                        i++;
+                        continue;
+                    case 't':
+                    case 'T':
+                        Flush();
+                        lines[^1].Runs.Add(new MTextRun("\t", state, isTab: true));
                         i++;
                         continue;
                     case 'S':
@@ -423,8 +611,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         continue;
                     case 'A':
                     case 'p':
-                        ReadDelimitedValue(value, i + 2, out var ignoreEnd);
-                        i = ignoreEnd - 1;
+                        Flush();
+                        var alignValue = ReadDelimitedValue(value, i + 2, out var alignEnd);
+                        state = state.WithAlignment(ParseAlignment(alignValue));
+                        i = alignEnd - 1;
                         continue;
                     default:
                         i++;
@@ -454,6 +644,20 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
 
         Flush();
         return new MTextLayout(lines);
+    }
+
+    private static string ReadFieldValue(string text, int start, out int end)
+    {
+        var index = text.IndexOf(">%", start, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            end = text.Length;
+            return text.Substring(start);
+        }
+
+        end = index + 2;
+        var content = text.Substring(start, index - start);
+        return TextProcessor.Parse(content, out _);
     }
 
     private static string ReadDelimitedValue(string text, int start, out int end)
@@ -562,6 +766,23 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return (float)(parsed.Value * MathHelper.DegToRadFactor);
     }
 
+    private static MTextAlignment? ParseAlignment(string value)
+    {
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed switch
+        {
+            0 => MTextAlignment.Left,
+            1 => MTextAlignment.Center,
+            2 => MTextAlignment.Right,
+            3 => MTextAlignment.Justify,
+            _ => null
+        };
+    }
+
     private static float? ParseFloat(string value)
     {
         if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
@@ -598,24 +819,50 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         var baseHeight = (float)text.Height;
         var lineSpacing = Math.Clamp((float)text.LineSpacing, 0.25f, 4f);
         var baseLineHeight = baseHeight * lineSpacing * scale;
+        var paragraphSpacing = baseHeight * 0.5f * scale;
 
         foreach (var line in lines)
         {
             if (line.Runs.Count == 0)
             {
-                layouts.Add(new MTextLineLayout(new List<MTextRunLayout>(), 0f, baseLineHeight));
+                var alignment = ResolveLineAlignment(line, text);
+                var extra = line.BreakKind == MTextLineBreakKind.Paragraph ? paragraphSpacing : 0f;
+                layouts.Add(new MTextLineLayout(new List<MTextRunLayout>(), 0f, baseLineHeight, extra, alignment, 0));
                 continue;
             }
 
             var runLayouts = new List<MTextRunLayout>(line.Runs.Count);
             var lineWidth = 0f;
             var maxRunHeight = 0f;
+            var spaceCount = 0;
 
             foreach (var run in line.Runs)
             {
                 var resolved = ResolveRunStyle(text, run.State, baseWidthFactor, baseObliqueAngle, baseBold, baseItalic, baseFontFamily, baseColor);
                 var runHeight = resolved.Height;
                 var style = CreateRunStyle(text.Style, resolved);
+
+                if (run.IsTab)
+                {
+                    var tabWidth = ResolveTabWidth(runHeight, resolved.WidthFactor);
+                    lineWidth += tabWidth * scale;
+                    maxRunHeight = MathF.Max(maxRunHeight, runHeight * scale);
+                    runLayouts.Add(new MTextRunLayout(
+                        new RenderTextLayout(string.Empty, 0f, 0f),
+                        resolved.Color,
+                        resolved.FontFamily,
+                        resolved.WidthFactor,
+                        resolved.ObliqueAngle,
+                        resolved.IsBold,
+                        resolved.IsItalic,
+                        runHeight,
+                        tabWidth * scale,
+                        0,
+                        null,
+                        0f));
+                    continue;
+                }
+
                 var layout = MeasureRunLayout(run.Text, runHeight, style, context);
                 if (string.IsNullOrEmpty(layout.Text))
                 {
@@ -627,6 +874,12 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                 lineWidth += runWidth;
                 maxRunHeight = MathF.Max(maxRunHeight, runHeightWorld);
 
+                var runSpaces = CountSpaces(run.Text);
+                spaceCount += runSpaces;
+
+                var backgroundColor = ResolveRunBackground(text, context.Settings);
+                var backgroundPadding = runHeight * 0.15f;
+
                 runLayouts.Add(new MTextRunLayout(
                     layout,
                     resolved.Color,
@@ -636,14 +889,19 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                     resolved.IsBold,
                     resolved.IsItalic,
                     runHeight,
-                    runWidth));
+                    runWidth,
+                    runSpaces,
+                    backgroundColor,
+                    backgroundPadding));
             }
 
             var lineHeight = text.LineSpacingStyle == LineSpacingStyleType.Exact
                 ? baseLineHeight
                 : MathF.Max(baseLineHeight, maxRunHeight);
+            var extraSpacingAfter = line.BreakKind == MTextLineBreakKind.Paragraph ? paragraphSpacing : 0f;
+            var alignmentValue = ResolveLineAlignment(line, text);
 
-            layouts.Add(new MTextLineLayout(runLayouts, lineWidth, lineHeight));
+            layouts.Add(new MTextLineLayout(runLayouts, lineWidth, lineHeight, extraSpacingAfter, alignmentValue, spaceCount));
         }
 
         return layouts;
@@ -691,6 +949,83 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
 
         return new MTextResolvedStyle(height, widthFactor, oblique, isBold, isItalic, fontFamily, color);
+    }
+
+    private static MTextAlignment ResolveLineAlignment(MTextLine line, MText text)
+    {
+        if (line.Alignment.HasValue)
+        {
+            return line.Alignment.Value;
+        }
+
+        return text.AttachmentPoint switch
+        {
+            AttachmentPointType.TopCenter => MTextAlignment.Center,
+            AttachmentPointType.MiddleCenter => MTextAlignment.Center,
+            AttachmentPointType.BottomCenter => MTextAlignment.Center,
+            AttachmentPointType.TopRight => MTextAlignment.Right,
+            AttachmentPointType.MiddleRight => MTextAlignment.Right,
+            AttachmentPointType.BottomRight => MTextAlignment.Right,
+            _ => MTextAlignment.Left
+        };
+    }
+
+    private static float ResolveTabWidth(float height, float widthFactor)
+    {
+        var baseWidth = MathF.Max(height * widthFactor, 0.1f);
+        return baseWidth * 4f;
+    }
+
+    private static int CountSpaces(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var ch in text)
+        {
+            if (ch == ' ')
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static RenderColor? ResolveRunBackground(MText text, CadRenderSceneSettings settings)
+    {
+        if (text.BackgroundFillFlags == BackgroundFillFlags.None)
+        {
+            return null;
+        }
+
+        RenderColor fillColor;
+        if (text.BackgroundFillFlags.HasFlag(BackgroundFillFlags.UseBackgroundFillColor))
+        {
+            var color = text.BackgroundColor;
+            if (color.IsByLayer || color.IsByBlock)
+            {
+                fillColor = settings.Background;
+            }
+            else
+            {
+                fillColor = ToRenderColor(color);
+            }
+        }
+        else if (text.BackgroundFillFlags.HasFlag(BackgroundFillFlags.UseDrawingWindowColor))
+        {
+            fillColor = settings.Background;
+        }
+        else
+        {
+            return null;
+        }
+
+        var alpha = ResolveTransparencyAlpha(text.BackgroundTransparency);
+        return new RenderColor(fillColor.R, fillColor.G, fillColor.B, alpha);
     }
 
     private static TextEntity CreateMeasureEntity(string text, float height, TextStyle style)
@@ -775,6 +1110,26 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return runStyle;
     }
 
+    private static TextStyle ResolveRunTextStyle(TextStyle baseStyle, MTextRunLayout run)
+    {
+        var runStyle = new TextStyle(baseStyle?.Name ?? TextStyle.DefaultName)
+        {
+            Filename = baseStyle?.Filename ?? string.Empty,
+            Width = baseStyle?.Width ?? 1.0,
+            Height = baseStyle?.Height ?? 0.0,
+            ObliqueAngle = baseStyle?.ObliqueAngle ?? 0.0,
+            MirrorFlag = baseStyle?.MirrorFlag ?? TextMirrorFlag.None,
+            TrueType = baseStyle?.TrueType ?? FontFlags.Regular
+        };
+
+        if (!string.IsNullOrWhiteSpace(run.FontFamily))
+        {
+            runStyle.Filename = run.FontFamily;
+        }
+
+        return runStyle;
+    }
+
     private enum HorizontalAdjustment
     {
         Left = 0,
@@ -821,20 +1176,43 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
     }
 
+    private enum MTextLineBreakKind
+    {
+        Line,
+        Paragraph
+    }
+
+    private enum MTextAlignment
+    {
+        Left,
+        Center,
+        Right,
+        Justify
+    }
+
     private sealed class MTextLine
     {
         public List<MTextRun> Runs { get; } = new();
+        public MTextLineBreakKind BreakKind { get; set; } = MTextLineBreakKind.Line;
+        public MTextAlignment? Alignment { get; }
+
+        public MTextLine(MTextAlignment? alignment)
+        {
+            Alignment = alignment;
+        }
     }
 
     private readonly struct MTextRun
     {
         public string Text { get; }
         public MTextFormatState State { get; }
+        public bool IsTab { get; }
 
-        public MTextRun(string text, MTextFormatState state)
+        public MTextRun(string text, MTextFormatState state, bool isTab)
         {
             Text = text;
             State = state;
+            IsTab = isTab;
         }
     }
 
@@ -843,10 +1221,36 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public IReadOnlyList<MTextRunLayout> Runs { get; }
         public float Width { get; }
         public float Height { get; }
+        public float ExtraSpacingAfter { get; }
+        public MTextAlignment Alignment { get; }
+        public int SpaceCount { get; }
 
-        public MTextLineLayout(IReadOnlyList<MTextRunLayout> runs, float width, float height)
+        public MTextLineLayout(
+            IReadOnlyList<MTextRunLayout> runs,
+            float width,
+            float height,
+            float extraSpacingAfter,
+            MTextAlignment alignment,
+            int spaceCount)
         {
             Runs = runs;
+            Width = width;
+            Height = height;
+            ExtraSpacingAfter = extraSpacingAfter;
+            Alignment = alignment;
+            SpaceCount = spaceCount;
+        }
+    }
+
+    private readonly struct MTextColumnLayout
+    {
+        public IReadOnlyList<MTextLineLayout> Lines { get; }
+        public float Width { get; }
+        public float Height { get; }
+
+        public MTextColumnLayout(IReadOnlyList<MTextLineLayout> lines, float width, float height)
+        {
+            Lines = lines;
             Width = width;
             Height = height;
         }
@@ -863,6 +1267,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public bool IsItalic { get; }
         public float FontSize { get; }
         public float Advance { get; }
+        public int SpaceCount { get; }
+        public RenderColor? BackgroundColor { get; }
+        public float BackgroundPadding { get; }
 
         public MTextRunLayout(
             RenderTextLayout layout,
@@ -873,7 +1280,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             bool isBold,
             bool isItalic,
             float fontSize,
-            float advance)
+            float advance,
+            int spaceCount,
+            RenderColor? backgroundColor,
+            float backgroundPadding)
         {
             Layout = layout;
             Color = color;
@@ -884,6 +1294,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             IsItalic = isItalic;
             FontSize = fontSize;
             Advance = advance;
+            SpaceCount = spaceCount;
+            BackgroundColor = backgroundColor;
+            BackgroundPadding = backgroundPadding;
         }
     }
 
@@ -944,7 +1357,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
 
     private readonly struct MTextFormatState
     {
-        public static MTextFormatState Default => new(null, null, null, null, null, null, null);
+        public static MTextFormatState Default => new(null, null, null, null, null, null, null, null);
 
         public RenderColor? Color { get; }
         public string? FontFamily { get; }
@@ -953,6 +1366,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public MTextHeight Height { get; }
         public float? WidthFactor { get; }
         public float? ObliqueAngle { get; }
+        public MTextAlignment? Alignment { get; }
 
         public MTextFormatState(
             RenderColor? color,
@@ -961,7 +1375,8 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             bool? isItalic,
             MTextHeight? height,
             float? widthFactor,
-            float? obliqueAngle)
+            float? obliqueAngle,
+            MTextAlignment? alignment)
         {
             Color = color;
             FontFamily = fontFamily;
@@ -970,11 +1385,12 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             Height = height ?? default;
             WidthFactor = widthFactor;
             ObliqueAngle = obliqueAngle;
+            Alignment = alignment;
         }
 
         public MTextFormatState WithColor(RenderColor? color)
         {
-            return new MTextFormatState(color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle);
+            return new MTextFormatState(color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment);
         }
 
         public MTextFormatState WithFont(MTextFont font)
@@ -982,22 +1398,27 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             var name = !string.IsNullOrWhiteSpace(font.Name) ? font.Name : FontFamily;
             var bold = font.IsBold ?? IsBold;
             var italic = font.IsItalic ?? IsItalic;
-            return new MTextFormatState(Color, name, bold, italic, Height, WidthFactor, ObliqueAngle);
+            return new MTextFormatState(Color, name, bold, italic, Height, WidthFactor, ObliqueAngle, Alignment);
         }
 
         public MTextFormatState WithHeight(MTextHeight height)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, height, WidthFactor, ObliqueAngle);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, height, WidthFactor, ObliqueAngle, Alignment);
         }
 
         public MTextFormatState WithWidthFactor(float? widthFactor)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, widthFactor, ObliqueAngle);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, widthFactor, ObliqueAngle, Alignment);
         }
 
         public MTextFormatState WithOblique(float? obliqueAngle)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, obliqueAngle);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, obliqueAngle, Alignment);
+        }
+
+        public MTextFormatState WithAlignment(MTextAlignment? alignment)
+        {
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, alignment);
         }
     }
 }

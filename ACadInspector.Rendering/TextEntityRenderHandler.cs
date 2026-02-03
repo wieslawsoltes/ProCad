@@ -124,6 +124,24 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
             }
         }
 
+        if (ShxTextGeometryBuilder.TryAddText(
+                builder,
+                layout.Text,
+                text.Style,
+                context,
+                anchor,
+                offset,
+                fontSize,
+                widthFactor,
+                rotation,
+                obliqueAngle,
+                mirrorX,
+                mirrorY,
+                color))
+        {
+            return;
+        }
+
         builder.Add(new RenderText(
             layout.Text,
             anchor,

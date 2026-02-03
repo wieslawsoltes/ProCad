@@ -176,12 +176,15 @@ public sealed class RenderHiddenLineOcclusionTests
             primitives: new IRenderPrimitive[] { triangle },
             bounds: bounds);
 
+        var spatialIndex = RenderSpatialIndex.Build(new[] { layer });
         return new RenderScene(
             new[] { layer },
             bounds,
             RenderColor.DefaultBackground,
             RenderVisualStyle.HiddenLine,
             RenderHiddenLineSettings.Default,
+            spatialIndex,
+            null,
             new RenderDiagnostics(),
             RenderStats.Empty);
     }

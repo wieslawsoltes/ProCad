@@ -21,6 +21,7 @@ public sealed class RenderEntityDispatcher : IRenderEntityDispatcher
 
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
+        using var scope = context.SelectionContext.EnterEntity(entity);
         for (var i = 0; i < _handlers.Length; i++)
         {
             var handler = _handlers[i];

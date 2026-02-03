@@ -129,7 +129,9 @@ internal static class RenderLinePatternStroker
                 }
                 else if (patternOffset <= Epsilon && (segment.IsText || segment.IsShape))
                 {
-                    AddDecoration(builder, current, direction, segment, color, thickness, lineCap, lineJoin, shapeResolver, settings);
+                    var decorationOffset = MathF.Min(available, remaining) * 0.5f;
+                    var decorationPosition = current + direction * decorationOffset;
+                    AddDecoration(builder, decorationPosition, direction, segment, color, thickness, lineCap, lineJoin, shapeResolver, settings);
                 }
 
                 current += direction * step;

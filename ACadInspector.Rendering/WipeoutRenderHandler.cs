@@ -12,6 +12,10 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var wipeout = (Wipeout)entity;
+        if (wipeout.ClipMode == ClipMode.Outside)
+        {
+            // TODO: Support inverted wipeout clipping (clip outside boundary). Currently rendered as inside only.
+        }
         var loops = BuildWipeoutLoop(wipeout, transform);
         if (loops.Count == 0)
         {
@@ -60,6 +64,24 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
 
     private static List<XY> ResolveBoundaryVertices(Wipeout wipeout)
     {
+        var useClipBoundary = wipeout.ClippingState;
+        if (!useClipBoundary || wipeout.ClipBoundaryVertices.Count == 0)
+        {
+            var size = wipeout.Size;
+            if (size.X <= 0 || size.Y <= 0)
+            {
+                return new List<XY>();
+            }
+
+            return new List<XY>
+            {
+                new XY(-0.5, -0.5),
+                new XY(size.X - 0.5, -0.5),
+                new XY(size.X - 0.5, size.Y - 0.5),
+                new XY(-0.5, size.Y - 0.5)
+            };
+        }
+
         if (wipeout.ClipBoundaryVertices.Count > 0)
         {
             if (wipeout.ClipType == ClipType.Rectangular && wipeout.ClipBoundaryVertices.Count >= 2)
@@ -82,19 +104,7 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
             return new List<XY>(wipeout.ClipBoundaryVertices);
         }
 
-        var size = wipeout.Size;
-        if (size.X <= 0 || size.Y <= 0)
-        {
-            return new List<XY>();
-        }
-
-        return new List<XY>
-        {
-            new XY(-0.5, -0.5),
-            new XY(size.X - 0.5, -0.5),
-            new XY(size.X - 0.5, size.Y - 0.5),
-            new XY(-0.5, size.Y - 0.5)
-        };
+        return new List<XY>();
     }
 
     private static XYZ ResolveWorldPoint(Wipeout wipeout, XY vertex)

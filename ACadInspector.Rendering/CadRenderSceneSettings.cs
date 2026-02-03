@@ -144,6 +144,11 @@ public sealed class CadRenderSceneSettings
     /// </summary>
     public RenderPerformanceBudget? PerformanceBudget { get; init; }
 
+    /// <summary>
+    /// Optional plot style table for CTB/STB overrides.
+    /// </summary>
+    public RenderPlotStyleTable? PlotStyleTable { get; init; }
+
     public int ResolvePolylineArcPrecision() => ResolvePrecision(PolylineArcPrecision, min: 4);
 
     public int ResolveSplinePrecision() => ResolvePrecision(SplinePrecision, min: 4);

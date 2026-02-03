@@ -98,6 +98,81 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         return new RenderLinePattern(segments.ToArray());
     }
 
+    public RenderLinePattern ResolveLinePattern(
+        LineType lineType,
+        double entityLineTypeScale,
+        CadDocument document,
+        CadRenderSceneSettings settings)
+    {
+        if (lineType is null || !lineType.IsComplex)
+        {
+            return RenderLinePattern.Continuous;
+        }
+
+        var scale = (float)(document.Header?.LineTypeScale ?? 1.0);
+        scale *= ResolveSpaceScale(document, settings);
+        scale *= (float)entityLineTypeScale;
+        if (scale <= 0)
+        {
+            scale = 1f;
+        }
+
+        var dotLength = MathF.Max(settings.MinLineWeightMm, settings.LineTypeDotLengthMm) / settings.MillimetersPerUnit;
+        dotLength *= scale;
+
+        var segments = new List<RenderLinePatternSegment>();
+        foreach (var segment in lineType.Segments)
+        {
+            float length;
+
+            if (segment.IsPoint)
+            {
+                length = dotLength;
+            }
+            else
+            {
+                length = (float)Math.Abs(segment.Length) * scale;
+            }
+
+            if (segment.IsText)
+            {
+                if (length <= MinSegmentLength)
+                {
+                    length = MinSegmentLength;
+                }
+                var textSegment = BuildTextSegment(segment, length, scale, settings, document);
+                segments.Add(textSegment);
+                continue;
+            }
+
+            if (segment.IsShape)
+            {
+                if (length <= MinSegmentLength)
+                {
+                    length = MinSegmentLength;
+                }
+                var shapeSegment = BuildShapeSegment(segment, length, scale, document);
+                segments.Add(shapeSegment);
+                continue;
+            }
+
+            if (length <= MinSegmentLength)
+            {
+                continue;
+            }
+
+            var isDraw = !segment.IsSpace;
+            segments.Add(new RenderLinePatternSegment(length, isDraw));
+        }
+
+        if (segments.Count == 0)
+        {
+            return RenderLinePattern.Continuous;
+        }
+
+        return new RenderLinePattern(segments.ToArray());
+    }
+
     private RenderLinePatternSegment BuildTextSegment(
         LineType.Segment segment,
         float length,
