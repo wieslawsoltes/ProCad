@@ -43,7 +43,15 @@ public sealed class RenderStatsTests
             var service = new FileRenderStatsExportService(tempPath);
             var scene = RenderSceneSamples.CreateBaselineScene();
             var document = new ACadSharp.CadDocument();
-            var viewModel = new CadRenderViewModel(document, scene, service, "render-stats.json");
+            var viewModel = new CadRenderViewModel(
+                document,
+                scene,
+                CreateSceneBuilder(),
+                new CadRenderSceneSettings(),
+                CadRenderLayoutSelection.ModelSpace,
+                documentPath: null,
+                service,
+                "render-stats.json");
 
             await viewModel.ExportStatsCommand.Execute().ToTask();
 

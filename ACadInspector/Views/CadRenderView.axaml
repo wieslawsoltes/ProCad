@@ -7,69 +7,52 @@
              mc:Ignorable="d"
              x:Class="ACadInspector.Views.CadRenderView"
              x:DataType="vm:CadRenderViewModel">
-  <Grid ColumnDefinitions="280,*">
-    <Border Grid.Column="0"
+  <Grid>
+    <controls:CadRenderControl Scene="{CompiledBinding Scene}"
+                               ShowGrid="{CompiledBinding ShowGrid}"
+                               ShowAxes="{CompiledBinding ShowAxes}"
+                               LayerVisibilityOverrides="{CompiledBinding LayerList.LayerVisibilityOverrides}"
+                               FitToViewTrigger="{CompiledBinding FitRequest}"
+                               ResetViewTrigger="{CompiledBinding ResetRequest}"
+                               FitOnSceneChange="{CompiledBinding FitOnLoad}" />
+    <Border HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="12"
+            Padding="8,6"
+            CornerRadius="10"
             Background="{DynamicResource ThemeControlLowBrush}"
             BorderBrush="{DynamicResource ThemeBorderLowBrush}"
-            BorderThickness="1"
-            Padding="10">
-      <Grid RowDefinitions="Auto,*"
-            RowSpacing="8">
-        <StackPanel Orientation="Horizontal"
-                    Spacing="8">
-          <TextBlock Text="Layers"
-                     FontWeight="SemiBold"
-                     VerticalAlignment="Center" />
-          <TextBox Width="140"
-                   Watermark="Search..."
-                   Text="{CompiledBinding LayerSearchText, UpdateSourceTrigger=PropertyChanged}" />
-          <Button Content="Clear"
-                  Command="{CompiledBinding ClearLayerSearchCommand}" />
-        </StackPanel>
-        <DataGrid Grid.Row="1"
-                  ItemsSource="{CompiledBinding LayerRowsView}"
-                  ColumnDefinitionsSource="{CompiledBinding LayerColumnDefinitions}"
-                  SortingModel="{CompiledBinding LayerSortingModel}"
-                  FilteringModel="{CompiledBinding LayerFilteringModel}"
-                  SearchModel="{CompiledBinding LayerSearchModel}"
-                  AutoGenerateColumns="False"
-                  CanUserSortColumns="True"
-                  CanUserReorderColumns="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="All"
-                  IsReadOnly="False" />
-      </Grid>
+            BorderThickness="1">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <Button Content="Fit"
+                Command="{CompiledBinding FitCommand}" />
+        <Button Content="Reset"
+                Command="{CompiledBinding ResetCommand}" />
+        <Button Content="Stats"
+                Command="{CompiledBinding ExportStatsCommand}" />
+        <ToggleButton Content="Grid"
+                      IsChecked="{CompiledBinding ShowGrid}" />
+        <ToggleButton Content="Axes"
+                      IsChecked="{CompiledBinding ShowAxes}" />
+      </StackPanel>
     </Border>
-    <Grid Grid.Column="1">
-      <controls:CadRenderControl Scene="{CompiledBinding Scene}"
-                                 ShowGrid="{CompiledBinding ShowGrid}"
-                                 ShowAxes="{CompiledBinding ShowAxes}"
-                                 LayerVisibilityOverrides="{CompiledBinding LayerVisibilityOverrides}"
-                                 FitToViewTrigger="{CompiledBinding FitRequest}"
-                                 ResetViewTrigger="{CompiledBinding ResetRequest}"
-                                 FitOnSceneChange="{CompiledBinding FitOnLoad}" />
-      <Border HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              Margin="12"
-              Padding="8,6"
-              CornerRadius="10"
-              Background="{DynamicResource ThemeControlLowBrush}"
-              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
-              BorderThickness="1">
-        <StackPanel Orientation="Horizontal"
-                    Spacing="8">
-          <Button Content="Fit"
-                  Command="{CompiledBinding FitCommand}" />
-          <Button Content="Reset"
-                  Command="{CompiledBinding ResetCommand}" />
-          <Button Content="Stats"
-                  Command="{CompiledBinding ExportStatsCommand}" />
-          <ToggleButton Content="Grid"
-                        IsChecked="{CompiledBinding ShowGrid}" />
-          <ToggleButton Content="Axes"
-                        IsChecked="{CompiledBinding ShowAxes}" />
-        </StackPanel>
-      </Border>
-    </Grid>
+    <Border HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Margin="12"
+            Padding="6,4"
+            CornerRadius="10"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1">
+      <TabStrip ItemsSource="{CompiledBinding Layouts}"
+                SelectedItem="{CompiledBinding SelectedLayout}">
+        <TabStrip.ItemTemplate>
+          <DataTemplate x:DataType="vm:CadRenderLayoutViewModel">
+            <TextBlock Text="{CompiledBinding DisplayName}" />
+          </DataTemplate>
+        </TabStrip.ItemTemplate>
+      </TabStrip>
+    </Border>
   </Grid>
 </UserControl>

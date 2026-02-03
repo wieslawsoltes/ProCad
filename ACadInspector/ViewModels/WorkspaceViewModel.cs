@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Reactive;
 using System.Threading;
@@ -9,9 +8,6 @@ using ACadInspector.Core;
 using ACadInspector.Services;
 using ACadInspector.Rendering;
 using ACadSharp;
-using ACadSharp.Entities;
-using ACadSharp.Objects;
-using ACadSharp.Tables;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.ReactiveUI.Controls;
@@ -111,10 +107,19 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             return;
         }
 
-        var settings = BuildRenderSettings(document, result.Path);
+        var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
+        var settings = CadRenderSettingsBuilder.Build(document, result.Path, _renderSceneSettings, selection);
         var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
         var statsFileName = BuildStatsFileName(result.FileName);
-        var renderViewModel = new CadRenderViewModel(document, scene, _statsExportService, statsFileName);
+        var renderViewModel = new CadRenderViewModel(
+            document,
+            scene,
+            _renderSceneBuilder,
+            _renderSceneSettings,
+            selection,
+            result.Path,
+            _statsExportService,
+            statsFileName);
         var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);
         _documentContext.Register(viewModel);
         AddDocument(viewModel);
@@ -138,239 +143,6 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
 
         var options = _ioOptions.BuildWriteOptions(viewModel.Format);
         _documentService.Save(viewModel.Path, viewModel.Document, options);
-    }
-
-    private CadRenderSceneSettings BuildRenderSettings(CadDocument document, string? documentPath)
-    {
-        var (isPaperSpace, viewportScale) = ResolveViewportSettings(document);
-        var annotationScale = ResolveAnnotationScaleFactor(document);
-        var supportPaths = BuildSupportPaths(documentPath);
-        var baseSettings = _renderSceneSettings;
-        var visualStyle = ResolveVisualStyle(document, baseSettings.VisualStyle);
-
-        return new CadRenderSceneSettings
-        {
-            SupportPaths = supportPaths,
-            Quality = baseSettings.Quality,
-            VisualStyle = visualStyle,
-            Lighting = baseSettings.Lighting,
-            EnableHatchFills = baseSettings.EnableHatchFills,
-            EnableHatchPatterns = baseSettings.EnableHatchPatterns,
-            EnableHatchGradients = baseSettings.EnableHatchGradients,
-            Background = baseSettings.Background,
-            FallbackColor = baseSettings.FallbackColor,
-            MillimetersPerUnit = baseSettings.MillimetersPerUnit,
-            DefaultLineWeightMm = baseSettings.DefaultLineWeightMm,
-            MinLineWeightMm = baseSettings.MinLineWeightMm,
-            LineTypeDotLengthMm = baseSettings.LineTypeDotLengthMm,
-            PolylineArcPrecision = baseSettings.PolylineArcPrecision,
-            SplinePrecision = baseSettings.SplinePrecision,
-            CirclePrecision = baseSettings.CirclePrecision,
-            TextWidthFactor = baseSettings.TextWidthFactor,
-            IsPaperSpace = isPaperSpace,
-            PaperSpaceLineTypeScalingOverride = baseSettings.PaperSpaceLineTypeScalingOverride,
-            ViewportScale = viewportScale,
-            ModelSpaceLineTypeScaling = baseSettings.ModelSpaceLineTypeScaling,
-            AnnotationScaleFactor = annotationScale,
-            IncludeInvisible = baseSettings.IncludeInvisible,
-            IncludeOffLayers = baseSettings.IncludeOffLayers,
-            IncludeUnsupportedAsPoints = baseSettings.IncludeUnsupportedAsPoints,
-            PerformanceBudget = baseSettings.PerformanceBudget
-        };
-    }
-
-    private static IReadOnlyList<string> BuildSupportPaths(string? documentPath)
-    {
-        if (string.IsNullOrWhiteSpace(documentPath))
-        {
-            return Array.Empty<string>();
-        }
-
-        var directory = Path.GetDirectoryName(documentPath);
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            return Array.Empty<string>();
-        }
-
-        return new[] { directory };
-    }
-
-    private static (bool IsPaperSpace, float ViewportScale) ResolveViewportSettings(CadDocument document)
-    {
-        if (document.Header is not null && !document.Header.ShowModelSpace)
-        {
-            var layout = ResolvePaperSpaceLayout(document);
-            var viewport = ResolveLayoutViewport(layout);
-            var scale = viewport?.ScaleFactor ?? 1.0;
-            return (true, NormalizeScale(scale));
-        }
-
-        var modelScale = ResolveModelSpaceViewportScale(document);
-        return (false, modelScale);
-    }
-
-    private static Layout? ResolvePaperSpaceLayout(CadDocument document)
-    {
-        if (document.Layouts is null)
-        {
-            return null;
-        }
-
-        Layout? best = null;
-        foreach (var layout in document.Layouts)
-        {
-            if (!layout.IsPaperSpace)
-            {
-                continue;
-            }
-
-            if (best is null || layout.TabOrder < best.TabOrder)
-            {
-                best = layout;
-            }
-        }
-
-        return best;
-    }
-
-    private static Viewport? ResolveLayoutViewport(Layout? layout)
-    {
-        if (layout is null)
-        {
-            return null;
-        }
-
-        if (layout.Viewports is not null)
-        {
-            foreach (var viewport in layout.Viewports)
-            {
-                if (!viewport.RepresentsPaper)
-                {
-                    return viewport;
-                }
-            }
-        }
-
-        if (layout.Viewport is not null && !layout.Viewport.RepresentsPaper)
-        {
-            return layout.Viewport;
-        }
-
-        return null;
-    }
-
-    private static float ResolveModelSpaceViewportScale(CadDocument document)
-    {
-        var vport = ResolveModelSpaceVPort(document);
-        if (vport is null)
-        {
-            return 1f;
-        }
-
-        var height = vport.TopRight.Y - vport.BottomLeft.Y;
-        if (height <= 0 || vport.ViewHeight <= 0)
-        {
-            return 1f;
-        }
-
-        return NormalizeScale(height / vport.ViewHeight);
-    }
-
-    private static VPort? ResolveModelSpaceVPort(CadDocument document)
-    {
-        if (document.VPorts is null)
-        {
-            return null;
-        }
-
-        if (!document.VPorts.TryGetValue(VPort.DefaultName, out var vport))
-        {
-            foreach (var candidate in document.VPorts)
-            {
-                vport = candidate;
-                break;
-            }
-        }
-
-        return vport;
-    }
-
-    private static RenderVisualStyle ResolveVisualStyle(CadDocument document, RenderVisualStyle fallback)
-    {
-        if (fallback != RenderVisualStyle.Wireframe)
-        {
-            return fallback;
-        }
-
-        if (document.Header is not null && !document.Header.ShowModelSpace)
-        {
-            var layout = ResolvePaperSpaceLayout(document);
-            var viewport = ResolveLayoutViewport(layout);
-            var layoutStyle = MapVisualStyle(viewport?.RenderMode);
-            if (layoutStyle != RenderVisualStyle.Wireframe)
-            {
-                return layoutStyle;
-            }
-        }
-
-        var vport = ResolveModelSpaceVPort(document);
-        return MapVisualStyle(vport?.RenderMode);
-    }
-
-    private static RenderVisualStyle MapVisualStyle(RenderMode? mode)
-    {
-        return mode switch
-        {
-            RenderMode.HiddenLine => RenderVisualStyle.HiddenLine,
-            RenderMode.FlatShaded => RenderVisualStyle.Shaded,
-            RenderMode.GouraudShaded => RenderVisualStyle.Shaded,
-            RenderMode.FlatShadedWithWireframe => RenderVisualStyle.Shaded,
-            RenderMode.GouraudShadedWithWireframe => RenderVisualStyle.Shaded,
-            _ => RenderVisualStyle.Wireframe
-        };
-    }
-
-    private static float ResolveAnnotationScaleFactor(CadDocument document)
-    {
-        if (document.DictionaryVariables is null)
-        {
-            return 1f;
-        }
-
-        var scaleName = document.DictionaryVariables.GetValue(DictionaryVariable.CurrentAnnotationScale);
-        if (string.IsNullOrWhiteSpace(scaleName))
-        {
-            return 1f;
-        }
-
-        if (document.Scales is null || !document.Scales.TryGet(scaleName, out var scale) || scale is null)
-        {
-            return 1f;
-        }
-
-        var factor = scale.ScaleFactor;
-        if (double.IsNaN(factor) || double.IsInfinity(factor) || factor <= 0.0)
-        {
-            return 1f;
-        }
-
-        var annotationScale = 1.0 / factor;
-        if (double.IsNaN(annotationScale) || double.IsInfinity(annotationScale) || annotationScale <= 0.0)
-        {
-            return 1f;
-        }
-
-        return (float)annotationScale;
-    }
-
-    private static float NormalizeScale(double scale)
-    {
-        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0)
-        {
-            return 1f;
-        }
-
-        return (float)scale;
     }
 
     private async Task SaveAsAsync(CancellationToken cancellationToken)

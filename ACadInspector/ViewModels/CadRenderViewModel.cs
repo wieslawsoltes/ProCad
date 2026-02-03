@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Reactive;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -10,12 +10,7 @@ using System.Threading.Tasks;
 using ACadInspector.Core;
 using ACadInspector.Rendering;
 using ACadSharp;
-using Avalonia;
-using Avalonia.Collections;
-using Avalonia.Controls;
-using Avalonia.Controls.DataGridFiltering;
-using Avalonia.Controls.DataGridSearching;
-using Avalonia.Controls.DataGridSorting;
+using ACadSharp.Objects;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
@@ -23,7 +18,12 @@ namespace ACadInspector.ViewModels;
 
 public sealed partial class CadRenderViewModel : ViewModelBase
 {
-    private readonly ObservableCollection<CadRenderLayerRowViewModel> _layerRows = new();
+    private readonly CadDocument _document;
+    private readonly string? _documentPath;
+    private readonly ICadRenderSceneBuilder _sceneBuilder;
+    private readonly CadRenderSceneSettings _baseSettings;
+    private CancellationTokenSource? _layoutRebuildCts;
+    private bool _suppressLayoutUpdates;
 
     [Reactive]
     public partial RenderScene? Scene { get; set; }
@@ -43,22 +43,15 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     [Reactive]
     public partial int ResetRequest { get; set; }
 
-    [Reactive]
-    public partial string LayerSearchText { get; set; } = string.Empty;
+    public CadRenderLayerListViewModel LayerList { get; }
+    public IReadOnlyList<CadRenderLayoutViewModel> Layouts { get; }
 
     [Reactive]
-    public partial IReadOnlyDictionary<string, bool>? LayerVisibilityOverrides { get; set; }
-
-    public DataGridCollectionView LayerRowsView { get; }
-    public DataGridColumnDefinitionList LayerColumnDefinitions { get; }
-    public SortingModel LayerSortingModel { get; } = new();
-    public FilteringModel LayerFilteringModel { get; } = new();
-    public SearchModel LayerSearchModel { get; } = new();
+    public partial CadRenderLayoutViewModel? SelectedLayout { get; set; }
 
     public ReactiveCommand<Unit, Unit> FitCommand { get; }
     public ReactiveCommand<Unit, Unit> ResetCommand { get; }
     public ReactiveCommand<Unit, Unit> ExportStatsCommand { get; }
-    public ReactiveCommand<Unit, Unit> ClearLayerSearchCommand { get; }
 
     private readonly IRenderStatsExportService _statsExportService;
     private readonly string _statsFileName;
@@ -66,15 +59,22 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     public CadRenderViewModel(
         CadDocument document,
         RenderScene? scene,
+        ICadRenderSceneBuilder sceneBuilder,
+        CadRenderSceneSettings baseSettings,
+        CadRenderLayoutSelection selection,
+        string? documentPath,
         IRenderStatsExportService statsExportService,
         string? statsFileName)
     {
+        _document = document ?? throw new ArgumentNullException(nameof(document));
+        _documentPath = documentPath;
+        _sceneBuilder = sceneBuilder ?? throw new ArgumentNullException(nameof(sceneBuilder));
+        _baseSettings = baseSettings ?? throw new ArgumentNullException(nameof(baseSettings));
         Scene = scene;
+        LayerList = new CadRenderLayerListViewModel(document);
+        Layouts = BuildLayouts(document);
         _statsExportService = statsExportService;
         _statsFileName = EnsureStatsFileName(statsFileName);
-
-        LayerRowsView = new DataGridCollectionView(_layerRows);
-        LayerColumnDefinitions = CadRenderLayerColumnDefinitions.Create();
 
         var canExport = this.WhenAnyValue(x => x.Scene)
             .Select(scene => scene is not null);
@@ -82,15 +82,18 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         ResetCommand = ReactiveCommand.Create(ResetView);
         ExportStatsCommand = ReactiveCommand.CreateFromTask(ExportStatsAsync, canExport);
 
-        this.WhenAnyValue(x => x.LayerSearchText)
-            .Subscribe(_ => ApplyLayerSearch());
-        ClearLayerSearchCommand = ReactiveCommand.Create(() => { LayerSearchText = string.Empty; });
+        _suppressLayoutUpdates = true;
+        SelectedLayout = ResolveSelectedLayout(selection);
+        _suppressLayoutUpdates = false;
 
-        LayerSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
-        LayerSearchModel.HighlightCurrent = true;
-        LayerSearchModel.WrapNavigation = true;
+        this.WhenAnyValue(x => x.SelectedLayout)
+            .Where(layout => layout is not null)
+            .Subscribe(layout => OnLayoutChanged(layout!));
 
-        LoadLayers(document);
+        if (Scene is null && SelectedLayout is not null)
+        {
+            _ = RebuildSceneAsync(SelectedLayout);
+        }
     }
 
     private void RequestFit()
@@ -103,62 +106,109 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         ResetRequest++;
     }
 
-    private void LoadLayers(CadDocument document)
+    private IReadOnlyList<CadRenderLayoutViewModel> BuildLayouts(CadDocument document)
     {
-        if (document.Layers is null)
+        var layouts = new List<CadRenderLayoutViewModel>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var modelName = Layout.ModelLayoutName;
+        layouts.Add(new CadRenderLayoutViewModel(modelName, isPaperSpace: false, displayName: "Model"));
+        names.Add(modelName);
+
+        if (document.Layouts is not null)
+        {
+            var ordered = new List<Layout>();
+            foreach (var layout in document.Layouts)
+            {
+                if (layout.IsPaperSpace)
+                {
+                    ordered.Add(layout);
+                }
+            }
+
+            ordered.Sort(static (left, right) => left.TabOrder.CompareTo(right.TabOrder));
+            foreach (var layout in ordered)
+            {
+                if (names.Add(layout.Name))
+                {
+                    layouts.Add(new CadRenderLayoutViewModel(layout.Name, isPaperSpace: true));
+                }
+            }
+        }
+
+        return layouts;
+    }
+
+    private CadRenderLayoutViewModel? ResolveSelectedLayout(CadRenderLayoutSelection selection)
+    {
+        if (!selection.IsPaperSpace)
+        {
+            return Layouts.Count > 0 ? Layouts[0] : null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selection.LayoutName))
+        {
+            foreach (var layout in Layouts)
+            {
+                if (layout.IsPaperSpace && string.Equals(layout.Name, selection.LayoutName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return layout;
+                }
+            }
+        }
+
+        foreach (var layout in Layouts)
+        {
+            if (layout.IsPaperSpace)
+            {
+                return layout;
+            }
+        }
+
+        return Layouts.Count > 0 ? Layouts[0] : null;
+    }
+
+    private void OnLayoutChanged(CadRenderLayoutViewModel layout)
+    {
+        if (_suppressLayoutUpdates)
         {
             return;
         }
 
-        foreach (var layer in document.Layers)
+        _ = RebuildSceneAsync(layout);
+    }
+
+    private async Task RebuildSceneAsync(CadRenderLayoutViewModel layout)
+    {
+        _layoutRebuildCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _layoutRebuildCts = cts;
+
+        var selection = layout.IsPaperSpace
+            ? new CadRenderLayoutSelection(true, layout.Name)
+            : CadRenderLayoutSelection.ModelSpace;
+        var settings = CadRenderSettingsBuilder.Build(_document, _documentPath, _baseSettings, selection);
+
+        RenderScene? scene = null;
+        try
         {
-            var row = new CadRenderLayerRowViewModel(layer);
-            row.VisibilityChanged += OnLayerVisibilityChanged;
-            _layerRows.Add(row);
+            scene = await Task.Run(() => _sceneBuilder.Build(_document, settings), cts.Token).ConfigureAwait(false);
         }
-
-        LayerRowsView.Refresh();
-        UpdateLayerVisibilityOverrides();
-    }
-
-    private void OnLayerVisibilityChanged(object? sender, EventArgs e)
-    {
-        UpdateLayerVisibilityOverrides();
-    }
-
-    private void UpdateLayerVisibilityOverrides()
-    {
-        if (_layerRows.Count == 0)
+        catch (OperationCanceledException)
         {
-            LayerVisibilityOverrides = null;
             return;
         }
 
-        var map = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in _layerRows)
+        if (cts.IsCancellationRequested)
         {
-            map[row.Name] = row.IsVisible;
-        }
-
-        LayerVisibilityOverrides = map;
-    }
-
-    private void ApplyLayerSearch()
-    {
-        if (string.IsNullOrWhiteSpace(LayerSearchText))
-        {
-            LayerSearchModel.Clear();
             return;
         }
 
-        var descriptor = new SearchDescriptor(
-            LayerSearchText.Trim(),
-            matchMode: SearchMatchMode.Contains,
-            termMode: SearchTermCombineMode.Any,
-            scope: SearchScope.VisibleColumns,
-            comparison: StringComparison.OrdinalIgnoreCase);
-
-        LayerSearchModel.SetOrUpdate(descriptor);
+        RxApp.MainThreadScheduler.Schedule(() =>
+        {
+            Scene = scene;
+            RequestFit();
+        });
     }
 
     private async Task ExportStatsAsync(CancellationToken cancellationToken)

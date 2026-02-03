@@ -64,7 +64,8 @@ public sealed class ViewportRenderHandler : IRenderEntityHandler
         RenderLineCap lineCap,
         RenderLineJoin lineJoin)
     {
-        if (viewport.Boundary is null)
+        if (viewport.Boundary is null ||
+            !viewport.Status.HasFlag(ViewportStatusFlags.NonRectangularClipping))
         {
             return false;
         }
