@@ -11,6 +11,7 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly PropertyGridViewModel _propertyGrid;
     private readonly CadIoOptionsViewModel _ioOptions;
     private readonly CadDocumentTreeViewModel _documentTree;
+    private readonly CadLayerToolViewModel _layerTool;
     private readonly CadDxfSemanticsViewModel _dxfSemantics;
     private readonly CadDxfRawViewModel _dxfRaw;
     private readonly CadDwgSemanticsViewModel _dwgSemantics;
@@ -22,6 +23,7 @@ public sealed class WorkspaceDockFactory : Factory
         PropertyGridViewModel propertyGrid,
         CadIoOptionsViewModel ioOptions,
         CadDocumentTreeViewModel documentTree,
+        CadLayerToolViewModel layerTool,
         CadDxfSemanticsViewModel dxfSemantics,
         CadDxfRawViewModel dxfRaw,
         CadDwgSemanticsViewModel dwgSemantics,
@@ -32,6 +34,7 @@ public sealed class WorkspaceDockFactory : Factory
         _propertyGrid = propertyGrid;
         _ioOptions = ioOptions;
         _documentTree = documentTree;
+        _layerTool = layerTool;
         _dxfSemantics = dxfSemantics;
         _dxfRaw = dxfRaw;
         _dwgSemantics = dwgSemantics;
@@ -51,6 +54,9 @@ public sealed class WorkspaceDockFactory : Factory
 
         _documentTree.Id = "DocumentTree";
         _documentTree.Title = "Document Tree";
+
+        _layerTool.Id = "Layers";
+        _layerTool.Title = "Layers";
 
         _dxfSemantics.Id = "DxfSemantics";
         _dxfSemantics.Title = "DXF";
@@ -86,7 +92,7 @@ public sealed class WorkspaceDockFactory : Factory
         var rightTopTools = CreateToolDock();
         rightTopTools.Id = "InspectorTools";
         rightTopTools.Title = "Inspector";
-        rightTopTools.VisibleDockables = CreateList<IDockable>(_propertyGrid, _preview);
+        rightTopTools.VisibleDockables = CreateList<IDockable>(_propertyGrid, _layerTool, _preview);
         rightTopTools.ActiveDockable = _propertyGrid;
         rightTopTools.DefaultDockable = _propertyGrid;
 

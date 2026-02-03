@@ -40,6 +40,9 @@
         <DataTemplate DataType="{x:Type vm:CadDocumentTreeViewModel}" x:DataType="vm:CadDocumentTreeViewModel">
             <views:CadDocumentTreeView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadLayerToolViewModel}" x:DataType="vm:CadLayerToolViewModel">
+            <views:CadLayerToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadPreviewViewModel}" x:DataType="vm:CadPreviewViewModel">
             <views:CadPreviewView />
         </DataTemplate>
