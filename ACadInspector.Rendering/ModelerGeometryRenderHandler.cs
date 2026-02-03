@@ -21,26 +21,37 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
         var builder = context.GetLayerBuilder(geometry);
         var color = context.ResolveEntityColor(geometry);
         var material = context.ResolveEntityMaterial(geometry);
+        var shadePolicy = RenderShadeEdgeUtils.Resolve(context.Settings);
+        var edgeColor = RenderShadeEdgeUtils.ResolveEdgeColor(color, shadePolicy);
         var thickness = context.ResolveLineWeight(geometry);
         var lineCap = context.ResolveLineCap(geometry);
         var lineJoin = context.ResolveLineJoin(geometry);
         var pattern = context.ResolveLinePattern(geometry);
         var geometryOffset = geometry.Point;
         var hasOffset = !geometryOffset.IsZero();
-        var emitSurface = ShouldEmitSurface(context.Settings.VisualStyle);
+        var emitSurface = shadePolicy.EmitSurfaces;
+        var emitEdges = shadePolicy.EmitEdges;
         if (emitSurface)
         {
+            var lighting = RenderShadeEdgeUtils.ResolveLighting(context.Settings, shadePolicy);
             var appended = TryAppendSurfaceFromAcis(
                 geometry,
                 builder,
                 transform,
+                color,
                 material,
                 context.Settings,
-                context.Settings.Lighting);
+                lighting,
+                shadePolicy);
             if (!appended)
             {
-                AppendSurfaceFromWires(wires, builder, transform, material, context.Settings.Lighting, geometryOffset, hasOffset);
+                AppendSurfaceFromWires(wires, builder, transform, color, material, lighting, shadePolicy, geometryOffset, hasOffset);
             }
+        }
+
+        if (!emitEdges)
+        {
+            return;
         }
 
         foreach (var wire in wires)
@@ -49,7 +60,7 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
                 wire,
                 builder,
                 transform,
-                color,
+                edgeColor,
                 thickness,
                 lineCap,
                 lineJoin,
@@ -64,8 +75,10 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
         IReadOnlyList<ModelerGeometry.Wire> wires,
         RenderLayerBuilder builder,
         Transform transform,
+        RenderColor entityColor,
         RenderMaterial material,
         RenderLightingSettings lighting,
+        RenderShadeEdgePolicy shadePolicy,
         XYZ geometryOffset,
         bool hasOffset)
     {
@@ -110,7 +123,7 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
 
             foreach (var triangle in triangles)
             {
-                var litColor = RenderLightingUtils.ComputeLitColor(triangle.A, triangle.B, triangle.C, lighting, material);
+                var litColor = RenderShadeEdgeUtils.ResolveSurfaceColor(entityColor, material, lighting, triangle.A, triangle.B, triangle.C, shadePolicy);
                 var a = RenderTransformUtils.ToVector2(triangle.A);
                 var b = RenderTransformUtils.ToVector2(triangle.B);
                 var c = RenderTransformUtils.ToVector2(triangle.C);
@@ -131,16 +144,18 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
         ModelerGeometry geometry,
         RenderLayerBuilder builder,
         Transform transform,
+        RenderColor entityColor,
         RenderMaterial material,
         CadRenderSceneSettings settings,
-        RenderLightingSettings lighting)
+        RenderLightingSettings lighting,
+        RenderShadeEdgePolicy shadePolicy)
     {
         if (!RenderAcisSatTessellator.TryTessellate(geometry, settings, out var triangles))
         {
             return false;
         }
 
-        AppendSurfaceTriangles(triangles, builder, transform, material, lighting);
+        AppendSurfaceTriangles(triangles, builder, transform, entityColor, material, lighting, shadePolicy);
         return true;
     }
 
@@ -148,15 +163,17 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
         IReadOnlyList<MeshTessellator.Triangle> triangles,
         RenderLayerBuilder builder,
         Transform transform,
+        RenderColor entityColor,
         RenderMaterial material,
-        RenderLightingSettings lighting)
+        RenderLightingSettings lighting,
+        RenderShadeEdgePolicy shadePolicy)
     {
         foreach (var triangle in triangles)
         {
             var a3 = RenderTransformUtils.Apply3D(transform, triangle.A);
             var b3 = RenderTransformUtils.Apply3D(transform, triangle.B);
             var c3 = RenderTransformUtils.Apply3D(transform, triangle.C);
-            var litColor = RenderLightingUtils.ComputeLitColor(a3, b3, c3, lighting, material);
+            var litColor = RenderShadeEdgeUtils.ResolveSurfaceColor(entityColor, material, lighting, a3, b3, c3, shadePolicy);
             var a = RenderTransformUtils.ToVector2(a3);
             var b = RenderTransformUtils.ToVector2(b3);
             var c = RenderTransformUtils.ToVector2(c3);
@@ -287,8 +304,4 @@ public sealed class ModelerGeometryRenderHandler : IRenderEntityHandler
         return Math.Abs(dx) <= tolerance && Math.Abs(dy) <= tolerance && Math.Abs(dz) <= tolerance;
     }
 
-    private static bool ShouldEmitSurface(RenderVisualStyle style)
-    {
-        return style == RenderVisualStyle.Shaded || style == RenderVisualStyle.HiddenLine;
-    }
 }

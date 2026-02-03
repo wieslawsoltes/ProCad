@@ -54,7 +54,14 @@ internal static class RenderPrimitiveBuilder
 
         if (list.Count == 1)
         {
-            builder.Add(new RenderPoint(list[0], color, thickness, lineCap, lineJoin));
+            builder.Add(new RenderPoint(
+                list[0],
+                color,
+                thickness,
+                lineCap,
+                lineJoin,
+                settings.PointDisplayMode,
+                settings.PointDisplaySize));
             return;
         }
 

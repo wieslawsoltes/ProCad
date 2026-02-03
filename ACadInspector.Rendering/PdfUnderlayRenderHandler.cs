@@ -54,14 +54,19 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
             opacity);
 
         var builder = context.GetLayerBuilder(underlay);
+        var loops = BuildClipLoops(underlay, transform, vertices, axis);
         if (underlay.Flags.HasFlag(UnderlayDisplayFlags.ClippingOn) && vertices.Count >= 3)
         {
-            var loops = BuildClipLoops(underlay, transform, vertices, axis);
             builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }));
         }
         else
         {
             builder.Add(renderImage);
+        }
+
+        if (context.Settings.UnderlayFrameVisibility.ShouldDisplay())
+        {
+            AppendFrame(builder, loops, underlay, context);
         }
     }
 
@@ -140,6 +145,39 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
         }
 
         return new[] { loop };
+    }
+
+    private static void AppendFrame(
+        RenderLayerBuilder builder,
+        IReadOnlyList<IReadOnlyList<Vector2>> loops,
+        PdfUnderlay underlay,
+        RenderBuildContext context)
+    {
+        if (loops.Count == 0)
+        {
+            return;
+        }
+
+        var color = context.ResolveEntityColor(underlay);
+        var thickness = context.ResolveLineWeight(underlay);
+        var lineCap = context.ResolveLineCap(underlay);
+        var lineJoin = context.ResolveLineJoin(underlay);
+
+        foreach (var loop in loops)
+        {
+            if (loop is null || loop.Count < 2)
+            {
+                continue;
+            }
+
+            builder.Add(new RenderPolyline(
+                loop,
+                isClosed: true,
+                color,
+                thickness,
+                lineCap,
+                lineJoin));
+        }
     }
 
     private static RenderColor ResolveUnderlayColor(PdfUnderlay underlay, RenderBuildContext context)

@@ -20,27 +20,30 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
 
         var builder = context.GetLayerBuilder(face);
         var color = context.ResolveEntityColor(face);
+        var shadePolicy = RenderShadeEdgeUtils.Resolve(context.Settings);
+        var edgeColor = RenderShadeEdgeUtils.ResolveEdgeColor(color, shadePolicy);
         var thickness = context.ResolveLineWeight(face);
         var lineCap = context.ResolveLineCap(face);
         var lineJoin = context.ResolveLineJoin(face);
         var pattern = context.ResolveLinePattern(face);
         var material = context.ResolveEntityMaterial(face);
-        var emitSurface = ShouldEmitSurface(context.Settings.VisualStyle);
+        var emitSurface = shadePolicy.EmitSurfaces;
         if (emitSurface)
         {
-            AppendSurface(builder, vertices, transform, material, context.Settings.Lighting);
+            var lighting = RenderShadeEdgeUtils.ResolveLighting(context.Settings, shadePolicy);
+            AppendSurface(builder, vertices, transform, color, material, lighting, shadePolicy);
         }
 
         var isQuad = vertices.Count == 4;
-        AppendEdge(builder, vertices, 0, 1, face.Flags.HasFlag(InvisibleEdgeFlags.First), transform, color, thickness, lineCap, lineJoin, pattern, context);
-        AppendEdge(builder, vertices, 1, 2, face.Flags.HasFlag(InvisibleEdgeFlags.Second), transform, color, thickness, lineCap, lineJoin, pattern, context);
+        AppendEdge(builder, vertices, 0, 1, face.Flags.HasFlag(InvisibleEdgeFlags.First), transform, edgeColor, thickness, lineCap, lineJoin, pattern, context, shadePolicy);
+        AppendEdge(builder, vertices, 1, 2, face.Flags.HasFlag(InvisibleEdgeFlags.Second), transform, edgeColor, thickness, lineCap, lineJoin, pattern, context, shadePolicy);
 
         var thirdEnd = isQuad ? 3 : 0;
-        AppendEdge(builder, vertices, 2, thirdEnd, face.Flags.HasFlag(InvisibleEdgeFlags.Third), transform, color, thickness, lineCap, lineJoin, pattern, context);
+        AppendEdge(builder, vertices, 2, thirdEnd, face.Flags.HasFlag(InvisibleEdgeFlags.Third), transform, edgeColor, thickness, lineCap, lineJoin, pattern, context, shadePolicy);
 
         if (isQuad)
         {
-            AppendEdge(builder, vertices, 3, 0, face.Flags.HasFlag(InvisibleEdgeFlags.Fourth), transform, color, thickness, lineCap, lineJoin, pattern, context);
+            AppendEdge(builder, vertices, 3, 0, face.Flags.HasFlag(InvisibleEdgeFlags.Fourth), transform, edgeColor, thickness, lineCap, lineJoin, pattern, context, shadePolicy);
         }
     }
 
@@ -73,9 +76,10 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
         RenderLineCap lineCap,
         RenderLineJoin lineJoin,
         RenderLinePattern pattern,
-        RenderBuildContext context)
+        RenderBuildContext context,
+        RenderShadeEdgePolicy shadePolicy)
     {
-        if (isHidden)
+        if (isHidden || !shadePolicy.EmitEdges)
         {
             return;
         }
@@ -104,8 +108,10 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
         RenderLayerBuilder builder,
         IReadOnlyList<XYZ> vertices,
         Transform transform,
+        RenderColor entityColor,
         RenderMaterial material,
-        RenderLightingSettings lighting)
+        RenderLightingSettings lighting,
+        RenderShadeEdgePolicy shadePolicy)
     {
         if (vertices.Count < 3)
         {
@@ -115,7 +121,7 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
         var a3 = RenderTransformUtils.Apply3D(transform, vertices[0]);
         var b3 = RenderTransformUtils.Apply3D(transform, vertices[1]);
         var c3 = RenderTransformUtils.Apply3D(transform, vertices[2]);
-        var litColor = RenderLightingUtils.ComputeLitColor(a3, b3, c3, lighting, material);
+        var litColor = RenderShadeEdgeUtils.ResolveSurfaceColor(entityColor, material, lighting, a3, b3, c3, shadePolicy);
         var a = RenderTransformUtils.ToVector2(a3);
         var b = RenderTransformUtils.ToVector2(b3);
         var c = RenderTransformUtils.ToVector2(c3);
@@ -132,7 +138,7 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
         if (vertices.Count == 4)
         {
             var d3 = RenderTransformUtils.Apply3D(transform, vertices[3]);
-            var litColor2 = RenderLightingUtils.ComputeLitColor(a3, c3, d3, lighting, material);
+            var litColor2 = RenderShadeEdgeUtils.ResolveSurfaceColor(entityColor, material, lighting, a3, c3, d3, shadePolicy);
             var d = RenderTransformUtils.ToVector2(d3);
             builder.Add(new RenderTriangle(
                 a,
@@ -146,8 +152,4 @@ public sealed class Face3DRenderHandler : IRenderEntityHandler
         }
     }
 
-    private static bool ShouldEmitSurface(RenderVisualStyle style)
-    {
-        return style == RenderVisualStyle.Shaded || style == RenderVisualStyle.HiddenLine;
-    }
 }

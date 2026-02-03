@@ -25,6 +25,13 @@ public sealed class FallbackRenderHandler : IRenderEntityHandler
 
         var bounds = entity.GetBoundingBox();
         var location = RenderTransformUtils.Apply(transform, bounds.Center);
-        builder.Add(new RenderPoint(location, color, thickness, lineCap, lineJoin));
+        builder.Add(new RenderPoint(
+            location,
+            color,
+            thickness,
+            lineCap,
+            lineJoin,
+            context.Settings.PointDisplayMode,
+            context.Settings.PointDisplaySize));
     }
 }

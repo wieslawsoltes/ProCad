@@ -75,7 +75,6 @@ public sealed class RenderFillTests
     public void BuildScene_DoesNotAddFillForWidePolylineWhenFillModeDisabled()
     {
         var document = new ACadSharp.CadDocument();
-        document.Header.FillMode = false;
         var polyline = new LwPolyline(new[]
         {
             new XY(0, 0),
@@ -87,10 +86,32 @@ public sealed class RenderFillTests
         };
         document.Entities.Add(polyline);
 
-        var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
+        var settings = new CadRenderSceneSettings { FillMode = false };
+        var scene = CreateSceneBuilder().Build(document, settings);
         var fills = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderFill>().ToArray();
 
         Assert.Empty(fills);
+    }
+
+    [Fact]
+    public void BuildScene_FillModeDisabled_UsesSolidOutline()
+    {
+        var document = new ACadSharp.CadDocument();
+        var solid = new Solid
+        {
+            FirstCorner = new XYZ(0, 0, 0),
+            SecondCorner = new XYZ(4, 0, 0),
+            ThirdCorner = new XYZ(4, 3, 0),
+            FourthCorner = new XYZ(0, 3, 0)
+        };
+        document.Entities.Add(solid);
+
+        var settings = new CadRenderSceneSettings { FillMode = false };
+        var scene = CreateSceneBuilder().Build(document, settings);
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToArray();
+
+        Assert.DoesNotContain(primitives, primitive => primitive is RenderFill);
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline);
     }
 
     [Fact]

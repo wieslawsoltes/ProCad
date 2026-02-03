@@ -85,6 +85,42 @@ public sealed class RenderHiddenLineOcclusionTests
     }
 
     [Fact]
+    public void HiddenLineOcclusion_ReturnsHiddenSegmentsBehindTriangle()
+    {
+        var triangle = new RenderTriangle(
+            new Vector2(10, 10),
+            new Vector2(90, 10),
+            new Vector2(50, 90),
+            RenderColor.FromRgb(200, 200, 200),
+            shade: 1f,
+            depthA: 1f,
+            depthB: 1f,
+            depthC: 1f);
+
+        var depthBuffer = new RenderDepthBuffer();
+        var hasDepth = RenderHiddenLineUtils.TryBuildDepthBuffer(
+            new IRenderPrimitive[] { triangle },
+            Matrix3x2.Identity,
+            depthBuffer,
+            width: 120,
+            height: 120);
+
+        Assert.True(hasDepth);
+
+        var segments = new List<RenderLineSegment>();
+        RenderHiddenLineUtils.AppendHiddenSegments(
+            depthBuffer,
+            Matrix3x2.Identity,
+            new Vector2(0, 50),
+            new Vector2(100, 50),
+            depthStart: 0f,
+            depthEnd: 0f,
+            segments: segments);
+
+        Assert.NotEmpty(segments);
+    }
+
+    [Fact]
     public void HiddenLineOcclusion_RespectsClipLoops()
     {
         var triangle = new RenderTriangle(
@@ -145,6 +181,7 @@ public sealed class RenderHiddenLineOcclusionTests
             bounds,
             RenderColor.DefaultBackground,
             RenderVisualStyle.HiddenLine,
+            RenderHiddenLineSettings.Default,
             new RenderDiagnostics(),
             RenderStats.Empty);
     }

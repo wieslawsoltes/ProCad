@@ -14,6 +14,17 @@ namespace ACadInspector.Rendering;
 public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolver
 {
     private const float MinSegmentLength = 0.0001f;
+    private readonly IRenderTextShaper _textShaper;
+
+    public DefaultRenderLinePatternResolver()
+        : this(new DefaultRenderTextShaper())
+    {
+    }
+
+    public DefaultRenderLinePatternResolver(IRenderTextShaper textShaper)
+    {
+        _textShaper = textShaper ?? new DefaultRenderTextShaper();
+    }
 
     public RenderLinePattern ResolveLinePattern(Entity entity, CadDocument document, CadRenderSceneSettings settings)
     {
@@ -87,7 +98,7 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         return new RenderLinePattern(segments.ToArray());
     }
 
-    private static RenderLinePatternSegment BuildTextSegment(
+    private RenderLinePatternSegment BuildTextSegment(
         LineType.Segment segment,
         float length,
         float scale,
@@ -98,14 +109,15 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         var baseHeight = style?.Height > 0 ? style.Height : 1.0;
         var fontSize = (float)(baseHeight * segment.Scale * scale);
         var textValue = string.IsNullOrEmpty(segment.Text) ? string.Empty : segment.Text;
-        var layoutWidth = EstimateTextWidth(textValue, fontSize, settings.TextWidthFactor);
-        var layoutHeight = fontSize;
-
         var widthFactor = (float)(style?.Width ?? 1.0);
         if (widthFactor <= 0f)
         {
             widthFactor = 1f;
         }
+
+        var layout = ShapeLineTypeText(textValue, fontSize, widthFactor, style, settings);
+        var layoutWidth = layout.Width;
+        var layoutHeight = layout.Height > 0f ? layout.Height : fontSize;
 
         var offset = new Vector2(
             (float)segment.Offset.X * (float)segment.Scale * scale,
@@ -140,6 +152,31 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
             fontFamily);
     }
 
+    private RenderTextLayout ShapeLineTypeText(
+        string text,
+        float fontSize,
+        float widthFactor,
+        TextStyle? style,
+        CadRenderSceneSettings settings)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return new RenderTextLayout(string.Empty, 0f, 0f);
+        }
+
+        var height = fontSize > 0f ? fontSize : 1f;
+        var resolvedStyle = style ?? TextStyle.Default;
+        var entity = new TextEntity
+        {
+            Value = text,
+            Height = height,
+            WidthFactor = widthFactor,
+            Style = resolvedStyle
+        };
+
+        return _textShaper.Shape(entity, settings);
+    }
+
     private static RenderLinePatternSegment BuildShapeSegment(
         LineType.Segment segment,
         float length,
@@ -162,16 +199,6 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
             shapeScale,
             shapeFile,
             segment.ShapeNumber);
-    }
-
-    private static float EstimateTextWidth(string text, float height, float widthFactor)
-    {
-        if (string.IsNullOrEmpty(text) || height <= 0f)
-        {
-            return 0f;
-        }
-
-        return text.Length * height * widthFactor;
     }
 
     private static float ResolveSpaceScale(CadDocument document, CadRenderSceneSettings settings)

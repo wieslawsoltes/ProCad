@@ -119,6 +119,94 @@ public sealed class RenderInsertTests
         Assert.Contains(primitives, primitive => primitive is RenderClipGroup);
     }
 
+    [Fact]
+    public void BuildScene_UsesOcsInsertPointForNonDefaultNormal()
+    {
+        var document = new CadDocument();
+        var block = new BlockRecord("WCS");
+        block.Entities.Add(new Line
+        {
+            StartPoint = XYZ.Zero,
+            EndPoint = new XYZ(1, 0, 0)
+        });
+        document.BlockRecords.Add(block);
+
+        var insert = new Insert(block)
+        {
+            InsertPoint = new XYZ(-10, 0, 0),
+            Normal = -XYZ.AxisZ,
+            XScale = 1,
+            YScale = 1,
+            ZScale = 1,
+            Rotation = 0
+        };
+        document.Entities.Add(insert);
+
+        var scene = CreateSceneBuilder(NullRenderXRefResolver.Instance)
+            .Build(document, new CadRenderSceneSettings());
+        var line = Assert.Single(scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderLine>());
+
+        var expectedTransform = insert.GetTransform();
+        var expectedStart = expectedTransform.ApplyTransform(XYZ.Zero);
+        var expectedEnd = expectedTransform.ApplyTransform(new XYZ(1, 0, 0));
+
+        Assert.True(Math.Abs(line.Start.X - (float)expectedStart.X) < 0.001f);
+        Assert.True(Math.Abs(line.Start.Y - (float)expectedStart.Y) < 0.001f);
+        Assert.True(Math.Abs(line.End.X - (float)expectedEnd.X) < 0.001f);
+        Assert.True(Math.Abs(line.End.Y - (float)expectedEnd.Y) < 0.001f);
+    }
+
+    [Fact]
+    public void BuildScene_RendersAttributeEntitiesInWorldSpace()
+    {
+        var document = new CadDocument();
+        var block = new BlockRecord("ATTR");
+        var definition = new AttributeDefinition
+        {
+            Tag = "TAG",
+            Value = "Label",
+            InsertPoint = new XYZ(1, 0, 0),
+            Height = 1
+        };
+        block.Entities.Add(definition);
+        document.BlockRecords.Add(block);
+
+        var insert = new Insert(block)
+        {
+            InsertPoint = new XYZ(10, 0, 0)
+        };
+
+        var attr = insert.Attributes.First(attr => string.Equals(attr.Tag, "TAG", StringComparison.OrdinalIgnoreCase));
+        var worldPoint = insert.GetTransform().ApplyTransform(definition.InsertPoint);
+        attr.InsertPoint = worldPoint;
+        document.Entities.Add(insert);
+
+        var handlers = new IRenderEntityHandler[]
+        {
+            new InsertRenderHandler(NullRenderXRefResolver.Instance),
+            new TextEntityRenderHandler(),
+            new FallbackRenderHandler()
+        };
+
+        var sceneBuilder = new CadRenderSceneBuilder(
+            new RenderEntityDispatcher(handlers),
+            new DefaultRenderStyleResolver(),
+            new DefaultRenderLinePatternResolver(),
+            new DefaultRenderShapeResolver(),
+            new DefaultRenderTextShaper(),
+            new DefaultRenderEntityVisibilityResolver(),
+            new DefaultRenderGeometrySampler(),
+            new DefaultRenderEntityOrderResolver(),
+            new RenderCacheStampProvider());
+
+        var scene = sceneBuilder
+            .Build(document, new CadRenderSceneSettings());
+        var text = Assert.Single(scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderText>());
+
+        Assert.True(Math.Abs(text.Anchor.X - (float)worldPoint.X) < 0.001f);
+        Assert.True(Math.Abs(text.Anchor.Y - (float)worldPoint.Y) < 0.001f);
+    }
+
     private static CadRenderSceneBuilder CreateSceneBuilder(IRenderXRefResolver xrefResolver)
     {
         var handlers = new IRenderEntityHandler[]

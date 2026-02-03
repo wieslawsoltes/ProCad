@@ -11,6 +11,8 @@ namespace ACadInspector.Rendering;
 public sealed class CadSkiaRenderService
 {
     private readonly Dictionary<PenKey, SKPaint> _strokePaintCache = new();
+    private readonly Dictionary<ObscuredPenKey, SKPaint> _obscuredPaintCache = new();
+    private readonly Dictionary<RenderObscuredLineType, SKPathEffect> _obscuredEffectCache = new();
     private readonly Dictionary<RenderColor, SKPaint> _fillPaintCache = new();
     private readonly Dictionary<TypefaceKey, SKTypeface> _typefaceCache = new();
     private readonly ConditionalWeakTable<RenderPolyline, SKPath> _polylineGeometryCache = new();
@@ -34,8 +36,18 @@ public sealed class CadSkiaRenderService
     private Size _hiddenLineCacheSize;
     private Matrix3x2 _hiddenLineCacheTransform = Matrix3x2.Identity;
     private bool _hiddenLineCacheValid;
+    private Size _renderSize;
 
-    public void ClearStrokePaintCache() => _strokePaintCache.Clear();
+    public void ClearStrokePaintCache()
+    {
+        _strokePaintCache.Clear();
+        _obscuredPaintCache.Clear();
+        foreach (var effect in _obscuredEffectCache.Values)
+        {
+            effect.Dispose();
+        }
+        _obscuredEffectCache.Clear();
+    }
 
     public void InvalidateHiddenLineCache()
     {
@@ -45,6 +57,7 @@ public sealed class CadSkiaRenderService
 
     public void Render(SKCanvas canvas, Size size, CadRenderStateSnapshot state, bool isInteractive)
     {
+        _renderSize = size;
         var scene = state.Scene;
         var background = scene?.Background ?? RenderColor.DefaultBackground;
         canvas.Clear(ToSkiaColor(background));
@@ -55,6 +68,7 @@ public sealed class CadSkiaRenderService
         }
 
         var renderStyle = isInteractive ? RenderVisualStyle.Wireframe : scene.VisualStyle;
+        var hiddenLineSettings = scene.HiddenLineSettings;
         var hasViewport = TryGetWorldViewport(size, state.ViewTransform, out var viewport);
         if (hasViewport)
         {
@@ -89,7 +103,7 @@ public sealed class CadSkiaRenderService
                 continue;
             }
 
-            DrawLayer(canvas, layer, renderStyle, hiddenLine, hasViewport, viewport, isInteractive, state);
+            DrawLayer(canvas, layer, renderStyle, hiddenLine, hiddenLineSettings, hasViewport, viewport, isInteractive, state);
         }
 
         canvas.Restore();
@@ -100,6 +114,7 @@ public sealed class CadSkiaRenderService
         RenderLayer layer,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
+        RenderHiddenLineSettings hiddenLineSettings,
         bool hasViewport,
         RenderBounds viewport,
         bool isInteractive,
@@ -114,7 +129,7 @@ public sealed class CadSkiaRenderService
         {
             foreach (var primitive in layer.Primitives)
             {
-                DrawPrimitive(canvas, primitive, style, hiddenLine, hasViewport, viewport, isInteractive, state);
+                DrawPrimitive(canvas, primitive, style, hiddenLine, hiddenLineSettings, layer.Color, hasViewport, viewport, isInteractive, state);
             }
 
             return;
@@ -149,9 +164,140 @@ public sealed class CadSkiaRenderService
 
             if (op.Primitive is not null)
             {
-                DrawPrimitive(canvas, op.Primitive, style, hiddenLine, hasViewport, viewport, isInteractive, state);
+                DrawPrimitive(canvas, op.Primitive, style, hiddenLine, hiddenLineSettings, layer.Color, hasViewport, viewport, isInteractive, state);
             }
         }
+    }
+
+    private void DrawObscuredSegments(
+        SKCanvas canvas,
+        Vector2 start,
+        Vector2 end,
+        float depthStart,
+        float depthEnd,
+        RenderColor primitiveColor,
+        float thickness,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        HiddenLineContext hidden,
+        RenderHiddenLineSettings hiddenLineSettings,
+        RenderColor layerColor,
+        CadRenderStateSnapshot state)
+    {
+        if (!hiddenLineSettings.IsEnabled)
+        {
+            return;
+        }
+
+        _hiddenLineSegments.Clear();
+        RenderHiddenLineUtils.AppendHiddenSegments(
+            hidden.DepthBuffer,
+            hidden.WorldToScreen,
+            start,
+            end,
+            depthStart,
+            depthEnd,
+            _hiddenLineSegments,
+            hidden.DepthEpsilon);
+
+        if (_hiddenLineSegments.Count == 0)
+        {
+            return;
+        }
+
+        var obscuredColor = ResolveObscuredColor(hiddenLineSettings, primitiveColor, layerColor);
+        var paint = GetObscuredPaint(obscuredColor, thickness, lineCap, lineJoin, hiddenLineSettings.LineType, state);
+        foreach (var segment in _hiddenLineSegments)
+        {
+            canvas.DrawLine(segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y, paint);
+        }
+    }
+
+    private static RenderColor ResolveObscuredColor(
+        RenderHiddenLineSettings settings,
+        RenderColor primitiveColor,
+        RenderColor layerColor)
+    {
+        var alpha = primitiveColor.A;
+        return settings.ColorMode switch
+        {
+            RenderHiddenLineColorMode.Layer => new RenderColor(layerColor.R, layerColor.G, layerColor.B, alpha),
+            RenderHiddenLineColorMode.Fixed => new RenderColor(settings.Color.R, settings.Color.G, settings.Color.B, alpha),
+            _ => primitiveColor
+        };
+    }
+
+    private SKPaint GetObscuredPaint(
+        RenderColor color,
+        float thickness,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        RenderObscuredLineType lineType,
+        CadRenderStateSnapshot state)
+    {
+        if (lineType == RenderObscuredLineType.Solid)
+        {
+            return GetStrokePaint(color, thickness, lineCap, lineJoin, state);
+        }
+
+        var worldThickness = ResolveWorldThickness(thickness, state);
+        var key = new ObscuredPenKey(color, worldThickness, lineCap, lineJoin, lineType);
+        if (_obscuredPaintCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var effect = ResolveObscuredPathEffect(lineType);
+        var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = worldThickness,
+            StrokeCap = ToSkiaLineCap(lineCap),
+            StrokeJoin = ToSkiaLineJoin(lineJoin),
+            Color = ToSkiaColor(color),
+            PathEffect = effect
+        };
+
+        _obscuredPaintCache[key] = paint;
+        return paint;
+    }
+
+    private SKPathEffect? ResolveObscuredPathEffect(RenderObscuredLineType lineType)
+    {
+        if (_obscuredEffectCache.TryGetValue(lineType, out var cached))
+        {
+            return cached;
+        }
+
+        var intervals = ResolveObscuredIntervals(lineType);
+        if (intervals is null)
+        {
+            return null;
+        }
+
+        var effect = SKPathEffect.CreateDash(intervals, 0);
+        _obscuredEffectCache[lineType] = effect;
+        return effect;
+    }
+
+    private static float[]? ResolveObscuredIntervals(RenderObscuredLineType lineType)
+    {
+        const float unit = 4f;
+        return lineType switch
+        {
+            RenderObscuredLineType.Dotted => new[] { unit * 0.5f, unit },
+            RenderObscuredLineType.Dashed => new[] { unit * 2f, unit },
+            RenderObscuredLineType.ShortDash => new[] { unit * 1.5f, unit },
+            RenderObscuredLineType.MediumDash => new[] { unit * 3f, unit },
+            RenderObscuredLineType.LongDash => new[] { unit * 4.5f, unit },
+            RenderObscuredLineType.DoubleShortDash => new[] { unit * 1.5f, unit * 0.5f, unit * 1.5f, unit },
+            RenderObscuredLineType.DoubleMediumDash => new[] { unit * 3f, unit * 0.5f, unit * 3f, unit },
+            RenderObscuredLineType.DoubleLongDash => new[] { unit * 4.5f, unit * 0.5f, unit * 4.5f, unit },
+            RenderObscuredLineType.MediumDashShortDashShortDash => new[] { unit * 3f, unit, unit * 1.5f, unit, unit * 1.5f, unit },
+            RenderObscuredLineType.LongDashShortDashShortDash => new[] { unit * 4.5f, unit, unit * 1.5f, unit, unit * 1.5f, unit },
+            _ => null
+        };
     }
 
     private static bool IsLayerVisible(RenderLayer layer, IReadOnlyDictionary<string, bool>? overrides)
@@ -169,6 +315,8 @@ public sealed class CadSkiaRenderService
         IRenderPrimitive primitive,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
+        RenderHiddenLineSettings hiddenLineSettings,
+        RenderColor layerColor,
         bool hasViewport,
         RenderBounds viewport,
         bool isInteractive,
@@ -181,7 +329,7 @@ public sealed class CadSkiaRenderService
 
         if (primitive is RenderClipGroup clipGroup)
         {
-            DrawClipGroup(canvas, clipGroup, style, hiddenLine, hasViewport, viewport, isInteractive, state);
+            DrawClipGroup(canvas, clipGroup, style, hiddenLine, hiddenLineSettings, layerColor, hasViewport, viewport, isInteractive, state);
             return;
         }
 
@@ -197,7 +345,7 @@ public sealed class CadSkiaRenderService
                     var paint = GetStrokePaint(line.Color, line.Thickness, line.LineCap, line.LineJoin, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
-                        DrawHiddenLine(canvas, paint, line, hiddenLine.Value);
+                        DrawHiddenLine(canvas, paint, line, hiddenLine.Value, hiddenLineSettings, layerColor, state);
                     }
                     else
                     {
@@ -210,7 +358,7 @@ public sealed class CadSkiaRenderService
                     var paint = GetStrokePaint(polyline.Color, polyline.Thickness, polyline.LineCap, polyline.LineJoin, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
-                        DrawHiddenPolyline(canvas, paint, polyline, hiddenLine.Value);
+                        DrawHiddenPolyline(canvas, paint, polyline, hiddenLine.Value, hiddenLineSettings, layerColor, state);
                     }
                     else
                     {
@@ -332,6 +480,8 @@ public sealed class CadSkiaRenderService
         RenderClipGroup clipGroup,
         RenderVisualStyle style,
         HiddenLineContext? hiddenLine,
+        RenderHiddenLineSettings hiddenLineSettings,
+        RenderColor layerColor,
         bool hasViewport,
         RenderBounds viewport,
         bool isInteractive,
@@ -349,7 +499,7 @@ public sealed class CadSkiaRenderService
         {
             foreach (var child in clipGroup.Primitives)
             {
-                DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
+                DrawPrimitive(canvas, child, style, clipHidden, hiddenLineSettings, layerColor, hasViewport, viewport, isInteractive, state);
             }
             return;
         }
@@ -359,7 +509,7 @@ public sealed class CadSkiaRenderService
         {
             foreach (var child in clipGroup.Primitives)
             {
-                DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
+                DrawPrimitive(canvas, child, style, clipHidden, hiddenLineSettings, layerColor, hasViewport, viewport, isInteractive, state);
             }
             return;
         }
@@ -368,7 +518,7 @@ public sealed class CadSkiaRenderService
         canvas.ClipPath(geometry, SKClipOperation.Intersect, antialias: true);
         foreach (var child in clipGroup.Primitives)
         {
-            DrawPrimitive(canvas, child, style, clipHidden, hasViewport, viewport, isInteractive, state);
+            DrawPrimitive(canvas, child, style, clipHidden, hiddenLineSettings, layerColor, hasViewport, viewport, isInteractive, state);
         }
         canvas.Restore();
     }
@@ -404,7 +554,10 @@ public sealed class CadSkiaRenderService
         SKCanvas canvas,
         SKPaint paint,
         RenderLine line,
-        HiddenLineContext hidden)
+        HiddenLineContext hidden,
+        RenderHiddenLineSettings hiddenLineSettings,
+        RenderColor layerColor,
+        CadRenderStateSnapshot state)
     {
         if (!line.HasDepth)
         {
@@ -427,13 +580,31 @@ public sealed class CadSkiaRenderService
         {
             canvas.DrawLine(segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y, paint);
         }
+
+        DrawObscuredSegments(
+            canvas,
+            line.Start,
+            line.End,
+            line.StartDepth!.Value,
+            line.EndDepth!.Value,
+            line.Color,
+            line.Thickness,
+            line.LineCap,
+            line.LineJoin,
+            hidden,
+            hiddenLineSettings,
+            layerColor,
+            state);
     }
 
     private void DrawHiddenPolyline(
         SKCanvas canvas,
         SKPaint paint,
         RenderPolyline polyline,
-        HiddenLineContext hidden)
+        HiddenLineContext hidden,
+        RenderHiddenLineSettings hiddenLineSettings,
+        RenderColor layerColor,
+        CadRenderStateSnapshot state)
     {
         if (!polyline.HasDepths)
         {
@@ -467,6 +638,21 @@ public sealed class CadSkiaRenderService
             {
                 canvas.DrawLine(segment.Start.X, segment.Start.Y, segment.End.X, segment.End.Y, paint);
             }
+
+            DrawObscuredSegments(
+                canvas,
+                start,
+                end,
+                depthStart,
+                depthEnd,
+                polyline.Color,
+                polyline.Thickness,
+                polyline.LineCap,
+                polyline.LineJoin,
+                hidden,
+                hiddenLineSettings,
+                layerColor,
+                state);
         }
     }
 
@@ -718,15 +904,79 @@ public sealed class CadSkiaRenderService
 
     private void DrawPoint(SKCanvas canvas, SKPaint paint, RenderPoint point, CadRenderStateSnapshot state)
     {
-        var scale = (float)(state.BaseScale * state.Zoom);
-        var size = (float)Math.Max(3.0, 6.0 / Math.Max(scale, 0.0001f));
+        var sizeWorld = ResolvePointSize(point, state);
+        if (sizeWorld <= 0f)
+        {
+            return;
+        }
+
         var center = point.Point;
-        var leftX = center.X - size;
-        var rightX = center.X + size;
-        var topY = center.Y - size;
-        var bottomY = center.Y + size;
-        canvas.DrawLine(leftX, center.Y, rightX, center.Y, paint);
-        canvas.DrawLine(center.X, topY, center.X, bottomY, paint);
+        var mode = point.DisplayMode;
+        var baseMode = (short)(mode & 0x1F);
+        var addCircle = (mode & 32) != 0;
+        var addSquare = (mode & 64) != 0;
+
+        var half = sizeWorld * 0.5f;
+
+        if (baseMode != 1)
+        {
+            switch (baseMode)
+            {
+                case 0:
+                    {
+                        var dotRadius = MathF.Max(half * 0.2f, paint.StrokeWidth * 0.5f);
+                        var fillPaint = GetFillPaint(point.Color);
+                        canvas.DrawCircle(center.X, center.Y, dotRadius, fillPaint);
+                        break;
+                    }
+                case 2:
+                    canvas.DrawLine(center.X - half, center.Y, center.X + half, center.Y, paint);
+                    canvas.DrawLine(center.X, center.Y - half, center.X, center.Y + half, paint);
+                    break;
+                case 3:
+                    canvas.DrawLine(center.X - half, center.Y - half, center.X + half, center.Y + half, paint);
+                    canvas.DrawLine(center.X - half, center.Y + half, center.X + half, center.Y - half, paint);
+                    break;
+                case 4:
+                    canvas.DrawLine(center.X, center.Y - half, center.X, center.Y + half, paint);
+                    break;
+            }
+        }
+
+        if (addCircle)
+        {
+            canvas.DrawCircle(center.X, center.Y, half, paint);
+        }
+
+        if (addSquare)
+        {
+            canvas.DrawRect(center.X - half, center.Y - half, sizeWorld, sizeWorld, paint);
+        }
+    }
+
+    private float ResolvePointSize(RenderPoint point, CadRenderStateSnapshot state)
+    {
+        var scale = (float)(state.BaseScale * state.Zoom);
+        if (scale <= 0f || float.IsNaN(scale) || float.IsInfinity(scale))
+        {
+            return 0f;
+        }
+
+        var sizeSetting = point.DisplaySize;
+        if (sizeSetting > 0)
+        {
+            return (float)sizeSetting;
+        }
+
+        var viewportHeight = (float)_renderSize.Height;
+        if (viewportHeight <= 0f)
+        {
+            return 0f;
+        }
+
+        var percent = sizeSetting < 0 ? (float)Math.Abs(sizeSetting) : 5f;
+        var sizePx = viewportHeight * (percent / 100f);
+        return sizePx / scale;
     }
 
     private void DrawText(SKCanvas canvas, RenderText text)
@@ -1184,9 +1434,7 @@ public sealed class CadSkiaRenderService
         RenderLineJoin lineJoin,
         CadRenderStateSnapshot state)
     {
-        var scale = (float)(state.BaseScale * state.Zoom);
-        var minWorld = (float)(state.MinPixelThickness / Math.Max(scale, 0.0001f));
-        var worldThickness = MathF.Max(thickness, minWorld);
+        var worldThickness = ResolveWorldThickness(thickness, state);
         var key = new PenKey(color, worldThickness, lineCap, lineJoin);
         if (_strokePaintCache.TryGetValue(key, out var paint))
         {
@@ -1204,6 +1452,13 @@ public sealed class CadSkiaRenderService
         };
         _strokePaintCache[key] = paint;
         return paint;
+    }
+
+    private static float ResolveWorldThickness(float thickness, CadRenderStateSnapshot state)
+    {
+        var scale = (float)(state.BaseScale * state.Zoom);
+        var minWorld = (float)(state.MinPixelThickness / Math.Max(scale, 0.0001f));
+        return MathF.Max(thickness, minWorld);
     }
 
     private SKBitmap? ResolveBitmap(string? path)
@@ -1792,4 +2047,11 @@ public sealed class CadSkiaRenderService
         float Thickness,
         RenderLineCap LineCap,
         RenderLineJoin LineJoin);
+
+    private readonly record struct ObscuredPenKey(
+        RenderColor Color,
+        float Thickness,
+        RenderLineCap LineCap,
+        RenderLineJoin LineJoin,
+        RenderObscuredLineType LineType);
 }

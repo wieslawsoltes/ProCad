@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using ACadSharp;
 using ACadSharp.Entities;
@@ -30,7 +31,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var insertTransform = insert.GetTransform();
+        var insertTransform = BuildInsertTransform(insert);
         insertTransform = ApplyBlockBasePoint(insert, insertTransform);
         var baseTransform = RenderTransformUtils.Combine(transform, insertTransform);
 
@@ -68,6 +69,17 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
         return RenderTransformUtils.Combine(transform, baseTransform);
     }
 
+    private static Transform BuildInsertTransform(Insert insert)
+    {
+        var normal = insert.Normal.IsZero() ? XYZ.AxisZ : insert.Normal;
+        var world = Matrix4.GetArbitraryAxis(normal);
+        var translation = Matrix4.CreateTranslation(insert.InsertPoint);
+        var rotation = Matrix4.CreateFromAxisAngle(XYZ.AxisZ, insert.Rotation);
+        var scale = Matrix4.CreateScale(new XYZ(insert.XScale, insert.YScale, insert.ZScale));
+
+        return new Transform(world * translation * rotation * scale);
+    }
+
     private void AppendBlockInstance(Insert insert, Transform transform, RenderBuildContext context)
     {
         if (insert.Block is null)
@@ -102,6 +114,11 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
 
         AppendAttributes(insert, transform, subContext);
         MergeLayerPrimitives(subContext, context, clipLoops);
+
+        if (hasClip)
+        {
+            AppendClipFrame(insert, clipLoops, context);
+        }
     }
 
     private static RenderBuildContext CreateSubContext(
@@ -149,6 +166,44 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             {
                 targetBuilder.Add(primitive);
             }
+        }
+    }
+
+    private static void AppendClipFrame(
+        Insert insert,
+        IReadOnlyList<IReadOnlyList<Vector2>> clipLoops,
+        RenderBuildContext context)
+    {
+        if (!context.Settings.XClipFrameVisibility.ShouldDisplay())
+        {
+            return;
+        }
+
+        if (clipLoops.Count == 0)
+        {
+            return;
+        }
+
+        var builder = context.GetLayerBuilder(insert);
+        var color = context.ResolveEntityColor(insert);
+        var thickness = context.ResolveLineWeight(insert);
+        var lineCap = context.ResolveLineCap(insert);
+        var lineJoin = context.ResolveLineJoin(insert);
+
+        foreach (var loop in clipLoops)
+        {
+            if (loop is null || loop.Count < 2)
+            {
+                continue;
+            }
+
+            builder.Add(new RenderPolyline(
+                loop,
+                isClosed: true,
+                color,
+                thickness,
+                lineCap,
+                lineJoin));
         }
     }
 
@@ -232,16 +287,29 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             EnableHatchFills = settings.EnableHatchFills,
             EnableHatchPatterns = settings.EnableHatchPatterns,
             EnableHatchGradients = settings.EnableHatchGradients,
+            HiddenLineSettings = settings.HiddenLineSettings,
+            ShadeEdge = settings.ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = settings.ShadeDiffuseToAmbientPercentage,
             Background = settings.Background,
             FallbackColor = settings.FallbackColor,
             MillimetersPerUnit = settings.MillimetersPerUnit,
             DefaultLineWeightMm = settings.DefaultLineWeightMm,
             MinLineWeightMm = settings.MinLineWeightMm,
+            DisplayLineWeight = settings.DisplayLineWeight,
             LineTypeDotLengthMm = settings.LineTypeDotLengthMm,
             PolylineArcPrecision = settings.PolylineArcPrecision,
             SplinePrecision = settings.SplinePrecision,
             CirclePrecision = settings.CirclePrecision,
             TextWidthFactor = settings.TextWidthFactor,
+            PointDisplayMode = settings.PointDisplayMode,
+            PointDisplaySize = settings.PointDisplaySize,
+            QuickTextMode = settings.QuickTextMode,
+            FillMode = settings.FillMode,
+            PolylineLineTypeGeneration = settings.PolylineLineTypeGeneration,
+            MirrorText = settings.MirrorText,
+            XClipFrameVisibility = settings.XClipFrameVisibility,
+            WipeoutFrameVisibility = settings.WipeoutFrameVisibility,
+            UnderlayFrameVisibility = settings.UnderlayFrameVisibility,
             IsPaperSpace = settings.IsPaperSpace,
             PaperSpaceLineTypeScalingOverride = settings.PaperSpaceLineTypeScalingOverride,
             ViewportScale = settings.ViewportScale,
@@ -396,6 +464,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
     private static void AppendAttributes(Insert insert, Transform transform, RenderBuildContext context)
     {
         var attributeMap = BuildAttributeMap(insert);
+        var identity = new Transform(Matrix4.Identity);
 
         foreach (var attribute in insert.Attributes)
         {
@@ -409,7 +478,8 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
                 continue;
             }
 
-            AppendAttributeEntity(attribute, transform, context);
+            var attributeTransform = ResolveAttributeTransform(attribute, insert, transform, identity);
+            AppendAttributeEntity(attribute, attributeTransform, context);
         }
 
         foreach (var definition in insert.Block.AttributeDefinitions)
@@ -480,6 +550,32 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
         }
 
         context.Dispatcher.Append(definition, transform, context);
+    }
+
+    private static Transform ResolveAttributeTransform(
+        AttributeEntity attribute,
+        Insert insert,
+        Transform insertTransform,
+        Transform identity)
+    {
+        if (string.IsNullOrWhiteSpace(attribute.Tag))
+        {
+            return identity;
+        }
+
+        var definition = insert.Block?.AttributeDefinitions
+            .FirstOrDefault(def => string.Equals(def.Tag, attribute.Tag, StringComparison.OrdinalIgnoreCase));
+        if (definition is null)
+        {
+            return identity;
+        }
+
+        var defPoint = definition.InsertPoint;
+        var worldPoint = insertTransform.ApplyTransform(defPoint);
+        var distToDef = (attribute.InsertPoint - defPoint).GetLength();
+        var distToWorld = (attribute.InsertPoint - worldPoint).GetLength();
+
+        return distToWorld <= distToDef ? identity : insertTransform;
     }
 
     private static DynamicBlockVisibilityFilter? TryCreateVisibilityFilter(

@@ -19,22 +19,30 @@ public sealed class PolyfaceMeshRenderHandler : IRenderEntityHandler
 
         var builder = context.GetLayerBuilder(mesh);
         var color = context.ResolveEntityColor(mesh);
+        var shadePolicy = RenderShadeEdgeUtils.Resolve(context.Settings);
+        var edgeColor = RenderShadeEdgeUtils.ResolveEdgeColor(color, shadePolicy);
         var thickness = context.ResolveLineWeight(mesh);
         var lineCap = context.ResolveLineCap(mesh);
         var lineJoin = context.ResolveLineJoin(mesh);
         var pattern = context.ResolveLinePattern(mesh);
         var material = context.ResolveEntityMaterial(mesh);
-        var emitSurface = ShouldEmitSurface(context.Settings.VisualStyle);
-        var lighting = context.Settings.Lighting;
+        var emitSurface = shadePolicy.EmitSurfaces;
+        var emitEdges = shadePolicy.EmitEdges;
+        var lighting = RenderShadeEdgeUtils.ResolveLighting(context.Settings, shadePolicy);
 
         foreach (var face in mesh.Faces)
         {
             if (emitSurface)
             {
-                AppendFaceSurface(mesh, face, builder, transform, material, lighting);
+                AppendFaceSurface(mesh, face, builder, transform, color, material, lighting, shadePolicy);
             }
 
-            AppendFaceEdges(mesh, face, builder, transform, color, thickness, lineCap, lineJoin, pattern, context);
+            if (!emitEdges)
+            {
+                continue;
+            }
+
+            AppendFaceEdges(mesh, face, builder, transform, edgeColor, thickness, lineCap, lineJoin, pattern, context);
         }
     }
 
@@ -131,8 +139,10 @@ public sealed class PolyfaceMeshRenderHandler : IRenderEntityHandler
         VertexFaceRecord face,
         RenderLayerBuilder builder,
         Transform transform,
+        RenderColor entityColor,
         RenderMaterial material,
-        RenderLightingSettings lighting)
+        RenderLightingSettings lighting,
+        RenderShadeEdgePolicy shadePolicy)
     {
         if (face is null)
         {
@@ -171,7 +181,7 @@ public sealed class PolyfaceMeshRenderHandler : IRenderEntityHandler
             var a3 = RenderTransformUtils.Apply3D(transform, triangle.A);
             var b3 = RenderTransformUtils.Apply3D(transform, triangle.B);
             var c3 = RenderTransformUtils.Apply3D(transform, triangle.C);
-            var litColor = RenderLightingUtils.ComputeLitColor(a3, b3, c3, lighting, material);
+            var litColor = RenderShadeEdgeUtils.ResolveSurfaceColor(entityColor, material, lighting, a3, b3, c3, shadePolicy);
             var a = RenderTransformUtils.ToVector2(a3);
             var b = RenderTransformUtils.ToVector2(b3);
             var c = RenderTransformUtils.ToVector2(c3);
@@ -200,8 +210,4 @@ public sealed class PolyfaceMeshRenderHandler : IRenderEntityHandler
         return true;
     }
 
-    private static bool ShouldEmitSurface(RenderVisualStyle style)
-    {
-        return style == RenderVisualStyle.Shaded || style == RenderVisualStyle.HiddenLine;
-    }
 }

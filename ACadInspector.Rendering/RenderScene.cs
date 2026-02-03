@@ -24,6 +24,7 @@ public sealed class RenderScene
 {
     public RenderColor Background { get; }
     public RenderVisualStyle VisualStyle { get; }
+    public RenderHiddenLineSettings HiddenLineSettings { get; }
     public RenderBounds Bounds { get; }
     public IReadOnlyList<RenderLayer> Layers { get; }
     public RenderDiagnostics Diagnostics { get; }
@@ -34,6 +35,7 @@ public sealed class RenderScene
         RenderBounds bounds,
         RenderColor background,
         RenderVisualStyle visualStyle,
+        RenderHiddenLineSettings hiddenLineSettings,
         RenderDiagnostics diagnostics,
         RenderStats stats)
     {
@@ -41,6 +43,7 @@ public sealed class RenderScene
         Bounds = bounds;
         Background = background;
         VisualStyle = visualStyle;
+        HiddenLineSettings = hiddenLineSettings;
         Diagnostics = diagnostics;
         Stats = stats;
     }

@@ -50,6 +50,7 @@ internal static class RenderSceneSamples
             bounds,
             RenderColor.DefaultBackground,
             RenderVisualStyle.Wireframe,
+            RenderHiddenLineSettings.Default,
             new RenderDiagnostics(),
             RenderStats.Empty);
     }

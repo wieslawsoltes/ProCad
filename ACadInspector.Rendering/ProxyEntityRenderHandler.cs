@@ -30,6 +30,13 @@ public sealed class ProxyEntityRenderHandler : IRenderEntityHandler
         var thickness = context.ResolveLineWeight(entity);
         var lineCap = context.ResolveLineCap(entity);
         var lineJoin = context.ResolveLineJoin(entity);
-        builder.Add(new RenderPoint(location, color, thickness, lineCap, lineJoin));
+        builder.Add(new RenderPoint(
+            location,
+            color,
+            thickness,
+            lineCap,
+            lineJoin,
+            context.Settings.PointDisplayMode,
+            context.Settings.PointDisplaySize));
     }
 }

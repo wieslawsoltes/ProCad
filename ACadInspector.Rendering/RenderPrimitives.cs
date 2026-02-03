@@ -458,6 +458,8 @@ public sealed class RenderPoint : IRenderPrimitive
     public float Thickness { get; }
     public RenderLineCap LineCap { get; }
     public RenderLineJoin LineJoin { get; }
+    public short DisplayMode { get; }
+    public double DisplaySize { get; }
     public RenderBounds Bounds { get; }
 
     public RenderPoint(
@@ -465,14 +467,27 @@ public sealed class RenderPoint : IRenderPrimitive
         RenderColor color,
         float thickness,
         RenderLineCap lineCap,
-        RenderLineJoin lineJoin)
+        RenderLineJoin lineJoin,
+        short displayMode,
+        double displaySize)
     {
         Point = point;
         Color = color;
         Thickness = thickness;
         LineCap = lineCap;
         LineJoin = lineJoin;
-        Bounds = RenderBounds.Empty.Expand(point);
+        DisplayMode = displayMode;
+        DisplaySize = displaySize;
+        if (displaySize > 0)
+        {
+            var extent = (float)(displaySize * 0.5);
+            var delta = new Vector2(extent, extent);
+            Bounds = new RenderBounds(point - delta, point + delta);
+        }
+        else
+        {
+            Bounds = RenderBounds.Empty.Expand(point);
+        }
     }
 }
 

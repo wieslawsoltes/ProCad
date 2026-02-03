@@ -21,12 +21,31 @@ public sealed class CadRenderSceneSettings
     public bool EnableHatchPatterns { get; init; } = true;
     public bool EnableHatchGradients { get; init; } = true;
 
+    /// <summary>
+    /// Gets the settings used to render obscured lines in hidden-line mode.
+    /// </summary>
+    public RenderHiddenLineSettings HiddenLineSettings { get; init; } = RenderHiddenLineSettings.Default;
+
+    /// <summary>
+    /// Gets the shade edge mode (SHADEDGE).
+    /// </summary>
+    public ShadeEdgeType ShadeEdge { get; init; } = ShadeEdgeType.FacesInEntityColorEdgesInBlack;
+
+    /// <summary>
+    /// Gets the diffuse-to-ambient percentage (SHADEDIF).
+    /// </summary>
+    public short ShadeDiffuseToAmbientPercentage { get; init; } = 70;
+
     public RenderColor Background { get; init; } = RenderColor.DefaultBackground;
     public RenderColor FallbackColor { get; init; } = RenderColor.DefaultForeground;
 
     public float MillimetersPerUnit { get; init; } = 1f;
     public float DefaultLineWeightMm { get; init; } = 0.25f;
     public float MinLineWeightMm { get; init; } = 0.05f;
+    /// <summary>
+    /// Gets a value indicating whether line weights should be displayed.
+    /// </summary>
+    public bool DisplayLineWeight { get; init; } = true;
     /// <summary>
     /// Default dot length used for zero-length linetype segments, in millimeters.
     /// </summary>
@@ -42,9 +61,59 @@ public sealed class CadRenderSceneSettings
     public float TextWidthFactor { get; init; } = 0.6f;
 
     /// <summary>
+    /// Gets the point display mode (PDMODE).
+    /// </summary>
+    public short PointDisplayMode { get; init; } = 0;
+
+    /// <summary>
+    /// Gets the point display size (PDSIZE).
+    /// </summary>
+    public double PointDisplaySize { get; init; } = 0.0;
+
+    /// <summary>
+    /// Gets a value indicating whether text should be shown as boxes (QTEXT).
+    /// </summary>
+    public bool QuickTextMode { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether filled entities should be rendered filled (FILLMODE).
+    /// </summary>
+    public bool FillMode { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether linetype generation should be continuous across polylines (PLINEGEN).
+    /// </summary>
+    public bool PolylineLineTypeGeneration { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether mirrored text should be displayed mirrored (MIRRTEXT).
+    /// </summary>
+    public bool MirrorText { get; init; } = true;
+
+    /// <summary>
+    /// Gets the frame visibility for XClip boundaries (XCLIPFRAME).
+    /// </summary>
+    public RenderFrameVisibility XClipFrameVisibility { get; init; } = RenderFrameVisibility.DisplayNotPlot;
+
+    /// <summary>
+    /// Gets the frame visibility for wipeouts (WIPEOUTFRAME).
+    /// </summary>
+    public RenderFrameVisibility WipeoutFrameVisibility { get; init; } = RenderFrameVisibility.DisplayAndPlot;
+
+    /// <summary>
+    /// Gets the frame visibility for underlays (PDFFRAME/DGNFRAME/DWFFRAME).
+    /// </summary>
+    public RenderFrameVisibility UnderlayFrameVisibility { get; init; } = RenderFrameVisibility.DisplayAndPlot;
+
+    /// <summary>
     /// Gets a value indicating whether paper space linetype scaling is applied.
     /// </summary>
     public bool IsPaperSpace { get; init; }
+
+    /// <summary>
+    /// Gets the paper space layout name to render when in paper space.
+    /// </summary>
+    public string? LayoutName { get; init; }
 
     /// <summary>
     /// Gets the layout-level paper space linetype scaling override, when available.

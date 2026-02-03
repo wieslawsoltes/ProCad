@@ -21,6 +21,21 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
         var builder = context.GetLayerBuilder(wipeout);
         var fillColor = context.Settings.Background;
         builder.Add(new RenderFill(loops[0], fillColor));
+
+        if (context.Settings.WipeoutFrameVisibility.ShouldDisplay())
+        {
+            var frameColor = context.ResolveEntityColor(wipeout);
+            var thickness = context.ResolveLineWeight(wipeout);
+            var lineCap = context.ResolveLineCap(wipeout);
+            var lineJoin = context.ResolveLineJoin(wipeout);
+            builder.Add(new RenderPolyline(
+                loops[0],
+                isClosed: true,
+                frameColor,
+                thickness,
+                lineCap,
+                lineJoin));
+        }
     }
 
     private static IReadOnlyList<IReadOnlyList<System.Numerics.Vector2>> BuildWipeoutLoop(

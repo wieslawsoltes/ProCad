@@ -31,6 +31,26 @@ public sealed class RenderTextTests
     }
 
     [Fact]
+    public void BuildScene_QuickTextMode_UsesPolylines()
+    {
+        var document = new ACadSharp.CadDocument();
+        var text = new TextEntity
+        {
+            Value = "Hello",
+            Height = 2.0,
+            InsertPoint = new XYZ(0, 0, 0)
+        };
+        document.Entities.Add(text);
+
+        var settings = new CadRenderSceneSettings { QuickTextMode = true };
+        var scene = CreateSceneBuilder().Build(document, settings);
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives);
+
+        Assert.DoesNotContain(primitives, primitive => primitive is RenderText);
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline);
+    }
+
+    [Fact]
     public void BuildScene_UsesFontFlagsFromStyle()
     {
         var document = new ACadSharp.CadDocument();

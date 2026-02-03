@@ -31,6 +31,11 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
 
     public float ResolveLineWeight(Entity entity, CadRenderSceneSettings settings)
     {
+        if (!settings.DisplayLineWeight)
+        {
+            return 0f;
+        }
+
         var weight = entity.GetActiveLineWeightType();
         var weightValue = (short)weight;
         float lineWeightMm;

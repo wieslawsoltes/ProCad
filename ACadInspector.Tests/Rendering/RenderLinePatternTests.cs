@@ -94,6 +94,35 @@ public sealed class RenderLinePatternTests
     }
 
     [Fact]
+    public void ResolveLinePattern_UsesTextShaperLayout()
+    {
+        var document = new CadDocument();
+        var lineType = new LineType("TEXTLINE");
+        lineType.AddSegment(new LineType.Segment
+        {
+            Length = 1.0,
+            Flags = LineTypeShapeFlags.Text,
+            Text = "AB",
+            Scale = 1.0
+        });
+        document.LineTypes.Add(lineType);
+
+        var line = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0),
+            LineType = lineType
+        };
+
+        var resolver = new DefaultRenderLinePatternResolver(new StubTextShaper());
+        var pattern = resolver.ResolveLinePattern(line, document, new CadRenderSceneSettings());
+
+        var textSegment = pattern.Segments.First(segment => segment.IsText);
+        Assert.Equal(42f, textSegment.LayoutWidth);
+        Assert.Equal(10f, textSegment.LayoutHeight);
+    }
+
+    [Fact]
     public void ResolveLinePattern_AppliesPaperSpaceScale()
     {
         var document = new CadDocument();
@@ -224,5 +253,18 @@ public sealed class RenderLinePatternTests
             new DefaultRenderGeometrySampler(),
             new DefaultRenderEntityOrderResolver(),
             new RenderCacheStampProvider());
+    }
+
+    private sealed class StubTextShaper : IRenderTextShaper
+    {
+        public RenderTextLayout Shape(TextEntity text, CadRenderSceneSettings settings)
+        {
+            return new RenderTextLayout(text.Value ?? string.Empty, 42f, 10f);
+        }
+
+        public RenderTextLayout Shape(MText text, CadRenderSceneSettings settings)
+        {
+            return new RenderTextLayout(text.PlainText ?? string.Empty, 0f, 0f);
+        }
     }
 }

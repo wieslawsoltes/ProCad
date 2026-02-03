@@ -223,7 +223,7 @@ internal static class RenderLinePatternStroker
         var anchor = position + direction * segment.Offset.X + normal * segment.Offset.Y;
         if (shapeResolver.TryResolveShape(segment.ShapeFile, segment.ShapeNumber, settings, out var geometry))
         {
-            AddShapeGeometry(builder, anchor, direction, segment, geometry, color, thickness, lineCap, lineJoin);
+            AddShapeGeometry(builder, anchor, direction, segment, geometry, color, thickness, lineCap, lineJoin, settings);
             return;
         }
 
@@ -239,7 +239,8 @@ internal static class RenderLinePatternStroker
         RenderColor color,
         float thickness,
         RenderLineCap lineCap,
-        RenderLineJoin lineJoin)
+        RenderLineJoin lineJoin,
+        CadRenderSceneSettings settings)
     {
         var baseAngle = segment.RotationIsAbsolute
             ? segment.Rotation
@@ -266,7 +267,14 @@ internal static class RenderLinePatternStroker
 
             if (transformed.Count == 1)
             {
-                builder.Add(new RenderPoint(transformed[0], color, thickness, lineCap, lineJoin));
+                builder.Add(new RenderPoint(
+                    transformed[0],
+                    color,
+                    thickness,
+                    lineCap,
+                    lineJoin,
+                    settings.PointDisplayMode,
+                    settings.PointDisplaySize));
                 continue;
             }
 

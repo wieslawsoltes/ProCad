@@ -15,6 +15,17 @@ internal static class RenderTransformUtils
         return new Transform(left.Matrix * right.Matrix);
     }
 
+    public static Transform CombineWithNormal(Transform transform, XYZ normal)
+    {
+        if (normal.IsZero() || normal.Equals(XYZ.AxisZ))
+        {
+            return transform;
+        }
+
+        var ocs = new Transform(Matrix4.GetArbitraryAxis(normal));
+        return Combine(transform, ocs);
+    }
+
     public static Vector2 Apply(Transform transform, XYZ point)
     {
         return ToVector2(transform.ApplyTransform(point));

@@ -32,6 +32,11 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         var obliqueAngle = ResolveObliqueAngle(text.Style);
         var (isBold, isItalic) = ResolveFontFlags(text.Style);
         var (mirrorX, mirrorY) = ResolveMirrorFlags(text.Style);
+        if (!context.Settings.MirrorText)
+        {
+            mirrorX = false;
+            mirrorY = false;
+        }
         var fontFamily = ResolveFontFamily(text.Style);
 
         var parsed = ParseFormattedText(text.Value);
@@ -56,6 +61,25 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
 
         var baseOffset = ResolveAttachmentOffset(text.AttachmentPoint, blockWidth, blockHeight);
         var horizontalAdjustMode = ResolveHorizontalAdjustment(text.AttachmentPoint);
+
+        if (context.Settings.QuickTextMode)
+        {
+            var lineCap = context.ResolveLineCap(text);
+            var lineJoin = context.ResolveLineJoin(text);
+            var thickness = context.ResolveLineWeight(text);
+            var quad = RenderTextUtils.BuildTextQuad(
+                anchor,
+                baseOffset,
+                blockWidth,
+                blockHeight,
+                widthFactor: 1f,
+                rotation,
+                obliqueAngle,
+                mirrorX,
+                mirrorY);
+            builder.Add(new RenderPolyline(quad, isClosed: true, color, thickness, lineCap, lineJoin));
+            return;
+        }
 
         if (TryResolveBackground(text, context.Settings, color, baseOffset, blockWidth, blockHeight, out var background))
         {

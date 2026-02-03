@@ -51,6 +51,11 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
             : ResolveAlignmentOffset(text.HorizontalAlignment, text.VerticalAlignment, layoutWidth, layoutHeight);
         var fontFamily = ResolveFontFamily(text.Style);
         var (mirrorX, mirrorY) = ResolveMirrorFlags(text);
+        if (!context.Settings.MirrorText)
+        {
+            mirrorX = false;
+            mirrorY = false;
+        }
 
         if (isAlignedOrFit)
         {
@@ -71,6 +76,25 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
                     widthFactor *= fitScale;
                 }
             }
+        }
+
+        if (context.Settings.QuickTextMode)
+        {
+            var lineCap = context.ResolveLineCap(text);
+            var lineJoin = context.ResolveLineJoin(text);
+            var thickness = context.ResolveLineWeight(text);
+            var quad = RenderTextUtils.BuildTextQuad(
+                anchor,
+                offset,
+                layoutWidth,
+                layoutHeight,
+                widthFactor,
+                rotation,
+                obliqueAngle,
+                mirrorX,
+                mirrorY);
+            builder.Add(new RenderPolyline(quad, isClosed: true, color, thickness, lineCap, lineJoin));
+            return;
         }
 
         if (TryResolveBackground(text, context.Settings, color, offset, layoutWidth, layoutHeight, out var background))

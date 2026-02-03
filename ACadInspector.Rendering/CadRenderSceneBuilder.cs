@@ -64,7 +64,7 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         var diagnostics = new RenderDiagnostics();
         if (settings.IsPaperSpace)
         {
-            var layout = ResolvePaperSpaceLayout(document);
+            var layout = ResolvePaperSpaceLayout(document, settings.LayoutName);
             var layoutScaling = ResolvePaperSpaceLineTypeScaling(layout);
             var paperSettings = WithViewportScale(settings, viewportScale: 1f, layoutScaling, annotationScaleFactor: 1f);
             var context = new RenderBuildContext(
@@ -145,7 +145,14 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
 
             var transform = BuildViewportTransform(viewport);
             var viewportBlock = ResolveViewportBlock(document, viewport);
-            AppendEntities(ResolveViewportEntities(document, viewport), viewportBlock, transform, viewportContext);
+            var viewportEntities = ResolveViewportEntities(document, viewport);
+            var frozenLayers = ResolveViewportFrozenLayers(viewport);
+            if (frozenLayers.Count > 0)
+            {
+                viewportEntities = FilterFrozenLayers(viewportEntities, frozenLayers);
+            }
+
+            AppendEntities(viewportEntities, viewportBlock, transform, viewportContext);
 
             var clipLoops = BuildViewportClip(viewport, settings);
             foreach (var entry in viewportContext.Layers.Entries)
@@ -224,32 +231,52 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
             sceneBounds,
             context.Settings.Background,
             context.Settings.VisualStyle,
+            context.Settings.HiddenLineSettings,
             context.Diagnostics,
             renderStats);
     }
 
-    private static Layout? ResolvePaperSpaceLayout(CadDocument document)
+    private static Layout? ResolvePaperSpaceLayout(CadDocument document, string? layoutName)
     {
-        if (document.Layouts is null)
+        if (!string.IsNullOrWhiteSpace(layoutName) && document.Layouts is not null)
         {
-            return document.PaperSpace?.Layout;
-        }
-
-        Layout? best = null;
-        foreach (var layout in document.Layouts)
-        {
-            if (!layout.IsPaperSpace)
+            foreach (var layout in document.Layouts)
             {
-                continue;
-            }
+                if (!layout.IsPaperSpace)
+                {
+                    continue;
+                }
 
-            if (best is null || layout.TabOrder < best.TabOrder)
-            {
-                best = layout;
+                if (string.Equals(layout.Name, layoutName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return layout;
+                }
             }
         }
 
-        return best ?? document.PaperSpace?.Layout;
+        if (document.Layouts is not null)
+        {
+            Layout? best = null;
+            foreach (var layout in document.Layouts)
+            {
+                if (!layout.IsPaperSpace)
+                {
+                    continue;
+                }
+
+                if (best is null || layout.TabOrder < best.TabOrder)
+                {
+                    best = layout;
+                }
+            }
+
+            if (best is not null)
+            {
+                return best;
+            }
+        }
+
+        return document.PaperSpace?.Layout;
     }
 
     private static BlockRecord? ResolvePaperSpaceBlock(CadDocument document, Layout? layout)
@@ -338,7 +365,16 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         var scaleY = viewHeight > 0.0 ? viewport.Height / viewHeight : 1.0;
         var twist = -viewport.TwistAngle;
 
-        var matrix = Matrix4.CreateTranslation(new XYZ(-viewport.ViewCenter.X, -viewport.ViewCenter.Y, 0));
+        var viewDirection = viewport.ViewDirection.IsZero() ? XYZ.AxisZ : viewport.ViewDirection;
+        var worldToView = Matrix4.GetArbitraryAxis(viewDirection);
+        if (!Matrix4.Inverse(worldToView, out var viewToDcs))
+        {
+            viewToDcs = Matrix4.Identity;
+        }
+
+        var matrix = Matrix4.CreateTranslation(new XYZ(-viewport.ViewTarget.X, -viewport.ViewTarget.Y, -viewport.ViewTarget.Z));
+        matrix = viewToDcs * matrix;
+        matrix = Matrix4.CreateTranslation(new XYZ(-viewport.ViewCenter.X, -viewport.ViewCenter.Y, 0)) * matrix;
         if (Math.Abs(twist) > 0.0001)
         {
             matrix = Matrix4.CreateRotationMatrix(0, 0, twist) * matrix;
@@ -351,7 +387,8 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
 
     private IReadOnlyList<IReadOnlyList<Vector2>> BuildViewportClip(Viewport viewport, CadRenderSceneSettings settings)
     {
-        if (viewport.Boundary is not null)
+        if (viewport.Boundary is not null &&
+            viewport.Status.HasFlag(ViewportStatusFlags.NonRectangularClipping))
         {
             var boundaryLoops = BuildBoundaryLoops(viewport.Boundary, settings);
             if (boundaryLoops.Count > 0)
@@ -386,6 +423,45 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         }
 
         return new[] { loop };
+    }
+
+    private static HashSet<string> ResolveViewportFrozenLayers(Viewport viewport)
+    {
+        var frozenLayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (viewport.FrozenLayers is null || viewport.FrozenLayers.Count == 0)
+        {
+            return frozenLayers;
+        }
+
+        foreach (var layer in viewport.FrozenLayers)
+        {
+            if (layer is null)
+            {
+                continue;
+            }
+
+            var name = layer.Name;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                frozenLayers.Add(name);
+            }
+        }
+
+        return frozenLayers;
+    }
+
+    private static IEnumerable<Entity> FilterFrozenLayers(IEnumerable<Entity> entities, HashSet<string> frozenLayers)
+    {
+        foreach (var entity in entities)
+        {
+            var layerName = entity.Layer?.Name;
+            if (layerName is not null && frozenLayers.Contains(layerName))
+            {
+                continue;
+            }
+
+            yield return entity;
+        }
     }
 
     private static IReadOnlyList<IReadOnlyList<Vector2>> BuildRectangleClip(Viewport viewport)
@@ -426,17 +502,31 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
             EnableHatchFills = settings.EnableHatchFills,
             EnableHatchPatterns = settings.EnableHatchPatterns,
             EnableHatchGradients = settings.EnableHatchGradients,
+            HiddenLineSettings = settings.HiddenLineSettings,
+            ShadeEdge = settings.ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = settings.ShadeDiffuseToAmbientPercentage,
             Background = settings.Background,
             FallbackColor = settings.FallbackColor,
             MillimetersPerUnit = settings.MillimetersPerUnit,
             DefaultLineWeightMm = settings.DefaultLineWeightMm,
             MinLineWeightMm = settings.MinLineWeightMm,
+            DisplayLineWeight = settings.DisplayLineWeight,
             LineTypeDotLengthMm = settings.LineTypeDotLengthMm,
             PolylineArcPrecision = settings.PolylineArcPrecision,
             SplinePrecision = settings.SplinePrecision,
             CirclePrecision = settings.CirclePrecision,
             TextWidthFactor = settings.TextWidthFactor,
+            PointDisplayMode = settings.PointDisplayMode,
+            PointDisplaySize = settings.PointDisplaySize,
+            QuickTextMode = settings.QuickTextMode,
+            FillMode = settings.FillMode,
+            PolylineLineTypeGeneration = settings.PolylineLineTypeGeneration,
+            MirrorText = settings.MirrorText,
+            XClipFrameVisibility = settings.XClipFrameVisibility,
+            WipeoutFrameVisibility = settings.WipeoutFrameVisibility,
+            UnderlayFrameVisibility = settings.UnderlayFrameVisibility,
             IsPaperSpace = settings.IsPaperSpace,
+            LayoutName = settings.LayoutName,
             PaperSpaceLineTypeScalingOverride = paperSpaceScaling ?? settings.PaperSpaceLineTypeScalingOverride,
             ViewportScale = viewportScale,
             ModelSpaceLineTypeScaling = settings.ModelSpaceLineTypeScaling,

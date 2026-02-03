@@ -155,6 +155,70 @@ internal static class RenderHiddenLineUtils
         }
     }
 
+    public static void AppendHiddenSegments(
+        RenderDepthBuffer depthBuffer,
+        Matrix3x2 worldToScreen,
+        Vector2 worldStart,
+        Vector2 worldEnd,
+        float depthStart,
+        float depthEnd,
+        List<RenderLineSegment> segments,
+        float depthEpsilon = DefaultDepthEpsilon)
+    {
+        if (segments is null)
+        {
+            throw new ArgumentNullException(nameof(segments));
+        }
+
+        if (depthBuffer.Width <= 0 || depthBuffer.Height <= 0 || !depthBuffer.HasDepth)
+        {
+            return;
+        }
+
+        var screenStart = Vector2.Transform(worldStart, worldToScreen);
+        var screenEnd = Vector2.Transform(worldEnd, worldToScreen);
+        var delta = screenEnd - screenStart;
+        var length = delta.Length();
+        if (length <= 0.001f)
+        {
+            if (!IsVisibleSample(depthBuffer, screenStart, depthStart, depthEpsilon))
+            {
+                segments.Add(new RenderLineSegment(worldStart, worldEnd));
+            }
+            return;
+        }
+
+        var steps = Math.Max(1, (int)MathF.Ceiling(length));
+        var invSteps = 1f / steps;
+
+        var runStart = -1;
+        for (var i = 0; i <= steps; i++)
+        {
+            var t = i * invSteps;
+            var screen = screenStart + delta * t;
+            var depth = Lerp(depthStart, depthEnd, t);
+            var visible = IsVisibleSample(depthBuffer, screen, depth, depthEpsilon);
+
+            if (!visible)
+            {
+                if (runStart < 0)
+                {
+                    runStart = i;
+                }
+            }
+            else if (runStart >= 0)
+            {
+                AppendSegment(worldStart, worldEnd, runStart, i - 1, invSteps, segments);
+                runStart = -1;
+            }
+        }
+
+        if (runStart >= 0)
+        {
+            AppendSegment(worldStart, worldEnd, runStart, steps, invSteps, segments);
+        }
+    }
+
     private static void AppendSegment(
         Vector2 worldStart,
         Vector2 worldEnd,
