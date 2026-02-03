@@ -91,7 +91,7 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
     private static bool TrySampleSplineAdaptive(Spline spline, int maxPoints, out List<XYZ> points)
     {
         points = new List<XYZ>(maxPoints);
-        if (!spline.TryPointOnSpline(0, out var start) || !TryResolveSplineEnd(spline, out var end))
+        if (!TryResolveSplineStart(spline, out var start) || !TryResolveSplineEnd(spline, out var end))
         {
             return false;
         }
@@ -142,21 +142,40 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
 
     private static bool TryResolveSplineEnd(Spline spline, out XYZ end)
     {
-        end = XYZ.NaN;
-        if (!spline.TryPointOnSpline(1, out end))
+        return TryResolveSplineEndpoint(
+            spline,
+            t: 1d,
+            fallbackT: 1d - 1e-6,
+            out end);
+    }
+
+    private static bool TryResolveSplineStart(Spline spline, out XYZ start)
+    {
+        return TryResolveSplineEndpoint(
+            spline,
+            t: 0d,
+            fallbackT: 1e-6,
+            out start);
+    }
+
+    private static bool TryResolveSplineEndpoint(Spline spline, double t, double fallbackT, out XYZ point)
+    {
+        point = XYZ.NaN;
+        if (!spline.TryPointOnSpline(t, out point))
         {
             return false;
         }
 
-        if (IsInvalidPoint(end) || IsNearZero(end))
+        if (IsSuspiciousSplineEndpoint(spline, point))
         {
-            const double epsilon = 1e-6;
-            var t = 1d - epsilon;
-            if (t > 0d && spline.TryPointOnSpline(t, out var candidate) && !IsInvalidPoint(candidate) && !IsNearZero(candidate))
+            if (fallbackT is > 0d and < 1d
+                && spline.TryPointOnSpline(fallbackT, out var candidate)
+                && !IsInvalidPoint(candidate)
+                && !IsSuspiciousSplineEndpoint(spline, candidate))
             {
-                end = candidate;
+                point = candidate;
             }
-            else if (IsInvalidPoint(end))
+            else if (IsInvalidPoint(point))
             {
                 return false;
             }
@@ -271,6 +290,42 @@ public sealed class DefaultRenderGeometrySampler : IRenderGeometrySampler
                || double.IsInfinity(point.X)
                || double.IsInfinity(point.Y)
                || double.IsInfinity(point.Z);
+    }
+
+    private static bool IsSuspiciousSplineEndpoint(Spline spline, XYZ point)
+    {
+        if (IsInvalidPoint(point))
+        {
+            return true;
+        }
+
+        if (!IsNearZero(point))
+        {
+            return false;
+        }
+
+        return !SplineHasNearZeroControlOrFitPoint(spline);
+    }
+
+    private static bool SplineHasNearZeroControlOrFitPoint(Spline spline)
+    {
+        foreach (var control in spline.ControlPoints)
+        {
+            if (IsNearZero(control))
+            {
+                return true;
+            }
+        }
+
+        foreach (var fit in spline.FitPoints)
+        {
+            if (IsNearZero(fit))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsNearZero(XYZ point)
