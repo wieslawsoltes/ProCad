@@ -24,6 +24,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
             return;
         }
 
+        var hatchTransform = RenderTransformUtils.CombineWithNormal(transform, hatch.Normal);
         var builder = context.GetLayerBuilder(hatch);
         var color = context.ResolveEntityColor(hatch);
         var thickness = context.ResolveLineWeight(hatch);
@@ -37,11 +38,11 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var worldLoops = TransformLoops(localLoops, transform);
+        var worldLoops = TransformLoops(localLoops, hatchTransform);
         var gradient = BuildGradient(hatch.GradientColor, color.A);
-        var enableFills = settings.EnableHatchFills;
-        var enablePatterns = settings.EnableHatchPatterns && settings.Quality != RenderQuality.Draft;
-        var enableGradients = settings.EnableHatchGradients && settings.Quality == RenderQuality.High;
+        var enableFills = settings.EnableHatchFills && settings.FillMode;
+        var enablePatterns = settings.EnableHatchPatterns && settings.Quality != RenderQuality.Draft && settings.FillMode;
+        var enableGradients = settings.EnableHatchGradients && settings.Quality == RenderQuality.High && settings.FillMode;
 
         if (gradient is not null)
         {
@@ -77,7 +78,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var segments = BuildPatternSegments(hatch.Pattern.Lines, localLoops, transform);
+        var segments = BuildPatternSegments(hatch.Pattern.Lines, localLoops, hatchTransform);
         if (segments.Count == 0)
         {
             AddBoundaryOutlines(builder, worldLoops, color, thickness, lineCap, lineJoin);

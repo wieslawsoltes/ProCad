@@ -17,7 +17,8 @@ public sealed class CircleRenderHandler : IRenderEntityHandler
         var lineJoin = context.ResolveLineJoin(circle);
         var pattern = context.ResolveLinePattern(circle);
 
-        if (pattern.IsContinuous && RenderTransformUtils.IsIdentity(transform))
+        var isDefaultNormal = circle.Normal.IsZero() || circle.Normal.Equals(XYZ.AxisZ);
+        if (pattern.IsContinuous && isDefaultNormal && RenderTransformUtils.IsIdentity(transform))
         {
             builder.Add(new RenderCircle(
                 RenderTransformUtils.ToVector2(circle.Center),

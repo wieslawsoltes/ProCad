@@ -17,12 +17,13 @@ public sealed class SolidRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var solid = (Solid)entity;
+        var solidTransform = RenderTransformUtils.CombineWithNormal(transform, solid.Normal);
         var points = new List<Vector2>
         {
-            RenderTransformUtils.Apply(transform, solid.FirstCorner),
-            RenderTransformUtils.Apply(transform, solid.SecondCorner),
-            RenderTransformUtils.Apply(transform, solid.ThirdCorner),
-            RenderTransformUtils.Apply(transform, solid.FourthCorner)
+            RenderTransformUtils.Apply(solidTransform, solid.FirstCorner),
+            RenderTransformUtils.Apply(solidTransform, solid.SecondCorner),
+            RenderTransformUtils.Apply(solidTransform, solid.ThirdCorner),
+            RenderTransformUtils.Apply(solidTransform, solid.FourthCorner)
         };
 
         TrimDuplicateEnd(points);
@@ -33,7 +34,16 @@ public sealed class SolidRenderHandler : IRenderEntityHandler
 
         var builder = context.GetLayerBuilder(solid);
         var color = context.ResolveEntityColor(solid);
-        builder.Add(new RenderFill(points, color));
+        if (context.Settings.FillMode)
+        {
+            builder.Add(new RenderFill(points, color));
+            return;
+        }
+
+        var thickness = context.ResolveLineWeight(solid);
+        var lineCap = context.ResolveLineCap(solid);
+        var lineJoin = context.ResolveLineJoin(solid);
+        builder.Add(new RenderPolyline(points, isClosed: true, color, thickness, lineCap, lineJoin));
     }
 
     private static void TrimDuplicateEnd(List<Vector2> points)

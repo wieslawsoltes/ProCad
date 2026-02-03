@@ -12,6 +12,7 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var polyline = (IPolyline)entity;
+        var polylineTransform = RenderTransformUtils.CombineWithNormal(transform, polyline.Normal);
         var builder = context.GetLayerBuilder(entity);
         var color = context.ResolveEntityColor(entity);
         var thickness = context.ResolveLineWeight(entity);
@@ -20,17 +21,17 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
         var pattern = context.ResolveLinePattern(entity);
 
         var points = context.GeometrySampler.SamplePolyline(polyline, context.Settings.ResolvePolylineArcPrecision());
-        if (context.Document.Header.FillMode)
+        if (context.Settings.FillMode)
         {
             WidePolylineTessellator.TryAddWidePolylineFill(
                 builder,
                 polyline,
-                transform,
+                polylineTransform,
                 color,
                 context.Settings.ResolvePolylineArcPrecision());
         }
 
-        if (!pattern.IsContinuous && ShouldRestartLinePattern(polyline))
+        if (!pattern.IsContinuous && ShouldRestartLinePattern(polyline, context.Settings))
         {
             foreach (var segment in polyline.Explode())
             {
@@ -43,7 +44,7 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
         RenderPrimitiveBuilder.AddSampled(
             builder,
             points,
-            transform,
+            polylineTransform,
             polyline.IsClosed,
             color,
             thickness,
@@ -54,13 +55,14 @@ public sealed class PolylineRenderHandler : IRenderEntityHandler
             context.Settings);
     }
 
-    private static bool ShouldRestartLinePattern(IPolyline polyline)
+    private static bool ShouldRestartLinePattern(IPolyline polyline, CadRenderSceneSettings settings)
     {
+        var defaultContinuous = settings.PolylineLineTypeGeneration;
         return polyline switch
         {
-            LwPolyline lw => !lw.Flags.HasFlag(LwPolylineFlags.Plinegen),
-            Polyline<Vertex2D> poly2d => !poly2d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern),
-            Polyline<Vertex3D> poly3d => !poly3d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern),
+            LwPolyline lw => !(lw.Flags.HasFlag(LwPolylineFlags.Plinegen) || defaultContinuous),
+            Polyline<Vertex2D> poly2d => !(poly2d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern) || defaultContinuous),
+            Polyline<Vertex3D> poly3d => !(poly3d.Flags.HasFlag(PolylineFlags.ContinuousLinetypePattern) || defaultContinuous),
             _ => true
         };
     }

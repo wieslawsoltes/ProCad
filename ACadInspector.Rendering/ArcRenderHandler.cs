@@ -17,7 +17,8 @@ public sealed class ArcRenderHandler : IRenderEntityHandler
         var lineJoin = context.ResolveLineJoin(arc);
         var pattern = context.ResolveLinePattern(arc);
 
-        if (pattern.IsContinuous && RenderTransformUtils.IsIdentity(transform))
+        var isDefaultNormal = arc.Normal.IsZero() || arc.Normal.Equals(XYZ.AxisZ);
+        if (pattern.IsContinuous && isDefaultNormal && RenderTransformUtils.IsIdentity(transform))
         {
             builder.Add(new RenderArc(
                 RenderTransformUtils.ToVector2(arc.Center),

@@ -10,6 +10,7 @@ public sealed class SplineRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var spline = (Spline)entity;
+        var splineTransform = RenderTransformUtils.CombineWithNormal(transform, spline.Normal);
         var builder = context.GetLayerBuilder(spline);
         var color = context.ResolveEntityColor(spline);
         var thickness = context.ResolveLineWeight(spline);
@@ -21,7 +22,7 @@ public sealed class SplineRenderHandler : IRenderEntityHandler
         RenderPrimitiveBuilder.AddSampled(
             builder,
             points,
-            transform,
+            splineTransform,
             spline.IsClosed,
             color,
             thickness,
