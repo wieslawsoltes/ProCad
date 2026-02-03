@@ -175,6 +175,7 @@ public partial class App : Application
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
         services.AddSingleton<IRenderStatsExportService, AvaloniaRenderStatsExportService>();
         services.AddSingleton<CadSelectionService>();
+        services.AddSingleton<CadSelectionFocusService>();
         services.AddSingleton<CadDocumentContextService>();
         services.AddSingleton<CadScriptWorkspaceService>();
 

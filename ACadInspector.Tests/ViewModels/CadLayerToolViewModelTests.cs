@@ -52,6 +52,7 @@ public sealed class CadLayerToolViewModelTests
             CadRenderLayoutSelection.ModelSpace,
             documentPath: null,
             new CadSelectionService(),
+            new CadSelectionFocusService(),
             new NullRenderStatsExportService(),
             statsFileName: null);
     }

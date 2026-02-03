@@ -22,6 +22,7 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
     private const string FilterPropertyPath = "Item.Name";
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
+    private readonly CadSelectionFocusService _focusService;
     private readonly Dictionary<object, CadDocumentTreeNode> _nodeMap = new();
     private readonly Dictionary<string, CadDocumentTreeNode> _handleMap = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<CadDocumentTreeNode> _roots = Array.Empty<CadDocumentTreeNode>();
@@ -57,10 +58,12 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
     public CadDocumentTreeViewModel(
         CadSelectionService selectionService,
         CadDocumentContextService documentContext,
+        CadSelectionFocusService focusService,
         FastPathDiagnosticsService fastPathDiagnostics)
     {
         _selectionService = selectionService;
         _documentContext = documentContext;
+        _focusService = focusService;
         FastPathDiagnostics = fastPathDiagnostics;
         var options = new HierarchicalOptions<CadDocumentTreeNode>
         {
@@ -138,6 +141,10 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         var node = ResolveNode(item);
         _documentContext.TrySetActiveFromSelection(node?.Source);
         _selectionService.SelectedObject = node?.Source;
+        if (node?.Source is ACadSharp.Entities.Entity)
+        {
+            _focusService.RequestFocus(node.Source);
+        }
     }
 
     private void OnSelectedObjectChanged(object? selected)
@@ -236,6 +243,11 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
             }
         }
 
+        if (TryGetPath(node, out var path))
+        {
+            TreeModel.Expand(path);
+        }
+
         if (TreeModel is IHierarchicalModelExpander expander &&
             expander.TryExpandToItem(node, out var expanded))
         {
@@ -244,6 +256,44 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
 
         var hierNode = ((HierarchicalModel)TreeModel).FindNode(node);
         return hierNode is null ? node : hierNode;
+    }
+
+    private bool TryGetPath(CadDocumentTreeNode target, out List<CadDocumentTreeNode> path)
+    {
+        path = new List<CadDocumentTreeNode>();
+        foreach (var root in _roots)
+        {
+            if (TryCollectPath(root, target, path))
+            {
+                return true;
+            }
+        }
+
+        path.Clear();
+        return false;
+    }
+
+    private static bool TryCollectPath(
+        CadDocumentTreeNode current,
+        CadDocumentTreeNode target,
+        List<CadDocumentTreeNode> path)
+    {
+        path.Add(current);
+        if (ReferenceEquals(current, target))
+        {
+            return true;
+        }
+
+        foreach (var child in current.Children)
+        {
+            if (TryCollectPath(child, target, path))
+            {
+                return true;
+            }
+        }
+
+        path.RemoveAt(path.Count - 1);
+        return false;
     }
 
     private void ApplySearch()

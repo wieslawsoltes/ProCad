@@ -51,6 +51,7 @@
                                SelectionBounds="{CompiledBinding SelectionBounds}"
                                HoverAnnotation="{CompiledBinding HoverAnnotation}"
                                SelectionAnnotation="{CompiledBinding SelectionAnnotation}"
+                               FocusRequest="{CompiledBinding FocusRequest}"
                                DebugBvhBounds="{CompiledBinding DebugBvhBounds}">
       <i:Interaction.Behaviors>
         <behaviors:CadRenderHitTestBehavior HoverCommand="{CompiledBinding HoverHitTestCommand}"

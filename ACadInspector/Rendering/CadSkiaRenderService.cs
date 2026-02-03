@@ -1943,7 +1943,12 @@ public sealed class CadSkiaRenderService
         }
 
         var baselineY = rect.Bottom - padding - metrics.Descent;
+        canvas.Save();
+        canvas.Translate(0f, baselineY);
+        canvas.Scale(1f, -1f);
+        canvas.Translate(0f, -baselineY);
         canvas.DrawText(label, rect.Left + padding, baselineY, textPaint);
+        canvas.Restore();
     }
 
     private static float PixelsToWorld(float pixels, CadRenderStateSnapshot state)

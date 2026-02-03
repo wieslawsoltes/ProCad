@@ -52,6 +52,7 @@ public sealed class RenderStatsTests
                 CadRenderLayoutSelection.ModelSpace,
                 documentPath: null,
                 new CadSelectionService(),
+                new CadSelectionFocusService(),
                 service,
                 "render-stats.json");
 

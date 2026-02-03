@@ -13,6 +13,7 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ACadInspector.Rendering;
+using ACadInspector.Services;
 using SkiaSharp;
 using AvaloniaVector = Avalonia.Vector;
 
@@ -73,6 +74,9 @@ public sealed class CadRenderControl : Control
 
     public static readonly StyledProperty<RenderAnnotation?> SelectionAnnotationProperty =
         AvaloniaProperty.Register<CadRenderControl, RenderAnnotation?>(nameof(SelectionAnnotation));
+
+    public static readonly StyledProperty<CadRenderFocusRequest?> FocusRequestProperty =
+        AvaloniaProperty.Register<CadRenderControl, CadRenderFocusRequest?>(nameof(FocusRequest));
 
     public static readonly StyledProperty<IReadOnlyList<RenderBounds>?> DebugBvhBoundsProperty =
         AvaloniaProperty.Register<CadRenderControl, IReadOnlyList<RenderBounds>?>(nameof(DebugBvhBounds));
@@ -199,6 +203,12 @@ public sealed class CadRenderControl : Control
         set => SetValue(SelectionAnnotationProperty, value);
     }
 
+    public CadRenderFocusRequest? FocusRequest
+    {
+        get => GetValue(FocusRequestProperty);
+        set => SetValue(FocusRequestProperty, value);
+    }
+
     public IReadOnlyList<RenderBounds>? DebugBvhBounds
     {
         get => GetValue(DebugBvhBoundsProperty);
@@ -275,6 +285,7 @@ public sealed class CadRenderControl : Control
             change.Property == SelectionBoundsProperty ||
             change.Property == HoverAnnotationProperty ||
             change.Property == SelectionAnnotationProperty ||
+            change.Property == FocusRequestProperty ||
             change.Property == DebugBvhBoundsProperty)
         {
             if (change.Property == ZoomProperty || change.Property == PanProperty)
@@ -285,9 +296,53 @@ public sealed class CadRenderControl : Control
             {
                 _renderer.ClearStrokePaintCache();
             }
+            if (change.Property == FocusRequestProperty && FocusRequest is not null)
+            {
+                FocusOnBounds(FocusRequest.Bounds, FocusRequest.Padding);
+            }
             UpdateRenderState();
             InvalidateVisual();
         }
+    }
+
+    private void FocusOnBounds(RenderBounds bounds, double paddingPixels)
+    {
+        if (Scene is null || bounds.IsEmpty)
+        {
+            return;
+        }
+
+        var size = Bounds.Size;
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return;
+        }
+
+        var boundsSize = bounds.Size;
+        if (boundsSize.X <= 0f || boundsSize.Y <= 0f)
+        {
+            bounds = bounds.Inflate(1f);
+            boundsSize = bounds.Size;
+        }
+
+        var padding = Math.Max(0.0, paddingPixels);
+        var availableWidth = Math.Max(1.0, size.Width - 2.0 * padding);
+        var availableHeight = Math.Max(1.0, size.Height - 2.0 * padding);
+
+        var desiredScale = Math.Min(availableWidth / boundsSize.X, availableHeight / boundsSize.Y);
+        if (double.IsNaN(desiredScale) || double.IsInfinity(desiredScale) || desiredScale <= 0.0)
+        {
+            return;
+        }
+
+        var zoom = desiredScale / _baseScale;
+        zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+
+        var center = bounds.Center;
+        var pan = ComputePanForZoom(center, new Point(size.Width * 0.5, size.Height * 0.5), zoom);
+
+        SetCurrentValue(ZoomProperty, zoom);
+        SetCurrentValue(PanProperty, pan);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

@@ -71,6 +71,17 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         SelectionAnnotation = BuildAnnotation(RenderAnnotationKind.Selection, entity, fallbackBounds);
     }
 
+    public bool TryGetBounds(Entity entity, out RenderBounds bounds)
+    {
+        if (_entityBounds is not null && _entityBounds.TryGetValue(entity, out bounds))
+        {
+            return true;
+        }
+
+        bounds = default;
+        return false;
+    }
+
     private RenderAnnotation? BuildAnnotation(RenderAnnotationKind kind, Entity? entity, RenderBounds? fallbackBounds)
     {
         if (entity is null)

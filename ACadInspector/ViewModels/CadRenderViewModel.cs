@@ -26,6 +26,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private readonly CadSelectionService _selectionService;
     private readonly CadSelectionAnnotationService _annotationService;
     private readonly CadToolManager _toolManager;
+    private readonly CadSelectionFocusService _focusService;
     private readonly List<RenderBounds> _bvhBounds = new();
     private RenderSpatialIndex? _hitTestIndex;
     private CancellationTokenSource? _layoutRebuildCts;
@@ -83,6 +84,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     [Reactive]
     public partial IReadOnlyList<RenderBounds>? DebugBvhBounds { get; set; }
 
+    [Reactive]
+    public partial CadRenderFocusRequest? FocusRequest { get; set; }
+
     public ReactiveCommand<Unit, Unit> FitCommand { get; }
     public ReactiveCommand<Unit, Unit> ResetCommand { get; }
     public ReactiveCommand<Unit, Unit> ExportStatsCommand { get; }
@@ -101,6 +105,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         CadRenderLayoutSelection selection,
         string? documentPath,
         CadSelectionService selectionService,
+        CadSelectionFocusService focusService,
         IRenderStatsExportService statsExportService,
         string? statsFileName)
     {
@@ -109,6 +114,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _sceneBuilder = sceneBuilder ?? throw new ArgumentNullException(nameof(sceneBuilder));
         _baseSettings = baseSettings ?? throw new ArgumentNullException(nameof(baseSettings));
         _selectionService = selectionService ?? throw new ArgumentNullException(nameof(selectionService));
+        _focusService = focusService ?? throw new ArgumentNullException(nameof(focusService));
         _annotationService = new CadSelectionAnnotationService();
         _toolManager = new CadToolManager();
         Scene = scene;
@@ -171,6 +177,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _annotationService.WhenAnyValue(x => x.HoveredObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(obj => HoveredObject = obj);
+
+        _focusService.WhenAnyValue(x => x.FocusRequest)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(HandleFocusRequest);
 
         RegisterDefaultTools();
 
@@ -324,6 +334,26 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     {
         SelectedObject = selected;
         _annotationService.UpdateSelection(selected, null);
+    }
+
+    private void HandleFocusRequest(CadSelectionFocusRequest? request)
+    {
+        if (request?.Target is not ACadSharp.Entities.Entity entity)
+        {
+            return;
+        }
+
+        if (entity.Document is not null && !ReferenceEquals(entity.Document, _document))
+        {
+            return;
+        }
+
+        if (!_annotationService.TryGetBounds(entity, out var bounds) || bounds.IsEmpty)
+        {
+            return;
+        }
+
+        FocusRequest = new CadRenderFocusRequest(bounds, padding: 24.0);
     }
 
     private void UpdateHitTestIndex()

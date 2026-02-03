@@ -38,6 +38,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     private readonly CadIoOptionsViewModel _ioOptions;
     private readonly CadDocumentTreeViewModel _documentTree;
     private readonly CadSelectionService _selectionService;
+    private readonly CadSelectionFocusService _focusService;
     private readonly CadDocumentContextService _documentContext;
     private readonly Docking.WorkspaceDockFactory _dockFactory;
     private readonly CadCompareViewModelFactory _compareFactory;
@@ -51,6 +52,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         CadIoOptionsViewModel ioOptions,
         CadDocumentTreeViewModel documentTree,
         CadSelectionService selectionService,
+        CadSelectionFocusService focusService,
         CadDocumentContextService documentContext,
         ICadDocumentService documentService,
         ICadFileDialogService fileDialogService,
@@ -68,6 +70,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _ioOptions = ioOptions;
         _documentTree = documentTree;
         _selectionService = selectionService;
+        _focusService = focusService;
         _documentContext = documentContext;
         _documentService = documentService;
         _fileDialogService = fileDialogService;
@@ -119,6 +122,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             selection,
             result.Path,
             _selectionService,
+            _focusService,
             _statsExportService,
             statsFileName);
         var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);
