@@ -1,12 +1,11 @@
 using System.Reactive.Linq;
 using ACadInspector.Services;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadLayerToolViewModel : Tool
+public sealed partial class CadLayerToolViewModel : CadToolViewModelBase
 {
     private readonly CadRenderLayerListViewModel _emptyLayerList;
 

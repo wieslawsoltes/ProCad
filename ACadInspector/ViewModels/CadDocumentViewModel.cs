@@ -1,11 +1,10 @@
 using ACadInspector.Core;
 using ACadSharp;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDocumentViewModel : Document
+public sealed partial class CadDocumentViewModel : CadDocumentViewModelBase
 {
     public CadDocument Document { get; }
     public CadRenderViewModel Render { get; }

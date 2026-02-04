@@ -7,13 +7,12 @@ using System.Threading.Tasks;
 using ACadInspector.Services;
 using ACadInspector.Scripting;
 using AvaloniaEdit.Document;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadScriptingViewModel : Tool
+public sealed partial class CadScriptingViewModel : CadToolViewModelBase
 {
     private readonly ICadScriptHost _scriptHost;
     private readonly CadDocumentContextService _documentContext;

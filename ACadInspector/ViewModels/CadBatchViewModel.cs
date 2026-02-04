@@ -20,13 +20,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadBatchViewModel : Tool, IFastPathDiagnosticsSource
+public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly ObservableCollection<CadBatchItemViewModel> _items = new();
     private readonly ObservableCollection<CadBatchResultRowViewModel> _results = new();

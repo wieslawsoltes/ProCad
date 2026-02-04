@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Reactive.Linq;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
 using ACadInspector.Services;
@@ -11,13 +12,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDwgSemanticsViewModel : Tool, IFastPathDiagnosticsSource
+public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
@@ -67,22 +67,8 @@ public sealed partial class CadDwgSemanticsViewModel : Tool, IFastPathDiagnostic
         SummaryColumnDefinitions = CadDwgSummaryColumnDefinitions.Create();
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .Subscribe(selected =>
-            {
-                if (IsActive)
-                {
-                    UpdateDwgSemantics(selected);
-                }
-            });
-
-        this.WhenAnyValue(x => x.IsActive)
-            .Subscribe(active =>
-            {
-                if (active)
-                {
-                    UpdateDwgSemantics(_selectionService.SelectedObject);
-                }
-            });
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(UpdateDwgSemantics);
     }
 
     private void UpdateDwgSemantics(object? selected)

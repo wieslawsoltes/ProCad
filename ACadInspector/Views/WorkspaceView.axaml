@@ -4,9 +4,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ACadInspector.ViewModels"
              xmlns:dock="using:Dock.Avalonia.Controls"
+             xmlns:recycling="using:Avalonia.Controls.Recycling"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="ACadInspector.Views.WorkspaceView"
              x:DataType="vm:WorkspaceViewModel">
+  <UserControl.Resources>
+    <recycling:ControlRecycling x:Key="DockControlRecycling"
+                                TryToUseIdAsKey="True" />
+  </UserControl.Resources>
   <Grid RowDefinitions="Auto,*,Auto">
     <Border Background="{DynamicResource ThemeControlLowBrush}"
             Padding="8">
@@ -27,6 +32,7 @@
     <dock:DockControl Grid.Row="1"
                       Layout="{Binding Layout}"
                       Factory="{Binding Factory}"
+                      recycling:ControlRecyclingDataTemplate.ControlRecycling="{StaticResource DockControlRecycling}"
                       InitializeLayout="False"
                       InitializeFactory="False" />
     <Border Grid.Row="2"

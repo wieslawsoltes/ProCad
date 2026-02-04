@@ -14,13 +14,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadCompareViewModel : Document, IFastPathDiagnosticsSource
+public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly ObservableCollection<CadDiffSummaryRowViewModel> _summaryRows = new();
     private readonly ObservableCollection<CadObjectDiffRowViewModel> _objectDiffRows = new();

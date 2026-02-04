@@ -7,11 +7,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 
 namespace ACadInspector.ViewModels;
 
-public sealed class CadIoOptionsViewModel : Tool, IFastPathDiagnosticsSource
+public sealed class CadIoOptionsViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly ObservableCollection<CadOptionRowViewModel> _readRows = new();
     private readonly ObservableCollection<CadOptionRowViewModel> _writeRows = new();

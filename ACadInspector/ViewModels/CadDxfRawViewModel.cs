@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reactive.Linq;
 using System.Text;
 using ACadInspector.Services;
 using ACadSharp;
@@ -8,13 +9,12 @@ using ACadSharp.Entities;
 using ACadSharp.Header;
 using ACadSharp.IO;
 using AvaloniaEdit.Document;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDxfRawViewModel : Tool
+public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
 {
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
@@ -37,22 +37,8 @@ public sealed partial class CadDxfRawViewModel : Tool
         _documentContext = documentContext;
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .Subscribe(selected =>
-            {
-                if (IsActive)
-                {
-                    UpdatePreview(selected);
-                }
-            });
-
-        this.WhenAnyValue(x => x.IsActive)
-            .Subscribe(active =>
-            {
-                if (active)
-                {
-                    UpdatePreview(_selectionService.SelectedObject);
-                }
-            });
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(UpdatePreview);
     }
 
     private void UpdatePreview(object? selected)

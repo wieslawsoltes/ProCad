@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Reactive.Linq;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
 using ACadInspector.Services;
@@ -8,13 +9,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDxfSemanticsViewModel : Tool, IFastPathDiagnosticsSource
+public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly ObservableCollection<CadDxfPropertyRowViewModel> _propertyRows = new();
     private readonly CadSelectionService _selectionService;
@@ -43,22 +43,8 @@ public sealed partial class CadDxfSemanticsViewModel : Tool, IFastPathDiagnostic
         PropertyColumnDefinitions = CadDxfPropertyColumnDefinitions.Create();
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .Subscribe(selected =>
-            {
-                if (IsActive)
-                {
-                    UpdateRows(selected);
-                }
-            });
-
-        this.WhenAnyValue(x => x.IsActive)
-            .Subscribe(active =>
-            {
-                if (active)
-                {
-                    UpdateRows(_selectionService.SelectedObject);
-                }
-            });
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(UpdateRows);
     }
 
     private void UpdateRows(object? selected)

@@ -6,13 +6,12 @@ using ACadInspector.Services;
 using ACadSharp;
 using ACadSharp.IO;
 using Avalonia.Media.Imaging;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadPreviewViewModel : Tool
+public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 {
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
