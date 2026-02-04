@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Data;
 
 namespace ACadInspector.ViewModels;
 
@@ -28,7 +29,12 @@ internal static class CadRenderLayerColumnDefinitions
         Func<CadRenderLayerRowViewModel, string> getter,
         Action<CadRenderLayerRowViewModel, string>? setter = null)
     {
-        var binding = DataGridBindingFactory.CreateBinding(propertyName, getter, setter);
+        var binding = DataGridBindingFactory.CreateBinding(
+            propertyName,
+            getter,
+            setter,
+            mode: BindingMode.TwoWay,
+            updateSourceTrigger: UpdateSourceTrigger.PropertyChanged);
         var accessor = DataGridBindingFactory.CreateValueAccessor(getter, setter);
         var column = new DataGridTextColumnDefinition
         {
