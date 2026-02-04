@@ -41,7 +41,7 @@
               SearchModel="{CompiledBinding SearchModel}"
               SortingAdapterFactory="{StaticResource HierarchicalSortingAdapterFactory}"
               SelectedItem="{CompiledBinding SelectedItem, Mode=TwoWay}"
-              AutoExpandSelectedItem="True"
+              AutoExpandSelectedItem="False"
               AutoScrollToSelectedItem="True"
               AutoGenerateColumns="False"
               CanUserSortColumns="True"

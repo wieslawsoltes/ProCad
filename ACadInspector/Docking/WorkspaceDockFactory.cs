@@ -70,9 +70,12 @@ public sealed class WorkspaceDockFactory : Factory
         documents.VisibleDockables = CreateList<IDockable>();
         documents.ActiveDockable = null;
         documents.DefaultDockable = null;
+        documents.IsCollapsable = false;
+        documents.CanClose = false;
 
         _documentTree.Id = "DocumentTree";
         _documentTree.Title = "Document Tree";
+        _documentTree.Dock = DockMode.Left;
 
         _layerTool.Id = "Layers";
         _layerTool.Title = "Layers";
@@ -116,6 +119,7 @@ public sealed class WorkspaceDockFactory : Factory
         var leftTools = CreateToolDock();
         leftTools.Id = "LeftTools";
         leftTools.Title = "Document Tree";
+        leftTools.Dock = DockMode.Left;
         leftTools.VisibleDockables = CreateList<IDockable>(_documentTree);
         leftTools.ActiveDockable = _documentTree;
         leftTools.DefaultDockable = _documentTree;
@@ -141,18 +145,10 @@ public sealed class WorkspaceDockFactory : Factory
         rightBottomTools.ActiveDockable = _dxfSemantics;
         rightBottomTools.DefaultDockable = _dxfSemantics;
 
-        documents.Proportion = 0.65;
-        leftTools.Proportion = 0.35;
+        documents.Proportion = 0.6;
+        leftTools.Proportion = 0.2;
         rightTopTools.Proportion = 0.55;
         rightBottomTools.Proportion = 0.45;
-
-        var left = CreateProportionalDock();
-        left.Id = "Left";
-        left.Orientation = Orientation.Vertical;
-        left.VisibleDockables = CreateList<IDockable>(documents, new ProportionalDockSplitter(), leftTools);
-        left.ActiveDockable = documents;
-        left.DefaultDockable = documents;
-        left.Proportion = 0.6;
 
         var right = CreateProportionalDock();
         right.Id = "Right";
@@ -160,14 +156,14 @@ public sealed class WorkspaceDockFactory : Factory
         right.VisibleDockables = CreateList<IDockable>(rightTopTools, new ProportionalDockSplitter(), rightBottomTools);
         right.ActiveDockable = rightTopTools;
         right.DefaultDockable = rightTopTools;
-        right.Proportion = 0.4;
+        right.Proportion = 0.2;
 
         var main = CreateProportionalDock();
         main.Id = "Main";
         main.Orientation = Orientation.Horizontal;
-        main.VisibleDockables = CreateList<IDockable>(left, new ProportionalDockSplitter(), right);
-        main.ActiveDockable = left;
-        main.DefaultDockable = left;
+        main.VisibleDockables = CreateList<IDockable>(leftTools, new ProportionalDockSplitter(), documents, new ProportionalDockSplitter(), right);
+        main.ActiveDockable = documents;
+        main.DefaultDockable = documents;
 
         var root = CreateRootDock();
         root.Id = "Root";
