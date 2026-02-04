@@ -1880,28 +1880,35 @@ public sealed class CadSkiaRenderService
         {
             bounds = bounds.Inflate(minSize);
         }
-        var strokeWidth = PixelsToWorld(style.StrokeWidthPixels, state);
-
-        if (style.FillColor.HasValue)
+        if (annotation.HasGeometry)
         {
-            using var fillPaint = new SKPaint
+            DrawAnnotationGeometry(canvas, annotation.Geometry!, style, state);
+        }
+        else
+        {
+            var strokeWidth = PixelsToWorld(style.StrokeWidthPixels, state);
+
+            if (style.FillColor.HasValue)
+            {
+                using var fillPaint = new SKPaint
+                {
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Fill,
+                    Color = ToSkiaColor(style.FillColor.Value)
+                };
+                DrawBounds(canvas, bounds, fillPaint);
+            }
+
+            using (var strokePaint = new SKPaint
             {
                 IsAntialias = true,
-                Style = SKPaintStyle.Fill,
-                Color = ToSkiaColor(style.FillColor.Value)
-            };
-            DrawBounds(canvas, bounds, fillPaint);
-        }
-
-        using (var strokePaint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = strokeWidth,
-            Color = ToSkiaColor(style.StrokeColor)
-        })
-        {
-            DrawBounds(canvas, bounds, strokePaint);
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = strokeWidth,
+                Color = ToSkiaColor(style.StrokeColor)
+            })
+            {
+                DrawBounds(canvas, bounds, strokePaint);
+            }
         }
 
         if (!annotation.HasLabel)
@@ -1950,6 +1957,148 @@ public sealed class CadSkiaRenderService
         canvas.DrawText(label, rect.Left + padding, baselineY, textPaint);
         canvas.Restore();
     }
+
+    private void DrawAnnotationGeometry(
+        SKCanvas canvas,
+        IReadOnlyList<IRenderPrimitive> geometry,
+        RenderAnnotationStyle style,
+        CadRenderStateSnapshot state)
+    {
+        if (geometry.Count == 0)
+        {
+            return;
+        }
+
+        var strokeWidth = PixelsToWorld(style.StrokeWidthPixels, state);
+        using var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = strokeWidth,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+            Color = ToSkiaColor(style.StrokeColor)
+        };
+
+        SKPaint? fillPaint = null;
+        if (style.FillColor.HasValue)
+        {
+            fillPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = ToSkiaColor(style.FillColor.Value)
+            };
+        }
+
+        try
+        {
+            for (var i = 0; i < geometry.Count; i++)
+            {
+                switch (geometry[i])
+                {
+                    case RenderLine line:
+                        strokePaint.StrokeCap = ToSkiaLineCap(line.LineCap);
+                        strokePaint.StrokeJoin = ToSkiaLineJoin(line.LineJoin);
+                        canvas.DrawLine(line.Start.X, line.Start.Y, line.End.X, line.End.Y, strokePaint);
+                        break;
+                    case RenderPolyline polyline:
+                        strokePaint.StrokeCap = ToSkiaLineCap(polyline.LineCap);
+                        strokePaint.StrokeJoin = ToSkiaLineJoin(polyline.LineJoin);
+                        canvas.DrawPath(GetPolylineGeometry(polyline), strokePaint);
+                        break;
+                    case RenderCircle circle:
+                        strokePaint.StrokeCap = ToSkiaLineCap(circle.LineCap);
+                        strokePaint.StrokeJoin = ToSkiaLineJoin(circle.LineJoin);
+                        canvas.DrawCircle(circle.Center.X, circle.Center.Y, circle.Radius, strokePaint);
+                        break;
+                    case RenderArc arc:
+                        strokePaint.StrokeCap = ToSkiaLineCap(arc.LineCap);
+                        strokePaint.StrokeJoin = ToSkiaLineJoin(arc.LineJoin);
+                        DrawArc(canvas, strokePaint, arc);
+                        break;
+                    case RenderPoint point:
+                        strokePaint.StrokeCap = ToSkiaLineCap(point.LineCap);
+                        strokePaint.StrokeJoin = ToSkiaLineJoin(point.LineJoin);
+                        DrawPoint(canvas, strokePaint, point, state);
+                        break;
+                    case RenderFill fill:
+                        DrawAnnotationPath(canvas, GetFillGeometry(fill), strokePaint, fillPaint);
+                        break;
+                    case RenderTriangle triangle:
+                        DrawAnnotationPath(canvas, GetTriangleGeometry(triangle), strokePaint, fillPaint);
+                        break;
+                    case RenderHatchFill hatchFill:
+                        DrawAnnotationPath(canvas, GetHatchGeometry(hatchFill), strokePaint, fillPaint);
+                        break;
+                    case RenderHatchPattern hatchPattern:
+                        DrawAnnotationPath(canvas, GetHatchGeometry(hatchPattern), strokePaint, fillPaint);
+                        break;
+                    case RenderClipGroup clipGroup:
+                        var clipPath = GetClipGeometry(clipGroup);
+                        if (clipPath is not null)
+                        {
+                            DrawAnnotationPath(canvas, clipPath, strokePaint, fillPaint);
+                        }
+                        break;
+                    case RenderText text:
+                        DrawAnnotationLoop(canvas,
+                            RenderTextUtils.BuildTextQuad(
+                                text.Anchor,
+                                text.Offset,
+                                text.LayoutWidth,
+                                text.LayoutHeight,
+                                text.WidthFactor,
+                                text.Rotation,
+                                text.ObliqueAngle,
+                                text.MirrorX,
+                                text.MirrorY),
+                            strokePaint,
+                            fillPaint);
+                        break;
+                    case RenderImage image:
+                        DrawAnnotationLoop(canvas, GetImageCorners(image), strokePaint, fillPaint);
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            fillPaint?.Dispose();
+        }
+    }
+
+    private static void DrawAnnotationPath(SKCanvas canvas, SKPath path, SKPaint strokePaint, SKPaint? fillPaint)
+    {
+        if (fillPaint is not null)
+        {
+            canvas.DrawPath(path, fillPaint);
+        }
+
+        canvas.DrawPath(path, strokePaint);
+    }
+
+    private static void DrawAnnotationLoop(
+        SKCanvas canvas,
+        IReadOnlyList<Vector2> loop,
+        SKPaint strokePaint,
+        SKPaint? fillPaint)
+    {
+        if (loop is null || loop.Count < 2)
+        {
+            return;
+        }
+
+        using var path = new SKPath();
+        path.MoveTo(loop[0].X, loop[0].Y);
+        for (var i = 1; i < loop.Count; i++)
+        {
+            path.LineTo(loop[i].X, loop[i].Y);
+        }
+        path.Close();
+        DrawAnnotationPath(canvas, path, strokePaint, fillPaint);
+    }
+
 
     private static float PixelsToWorld(float pixels, CadRenderStateSnapshot state)
     {

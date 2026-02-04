@@ -9,7 +9,9 @@ namespace ACadInspector.Services;
 
 public sealed partial class CadSelectionAnnotationService : ReactiveObject
 {
+    private const int MaxAnnotationPrimitives = 2048;
     private Dictionary<Entity, RenderBounds>? _entityBounds;
+    private Dictionary<Entity, List<IRenderPrimitive>>? _entityGeometry;
 
     [Reactive]
     public partial RenderAnnotation? HoverAnnotation { get; private set; }
@@ -25,6 +27,7 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         if (scene is null)
         {
             _entityBounds = null;
+            _entityGeometry = null;
             HoverAnnotation = null;
             SelectionAnnotation = null;
             HoveredObject = null;
@@ -32,6 +35,7 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         }
 
         var map = new Dictionary<Entity, RenderBounds>(ReferenceEqualityComparer.Instance);
+        var geometry = new Dictionary<Entity, List<IRenderPrimitive>>(ReferenceEqualityComparer.Instance);
         foreach (var kvp in scene.PrimitiveMetadata)
         {
             var entity = kvp.Value.OwnerEntity ?? kvp.Value.SourceEntity;
@@ -48,9 +52,18 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
             {
                 map[entity] = kvp.Key.Bounds;
             }
+
+            if (!geometry.TryGetValue(entity, out var list))
+            {
+                list = new List<IRenderPrimitive>();
+                geometry[entity] = list;
+            }
+
+            list.Add(kvp.Key);
         }
 
         _entityBounds = map;
+        _entityGeometry = geometry;
     }
 
     public void ClearHover()
@@ -62,13 +75,26 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
     public void UpdateHover(Entity? entity, RenderBounds? fallbackBounds)
     {
         HoveredObject = entity;
-        HoverAnnotation = BuildAnnotation(RenderAnnotationKind.Hover, entity, fallbackBounds);
+        HoverAnnotation = BuildAnnotation(RenderAnnotationKind.Hover, entity, fallbackBounds, geometryOverride: null);
     }
 
     public void UpdateSelection(object? selected, RenderBounds? fallbackBounds)
     {
         var entity = selected as Entity;
-        SelectionAnnotation = BuildAnnotation(RenderAnnotationKind.Selection, entity, fallbackBounds);
+        SelectionAnnotation = BuildAnnotation(RenderAnnotationKind.Selection, entity, fallbackBounds, geometryOverride: null);
+    }
+
+    public void UpdateHover(Entity? entity, RenderBounds? fallbackBounds, IRenderPrimitive? primitive)
+    {
+        HoveredObject = entity;
+        var geometryOverride = primitive is null ? null : new[] { primitive };
+        HoverAnnotation = BuildAnnotation(RenderAnnotationKind.Hover, entity, fallbackBounds, geometryOverride);
+    }
+
+    public void UpdateSelection(Entity? entity, RenderBounds? fallbackBounds, IRenderPrimitive? primitive)
+    {
+        var geometryOverride = primitive is null ? null : new[] { primitive };
+        SelectionAnnotation = BuildAnnotation(RenderAnnotationKind.Selection, entity, fallbackBounds, geometryOverride);
     }
 
     public bool TryGetBounds(Entity entity, out RenderBounds bounds)
@@ -82,7 +108,11 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         return false;
     }
 
-    private RenderAnnotation? BuildAnnotation(RenderAnnotationKind kind, Entity? entity, RenderBounds? fallbackBounds)
+    private RenderAnnotation? BuildAnnotation(
+        RenderAnnotationKind kind,
+        Entity? entity,
+        RenderBounds? fallbackBounds,
+        IReadOnlyList<IRenderPrimitive>? geometryOverride)
     {
         if (entity is null)
         {
@@ -99,7 +129,8 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         var style = kind == RenderAnnotationKind.Selection
             ? RenderAnnotationStyle.Selection
             : RenderAnnotationStyle.Hover;
-        return new RenderAnnotation(kind, bounds.Value, label, style);
+        var geometry = geometryOverride ?? ResolveEntityGeometry(entity);
+        return new RenderAnnotation(kind, bounds.Value, label, style, geometry);
     }
 
     private RenderBounds? ResolveEntityBounds(Entity entity, RenderBounds? fallback)
@@ -110,6 +141,21 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         }
 
         return fallback;
+    }
+
+    private IReadOnlyList<IRenderPrimitive>? ResolveEntityGeometry(Entity entity)
+    {
+        if (_entityGeometry is null || !_entityGeometry.TryGetValue(entity, out var list))
+        {
+            return null;
+        }
+
+        if (list.Count == 0 || list.Count > MaxAnnotationPrimitives)
+        {
+            return null;
+        }
+
+        return list;
     }
 
     private static string BuildLabel(Entity entity)

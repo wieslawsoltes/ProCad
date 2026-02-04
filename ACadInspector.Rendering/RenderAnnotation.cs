@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ACadInspector.Rendering;
 
@@ -68,14 +69,22 @@ public readonly struct RenderAnnotation
     public RenderBounds Bounds { get; }
     public string Label { get; }
     public RenderAnnotationStyle Style { get; }
+    public IReadOnlyList<IRenderPrimitive>? Geometry { get; }
 
-    public RenderAnnotation(RenderAnnotationKind kind, RenderBounds bounds, string label, RenderAnnotationStyle style)
+    public RenderAnnotation(
+        RenderAnnotationKind kind,
+        RenderBounds bounds,
+        string label,
+        RenderAnnotationStyle style,
+        IReadOnlyList<IRenderPrimitive>? geometry = null)
     {
         Kind = kind;
         Bounds = bounds;
         Label = label ?? string.Empty;
         Style = style;
+        Geometry = geometry;
     }
 
     public bool HasLabel => !string.IsNullOrWhiteSpace(Label);
+    public bool HasGeometry => Geometry is { Count: > 0 };
 }

@@ -414,7 +414,16 @@ public sealed class RenderHitTestEngine
 
     private static bool TryHitText(RenderText text, Vector2 point, float tolerance, out float distance)
     {
-        var quad = BuildTextQuad(text);
+        var quad = RenderTextUtils.BuildTextQuad(
+            text.Anchor,
+            text.Offset,
+            text.LayoutWidth,
+            text.LayoutHeight,
+            text.WidthFactor,
+            text.Rotation,
+            text.ObliqueAngle,
+            text.MirrorX,
+            text.MirrorY);
         if (RenderLoopUtils.IsPointInLoops(point, new[] { quad }, RenderLoopFillMode.EvenOdd))
         {
             distance = 0f;
@@ -428,10 +437,10 @@ public sealed class RenderHitTestEngine
         }
 
         var minSq = float.PositiveInfinity;
-        for (var i = 0; i < quad.Length; i++)
+        for (var i = 0; i < quad.Count; i++)
         {
             var a = quad[i];
-            var b = quad[(i + 1) % quad.Length];
+            var b = quad[(i + 1) % quad.Count];
             var distSq = DistancePointToSegmentSquared(point, a, b);
             if (distSq < minSq)
             {
@@ -447,42 +456,6 @@ public sealed class RenderHitTestEngine
 
         distance = MathF.Sqrt(minSq);
         return true;
-    }
-
-    private static Vector2[] BuildTextQuad(RenderText text)
-    {
-        var width = text.LayoutWidth;
-        var height = text.LayoutHeight;
-        var corners = new[]
-        {
-            text.Offset,
-            text.Offset + new Vector2(width, 0f),
-            text.Offset + new Vector2(width, height),
-            text.Offset + new Vector2(0f, height)
-        };
-
-        var scaleX = text.WidthFactor * (text.MirrorX ? -1f : 1f);
-        var scaleY = text.MirrorY ? 1f : -1f;
-        var skew = MathF.Tan(text.ObliqueAngle);
-        var sin = MathF.Sin(text.Rotation);
-        var cos = MathF.Cos(text.Rotation);
-
-        for (var i = 0; i < corners.Length; i++)
-        {
-            var corner = corners[i];
-            var transformed = new Vector2(corner.X * scaleX, corner.Y * scaleY);
-            if (MathF.Abs(skew) > 0.0001f)
-            {
-                transformed = new Vector2(transformed.X + transformed.Y * skew, transformed.Y);
-            }
-
-            var rotated = new Vector2(
-                transformed.X * cos - transformed.Y * sin,
-                transformed.X * sin + transformed.Y * cos);
-            corners[i] = text.Anchor + rotated;
-        }
-
-        return corners;
     }
 
     private static Vector2[] GetImageCorners(RenderImage image)

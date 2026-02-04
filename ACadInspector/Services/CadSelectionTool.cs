@@ -60,7 +60,8 @@ public sealed class CadSelectionTool : ICadTool
             return;
         }
 
-        context.AnnotationService.UpdateHover(hit.Value.entity, hit.Value.bounds);
+        var entity = hit.Value.OwnerEntity ?? hit.Value.SourceEntity;
+        context.AnnotationService.UpdateHover(entity, hit.Value.Bounds, hit.Value.Primitive);
     }
 
     private void HandleSelect(CadRenderHitTestRequest? request, in CadToolContext context)
@@ -79,13 +80,13 @@ public sealed class CadSelectionTool : ICadTool
         }
 
         var hit = ResolveHit(scene, context.SpatialIndex, request.Value);
-        var target = hit?.entity;
+        var target = hit?.OwnerEntity ?? hit?.SourceEntity;
 
         context.SelectionService.SelectedObject = target;
-        context.AnnotationService.UpdateSelection(target, hit?.bounds);
+        context.AnnotationService.UpdateSelection(target, hit?.Bounds, hit?.Primitive);
     }
 
-    private (Entity? entity, RenderBounds bounds)? ResolveHit(RenderScene scene, RenderSpatialIndex? index, CadRenderHitTestRequest request)
+    private RenderHitTestResult? ResolveHit(RenderScene scene, RenderSpatialIndex? index, CadRenderHitTestRequest request)
     {
         _hitResults.Clear();
         _hitTestEngine.HitTestPoint(scene, index, request.WorldPoint, request.Tolerance, _hitResults);
@@ -93,10 +94,9 @@ public sealed class CadSelectionTool : ICadTool
         for (var i = 0; i < _hitResults.Count; i++)
         {
             var hit = _hitResults[i];
-            var entity = hit.OwnerEntity ?? hit.SourceEntity;
-            if (entity is not null)
+            if (hit.OwnerEntity is not null || hit.SourceEntity is not null)
             {
-                return (entity, hit.Bounds);
+                return hit;
             }
         }
 
