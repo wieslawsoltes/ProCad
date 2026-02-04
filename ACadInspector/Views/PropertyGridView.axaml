@@ -29,6 +29,10 @@
                Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
       <Button Content="Clear"
               Command="{CompiledBinding ClearFilterCommand}" />
+      <Button Content="Edit Block"
+              Margin="12,0,0,0"
+              IsVisible="{CompiledBinding CanEditBlock}"
+              Command="{CompiledBinding EditBlockCommand}" />
     </StackPanel>
     <DataGrid Grid.Row="1"
               ItemsSource="{CompiledBinding RowsView}"

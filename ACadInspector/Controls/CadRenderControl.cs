@@ -89,6 +89,7 @@ public sealed class CadRenderControl : Control
     private Matrix3x2 _viewTransform = Matrix3x2.Identity;
     private double _cachedZoom = 1.0;
     private bool _isInteracting;
+    private bool _pendingFit;
     private DateTime _interactionUntilUtc;
     private DispatcherTimer? _interactionTimer;
     private static readonly TimeSpan InteractionHold = TimeSpan.FromMilliseconds(150);
@@ -242,6 +243,13 @@ public sealed class CadRenderControl : Control
     {
         var size = base.ArrangeOverride(finalSize);
         UpdateViewTransform();
+        if (_pendingFit && FitOnSceneChange)
+        {
+            if (TryFitToScene())
+            {
+                _pendingFit = false;
+            }
+        }
         return size;
     }
 
@@ -255,7 +263,11 @@ public sealed class CadRenderControl : Control
             _renderer.InvalidateHiddenLineCache();
             if (FitOnSceneChange)
             {
-                FitToScene();
+                _pendingFit = !TryFitToScene();
+            }
+            else
+            {
+                _pendingFit = false;
             }
             UpdateRenderState();
             InvalidateVisual();
@@ -475,11 +487,19 @@ public sealed class CadRenderControl : Control
 
     private void FitToScene()
     {
+        if (!TryFitToScene())
+        {
+            _pendingFit = true;
+        }
+    }
+
+    private bool TryFitToScene()
+    {
         var scene = Scene;
         var size = Bounds.Size;
         if (scene is null || size.Width <= 0 || size.Height <= 0 || scene.Bounds.IsEmpty)
         {
-            return;
+            return false;
         }
 
         var sceneSize = scene.Bounds.Size;
@@ -487,7 +507,7 @@ public sealed class CadRenderControl : Control
         {
             _baseScale = 1.0;
             _sceneCenter = Vector2.Zero;
-            return;
+            return false;
         }
 
         var padding = (float)FitPadding;
@@ -503,6 +523,7 @@ public sealed class CadRenderControl : Control
         SetCurrentValue(PanProperty, default(AvaloniaVector));
         UpdateViewTransform();
         InvalidateVisual();
+        return true;
     }
 
     private void ResetView()

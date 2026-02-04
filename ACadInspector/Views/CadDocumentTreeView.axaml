@@ -50,6 +50,15 @@
               GridLinesVisibility="All"
               IsReadOnly="True"
               HierarchicalRowsEnabled="True"
-              HierarchicalModel="{CompiledBinding TreeModel}" />
+              HierarchicalModel="{CompiledBinding TreeModel}">
+      <DataGrid.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="Edit Block"
+                    Command="{CompiledBinding EditBlockCommand}"
+                    CommandParameter="{CompiledBinding SelectedItem}"
+                    IsEnabled="{CompiledBinding CanEditBlock}" />
+        </ContextMenu>
+      </DataGrid.ContextMenu>
+    </DataGrid>
   </Grid>
 </UserControl>

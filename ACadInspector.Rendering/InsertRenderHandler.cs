@@ -142,7 +142,8 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             context.Diagnostics,
             context.Stats,
             context.ViewportOverrides,
-            selectionContext);
+            selectionContext,
+            context.BlockContext);
     }
 
     private static void MergeLayerPrimitives(
@@ -445,34 +446,42 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             return;
         }
 
+        if (!context.BlockContext.TryEnter(block, out var blockScope))
+        {
+            return;
+        }
+
         var visibilityFilter = TryCreateVisibilityFilter(insert, block, dynamicInfo?.Properties);
         var actionMap = TryCreateActionMap(block, dynamicInfo);
         var ordered = context.EntityOrderResolver.OrderEntities(block.Entities, block);
 
-        foreach (var child in ordered)
+        using (blockScope)
         {
-            if (child is AttributeDefinition or AttributeEntity)
+            foreach (var child in ordered)
             {
-                continue;
-            }
+                if (child is AttributeDefinition or AttributeEntity)
+                {
+                    continue;
+                }
 
-            if (visibilityFilter is not null && !visibilityFilter.IsVisible(child))
-            {
-                continue;
-            }
+                if (visibilityFilter is not null && !visibilityFilter.IsVisible(child))
+                {
+                    continue;
+                }
 
-            if (!context.VisibilityResolver.ShouldRender(child, context.Settings))
-            {
-                continue;
-            }
+                if (!context.VisibilityResolver.ShouldRender(child, context.Settings))
+                {
+                    continue;
+                }
 
-            var childTransform = transform;
-            if (actionMap is not null && actionMap.TryGetTransform(child, out var actionTransform))
-            {
-                childTransform = RenderTransformUtils.Combine(transform, actionTransform);
-            }
+                var childTransform = transform;
+                if (actionMap is not null && actionMap.TryGetTransform(child, out var actionTransform))
+                {
+                    childTransform = RenderTransformUtils.Combine(transform, actionTransform);
+                }
 
-            context.Dispatcher.Append(child, childTransform, context);
+                context.Dispatcher.Append(child, childTransform, context);
+            }
         }
     }
 

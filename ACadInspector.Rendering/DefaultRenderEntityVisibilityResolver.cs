@@ -7,6 +7,16 @@ public sealed class DefaultRenderEntityVisibilityResolver : IRenderEntityVisibil
 {
     public bool ShouldRender(Entity entity, CadRenderSceneSettings settings)
     {
+        if (!settings.RenderAttributes && entity is AttributeEntity)
+        {
+            return false;
+        }
+
+        if (!settings.RenderAttributeDefinitions && entity is AttributeDefinition)
+        {
+            return false;
+        }
+
         if (!settings.IncludeInvisible && entity.IsInvisible)
         {
             return false;

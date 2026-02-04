@@ -91,6 +91,16 @@ public sealed class CadRenderSceneSettings
     public bool MirrorText { get; init; } = true;
 
     /// <summary>
+    /// Gets a value indicating whether attribute entities (ATTRIB) should be rendered.
+    /// </summary>
+    public bool RenderAttributes { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether attribute definitions (ATTDEF) should be rendered.
+    /// </summary>
+    public bool RenderAttributeDefinitions { get; init; } = true;
+
+    /// <summary>
     /// Gets the frame visibility for XClip boundaries (XCLIPFRAME).
     /// </summary>
     public RenderFrameVisibility XClipFrameVisibility { get; init; } = RenderFrameVisibility.DisplayNotPlot;
@@ -148,6 +158,56 @@ public sealed class CadRenderSceneSettings
     /// Optional plot style table for CTB/STB overrides.
     /// </summary>
     public RenderPlotStyleTable? PlotStyleTable { get; init; }
+
+    public CadRenderSceneSettings WithAttributeVisibility(bool renderAttributes, bool renderAttributeDefinitions)
+    {
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = SupportPaths,
+            Quality = Quality,
+            VisualStyle = VisualStyle,
+            Lighting = Lighting,
+            EnableHatchFills = EnableHatchFills,
+            EnableHatchPatterns = EnableHatchPatterns,
+            EnableHatchGradients = EnableHatchGradients,
+            HiddenLineSettings = HiddenLineSettings,
+            ShadeEdge = ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = ShadeDiffuseToAmbientPercentage,
+            Background = Background,
+            FallbackColor = FallbackColor,
+            MillimetersPerUnit = MillimetersPerUnit,
+            DefaultLineWeightMm = DefaultLineWeightMm,
+            MinLineWeightMm = MinLineWeightMm,
+            DisplayLineWeight = DisplayLineWeight,
+            LineTypeDotLengthMm = LineTypeDotLengthMm,
+            PolylineArcPrecision = PolylineArcPrecision,
+            SplinePrecision = SplinePrecision,
+            CirclePrecision = CirclePrecision,
+            TextWidthFactor = TextWidthFactor,
+            PointDisplayMode = PointDisplayMode,
+            PointDisplaySize = PointDisplaySize,
+            QuickTextMode = QuickTextMode,
+            FillMode = FillMode,
+            PolylineLineTypeGeneration = PolylineLineTypeGeneration,
+            MirrorText = MirrorText,
+            RenderAttributes = renderAttributes,
+            RenderAttributeDefinitions = renderAttributeDefinitions,
+            XClipFrameVisibility = XClipFrameVisibility,
+            WipeoutFrameVisibility = WipeoutFrameVisibility,
+            UnderlayFrameVisibility = UnderlayFrameVisibility,
+            IsPaperSpace = IsPaperSpace,
+            LayoutName = LayoutName,
+            PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
+            ViewportScale = ViewportScale,
+            ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = AnnotationScaleFactor,
+            IncludeInvisible = IncludeInvisible,
+            IncludeOffLayers = IncludeOffLayers,
+            IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
+            PerformanceBudget = PerformanceBudget,
+            PlotStyleTable = PlotStyleTable
+        };
+    }
 
     public int ResolvePolylineArcPrecision() => ResolvePrecision(PolylineArcPrecision, min: 4);
 

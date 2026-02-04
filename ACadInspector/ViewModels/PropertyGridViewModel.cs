@@ -11,13 +11,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class PropertyGridViewModel : Tool, IFastPathDiagnosticsSource
+public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private const string FilterColumnId = "Name";
     private readonly ObservableCollection<PropertyGridRowViewModel> _rows = new();
@@ -47,25 +46,32 @@ public sealed partial class PropertyGridViewModel : Tool, IFastPathDiagnosticsSo
     [Reactive]
     public partial string SearchSummary { get; set; } = "No results";
 
+    [Reactive]
+    public partial bool CanEditBlock { get; set; }
+
     public ReactiveCommand<Unit, Unit> NextSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> PreviousSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
+    public ReactiveCommand<Unit, Unit> EditBlockCommand { get; }
 
     private readonly ICadPropertyEditPipeline _pipeline;
     private readonly IRenderCacheStampProvider _stampProvider;
     private readonly CadSelectionService _selectionService;
+    private readonly CadBlockEditorService _blockEditorService;
     private bool _suppressSelection;
 
     public PropertyGridViewModel(
         ICadPropertyEditPipeline pipeline,
         IRenderCacheStampProvider stampProvider,
         CadSelectionService selectionService,
+        CadBlockEditorService blockEditorService,
         FastPathDiagnosticsService fastPathDiagnostics)
     {
         _pipeline = pipeline;
         _stampProvider = stampProvider;
         _selectionService = selectionService;
+        _blockEditorService = blockEditorService;
         FastPathDiagnostics = fastPathDiagnostics;
         _rowsReadOnly = new ReadOnlyObservableCollection<PropertyGridRowViewModel>(_rows);
         RowsView = new DataGridCollectionView(_rows);
@@ -98,6 +104,10 @@ public sealed partial class PropertyGridViewModel : Tool, IFastPathDiagnosticsSo
         this.WhenAnyValue(x => x.SelectedObject)
             .Subscribe(PublishSelection);
 
+        this.WhenAnyValue(x => x.SelectedObject)
+            .Select(selected => _blockEditorService.CanOpen(selected))
+            .Subscribe(canEdit => CanEditBlock = canEdit);
+
         this.WhenAnyValue(x => x.IsActive)
             .Subscribe(active =>
             {
@@ -124,6 +134,9 @@ public sealed partial class PropertyGridViewModel : Tool, IFastPathDiagnosticsSo
         PreviousSearchCommand = ReactiveCommand.Create(() => { SearchModel.MovePrevious(); }, canNavigate);
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
         ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
+        EditBlockCommand = ReactiveCommand.Create(
+            () => { _blockEditorService.TryOpenBlockEditor(SelectedObject); },
+            this.WhenAnyValue(x => x.CanEditBlock));
     }
 
     private void UpdateRows(object? target)

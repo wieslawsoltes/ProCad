@@ -43,8 +43,23 @@
         <DataTemplate DataType="{x:Type vm:CadLayerToolViewModel}" x:DataType="vm:CadLayerToolViewModel">
             <views:CadLayerToolView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadBlocksToolViewModel}" x:DataType="vm:CadBlocksToolViewModel">
+            <views:CadBlocksToolView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadTextStyleToolViewModel}" x:DataType="vm:CadTextStyleToolViewModel">
+            <views:CadTextStyleToolView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadLineTypeToolViewModel}" x:DataType="vm:CadLineTypeToolViewModel">
+            <views:CadLineTypeToolView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadDimensionStyleToolViewModel}" x:DataType="vm:CadDimensionStyleToolViewModel">
+            <views:CadDimensionStyleToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadPreviewViewModel}" x:DataType="vm:CadPreviewViewModel">
             <views:CadPreviewView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadBlockEditorViewModel}" x:DataType="vm:CadBlockEditorViewModel">
+            <views:CadBlockEditorView />
         </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadDxfSemanticsViewModel}" x:DataType="vm:CadDxfSemanticsViewModel">
             <views:CadDxfSemanticsView />

@@ -42,6 +42,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     public partial bool ShowAxes { get; set; } = true;
 
     [Reactive]
+    public partial bool ShowLayoutTabs { get; set; } = true;
+
+    [Reactive]
     public partial bool FitOnLoad { get; set; } = true;
 
     [Reactive]

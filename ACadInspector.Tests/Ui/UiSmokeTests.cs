@@ -160,12 +160,22 @@ public sealed class UiSmokeTests
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
         services.AddSingleton<IRenderStatsExportService, NullRenderStatsExportService>();
         services.AddSingleton<CadSelectionService>();
+        services.AddSingleton<CadSelectionFocusService>();
         services.AddSingleton<CadDocumentContextService>();
+        services.AddSingleton<CadDocumentDockService>();
         services.AddSingleton<CadScriptWorkspaceService>();
+        services.AddSingleton<CadBlockEditorViewModelFactory>();
+        services.AddSingleton<CadBlockEditorService>();
+        services.AddSingleton<CadBlockPreviewService>();
+        services.AddSingleton<CadStylePreviewService>();
 
         services.AddSingleton<PropertyGridViewModel>();
         services.AddSingleton<CadDocumentTreeViewModel>();
         services.AddSingleton<CadLayerToolViewModel>();
+        services.AddSingleton<CadBlocksToolViewModel>();
+        services.AddSingleton<CadTextStyleToolViewModel>();
+        services.AddSingleton<CadLineTypeToolViewModel>();
+        services.AddSingleton<CadDimensionStyleToolViewModel>();
         services.AddSingleton<CadPreviewViewModel>();
         services.AddSingleton<CadDxfSemanticsViewModel>();
         services.AddSingleton<CadDxfRawViewModel>();

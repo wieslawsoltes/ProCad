@@ -13,6 +13,10 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadIoOptionsViewModel _ioOptions;
     private readonly CadDocumentTreeViewModel _documentTree;
     private readonly CadLayerToolViewModel _layerTool;
+    private readonly CadBlocksToolViewModel _blocksTool;
+    private readonly CadTextStyleToolViewModel _textStyleTool;
+    private readonly CadLineTypeToolViewModel _lineTypeTool;
+    private readonly CadDimensionStyleToolViewModel _dimensionStyleTool;
     private readonly CadDxfSemanticsViewModel _dxfSemantics;
     private readonly CadDxfRawViewModel _dxfRaw;
     private readonly CadDwgSemanticsViewModel _dwgSemantics;
@@ -27,6 +31,10 @@ public sealed class WorkspaceDockFactory : Factory
         CadIoOptionsViewModel ioOptions,
         CadDocumentTreeViewModel documentTree,
         CadLayerToolViewModel layerTool,
+        CadBlocksToolViewModel blocksTool,
+        CadTextStyleToolViewModel textStyleTool,
+        CadLineTypeToolViewModel lineTypeTool,
+        CadDimensionStyleToolViewModel dimensionStyleTool,
         CadDxfSemanticsViewModel dxfSemantics,
         CadDxfRawViewModel dxfRaw,
         CadDwgSemanticsViewModel dwgSemantics,
@@ -40,6 +48,10 @@ public sealed class WorkspaceDockFactory : Factory
         _ioOptions = ioOptions;
         _documentTree = documentTree;
         _layerTool = layerTool;
+        _blocksTool = blocksTool;
+        _textStyleTool = textStyleTool;
+        _lineTypeTool = lineTypeTool;
+        _dimensionStyleTool = dimensionStyleTool;
         _dxfSemantics = dxfSemantics;
         _dxfRaw = dxfRaw;
         _dwgSemantics = dwgSemantics;
@@ -64,6 +76,18 @@ public sealed class WorkspaceDockFactory : Factory
 
         _layerTool.Id = "Layers";
         _layerTool.Title = "Layers";
+
+        _blocksTool.Id = "Blocks";
+        _blocksTool.Title = "Blocks";
+
+        _textStyleTool.Id = "TextStyles";
+        _textStyleTool.Title = "Text Styles";
+
+        _lineTypeTool.Id = "LineTypes";
+        _lineTypeTool.Title = "Line Types";
+
+        _dimensionStyleTool.Id = "DimensionStyles";
+        _dimensionStyleTool.Title = "Dimension Styles";
 
         _dxfSemantics.Id = "DxfSemantics";
         _dxfSemantics.Title = "DXF";
@@ -99,7 +123,14 @@ public sealed class WorkspaceDockFactory : Factory
         var rightTopTools = CreateToolDock();
         rightTopTools.Id = "InspectorTools";
         rightTopTools.Title = "Inspector";
-        rightTopTools.VisibleDockables = CreateList<IDockable>(_propertyGrid, _layerTool, _preview);
+        rightTopTools.VisibleDockables = CreateList<IDockable>(
+            _propertyGrid,
+            _layerTool,
+            _blocksTool,
+            _textStyleTool,
+            _lineTypeTool,
+            _dimensionStyleTool,
+            _preview);
         rightTopTools.ActiveDockable = _propertyGrid;
         rightTopTools.DefaultDockable = _propertyGrid;
 
@@ -143,10 +174,12 @@ public sealed class WorkspaceDockFactory : Factory
         root.VisibleDockables = CreateList<IDockable>(main);
         root.ActiveDockable = main;
         root.DefaultDockable = main;
+        root.HiddenDockables = CreateList<IDockable>();
         root.LeftPinnedDockables = CreateList<IDockable>();
         root.RightPinnedDockables = CreateList<IDockable>();
         root.TopPinnedDockables = CreateList<IDockable>();
         root.BottomPinnedDockables = CreateList<IDockable>();
+        root.Windows = CreateList<IDockWindow>();
 
         var pinned = CreateToolDock();
         pinned.Id = "Pinned";
@@ -182,6 +215,17 @@ public sealed class WorkspaceDockFactory : Factory
             _selectionService.SelectedObject = document.Document;
             _documentTree.LoadDocument(document);
             _documentContext.ActiveDocument = document;
+        }
+
+        if (dockable is CadBlockEditorViewModel blockEditor)
+        {
+            if (_documentContext.TryGetViewModel(blockEditor.Document, out var documentViewModel))
+            {
+                _documentContext.ActiveDocument = documentViewModel;
+                _documentTree.LoadDocument(documentViewModel);
+            }
+
+            _selectionService.SelectedObject = blockEditor.Block;
         }
     }
 

@@ -93,6 +93,8 @@ public static class CadRenderSettingsBuilder
             FillMode = header?.FillMode ?? baseSettings.FillMode,
             PolylineLineTypeGeneration = header?.PolylineLineTypeGeneration ?? baseSettings.PolylineLineTypeGeneration,
             MirrorText = header?.MirrorText ?? baseSettings.MirrorText,
+            RenderAttributes = baseSettings.RenderAttributes,
+            RenderAttributeDefinitions = baseSettings.RenderAttributeDefinitions,
             XClipFrameVisibility = xclipFrameVisibility,
             WipeoutFrameVisibility = wipeoutFrameVisibility,
             UnderlayFrameVisibility = underlayFrameVisibility,

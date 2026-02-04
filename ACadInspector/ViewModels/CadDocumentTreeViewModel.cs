@@ -10,19 +10,19 @@ using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridHierarchical;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
-using Dock.Model.ReactiveUI.Controls;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnosticsSource
+public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private const string FilterColumnId = "Name";
     private const string FilterPropertyPath = "Item.Name";
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
     private readonly CadSelectionFocusService _focusService;
+    private readonly CadBlockEditorService _blockEditorService;
     private readonly Dictionary<object, CadDocumentTreeNode> _nodeMap = new();
     private readonly Dictionary<string, CadDocumentTreeNode> _handleMap = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<CadDocumentTreeNode> _roots = Array.Empty<CadDocumentTreeNode>();
@@ -54,16 +54,22 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
     public ReactiveCommand<Unit, Unit> PreviousSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
+    public ReactiveCommand<object?, Unit> EditBlockCommand { get; }
+
+    [Reactive]
+    public partial bool CanEditBlock { get; set; }
 
     public CadDocumentTreeViewModel(
         CadSelectionService selectionService,
         CadDocumentContextService documentContext,
         CadSelectionFocusService focusService,
+        CadBlockEditorService blockEditorService,
         FastPathDiagnosticsService fastPathDiagnostics)
     {
         _selectionService = selectionService;
         _documentContext = documentContext;
         _focusService = focusService;
+        _blockEditorService = blockEditorService;
         FastPathDiagnostics = fastPathDiagnostics;
         var options = new HierarchicalOptions<CadDocumentTreeNode>
         {
@@ -84,6 +90,10 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
 
         this.WhenAnyValue(x => x.SelectedItem)
             .Subscribe(OnSelectedItemChanged);
+
+        this.WhenAnyValue(x => x.SelectedItem)
+            .Select(CanOpenBlockEditor)
+            .Subscribe(canEdit => CanEditBlock = canEdit);
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
@@ -106,6 +116,9 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         PreviousSearchCommand = ReactiveCommand.Create(() => { SearchModel.MovePrevious(); }, canNavigate);
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
         ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
+
+        EditBlockCommand = ReactiveCommand.Create<object?>(ExecuteEditBlock,
+            this.WhenAnyValue(x => x.CanEditBlock));
     }
 
     public void LoadDocument(CadDocumentViewModel? document)
@@ -145,6 +158,20 @@ public sealed partial class CadDocumentTreeViewModel : Tool, IFastPathDiagnostic
         {
             _focusService.RequestFocus(node.Source);
         }
+    }
+
+    private bool CanOpenBlockEditor(object? item)
+    {
+        var node = ResolveNode(item);
+        var source = node?.Source ?? item;
+        return _blockEditorService.CanOpen(source);
+    }
+
+    private void ExecuteEditBlock(object? item)
+    {
+        var node = ResolveNode(item ?? SelectedItem);
+        var source = node?.Source ?? item;
+        _blockEditorService.TryOpenBlockEditor(source);
     }
 
     private void OnSelectedObjectChanged(object? selected)

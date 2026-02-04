@@ -21,6 +21,7 @@ public sealed class RenderBuildContext
     public RenderLayerRegistry Layers { get; }
     public RenderDiagnostics Diagnostics { get; }
     public RenderSelectionContext SelectionContext { get; }
+    public RenderBlockContext BlockContext { get; }
     internal RenderStatsAccumulator Stats { get; }
     internal RenderLayerOverrides? ViewportOverrides { get; }
 
@@ -38,7 +39,8 @@ public sealed class RenderBuildContext
         RenderDiagnostics diagnostics,
         RenderStatsAccumulator stats,
         RenderLayerOverrides? viewportOverrides = null,
-        RenderSelectionContext? selectionContext = null)
+        RenderSelectionContext? selectionContext = null,
+        RenderBlockContext? blockContext = null)
     {
         Document = document;
         Settings = settings;
@@ -52,6 +54,7 @@ public sealed class RenderBuildContext
         Dispatcher = dispatcher;
         ViewportOverrides = viewportOverrides;
         SelectionContext = selectionContext ?? new RenderSelectionContext();
+        BlockContext = blockContext ?? new RenderBlockContext();
         Layers = new RenderLayerRegistry(styleResolver, settings, SelectionContext, viewportOverrides);
         Diagnostics = diagnostics;
         Stats = stats;

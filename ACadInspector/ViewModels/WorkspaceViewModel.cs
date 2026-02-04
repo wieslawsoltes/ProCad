@@ -40,6 +40,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     private readonly CadSelectionService _selectionService;
     private readonly CadSelectionFocusService _focusService;
     private readonly CadDocumentContextService _documentContext;
+    private readonly CadDocumentDockService _documentDockService;
     private readonly Docking.WorkspaceDockFactory _dockFactory;
     private readonly CadCompareViewModelFactory _compareFactory;
     private readonly ICadRenderSceneBuilder _renderSceneBuilder;
@@ -54,6 +55,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         CadSelectionService selectionService,
         CadSelectionFocusService focusService,
         CadDocumentContextService documentContext,
+        CadDocumentDockService documentDockService,
         ICadDocumentService documentService,
         ICadFileDialogService fileDialogService,
         Docking.WorkspaceDockFactory dockFactory,
@@ -72,6 +74,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _selectionService = selectionService;
         _focusService = focusService;
         _documentContext = documentContext;
+        _documentDockService = documentDockService;
         _documentService = documentService;
         _fileDialogService = fileDialogService;
         _dockFactory = dockFactory;
@@ -85,6 +88,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         Layout = dockFactory.CreateLayout();
         AppLog.Write("WorkspaceViewModel layout created.");
         dockFactory.InitLayout(Layout);
+        _documentDockService.RegisterLayout(Layout);
         AppLog.Write("WorkspaceViewModel layout initialized.");
 
         OpenCommand = ReactiveCommand.CreateFromTask(OpenAsync);

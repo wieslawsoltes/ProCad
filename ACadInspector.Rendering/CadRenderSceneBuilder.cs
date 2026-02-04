@@ -102,6 +102,48 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         return BuildScene(modelContext, stats, stopwatch);
     }
 
+    public RenderScene BuildBlock(CadDocument document, BlockRecord block, CadRenderSceneSettings settings)
+    {
+        if (document is null)
+        {
+            throw new ArgumentNullException(nameof(document));
+        }
+
+        if (block is null)
+        {
+            throw new ArgumentNullException(nameof(block));
+        }
+
+        if (settings is null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var stats = new RenderStatsAccumulator();
+        var diagnostics = new RenderDiagnostics();
+        var context = new RenderBuildContext(
+            document,
+            settings,
+            _styleResolver,
+            _linePatternResolver,
+            _shapeResolver,
+            _textShaper,
+            _visibilityResolver,
+            _geometrySampler,
+            _orderResolver,
+            _dispatcher,
+            diagnostics,
+            stats);
+
+        var basePoint = block.BlockEntity?.BasePoint ?? XYZ.Zero;
+        var offset = new XYZ(-basePoint.X, -basePoint.Y, -basePoint.Z);
+        var transform = new Transform(Matrix4.CreateTranslation(offset));
+        using var rootScope = context.BlockContext.EnterRoot(block);
+        AppendEntities(block.Entities, block, transform, context);
+        return BuildScene(context, stats, stopwatch);
+    }
+
     private void BuildPaperSpace(
         CadDocument document,
         Layout? layout,
