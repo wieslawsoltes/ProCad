@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -6,6 +7,8 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ACadInspector.Services;
+using ACadSharp.Entities;
+using ACadSharp.Tables;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
@@ -19,11 +22,14 @@ namespace ACadInspector.ViewModels;
 public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
 {
     private readonly ObservableCollection<CadBlockRowViewModel> _blockRows = new();
+    private readonly Dictionary<BlockRecord, CadBlockRowViewModel> _rowMap = new(ReferenceEqualityComparer.Instance);
     private readonly CadDocumentContextService _documentContext;
     private readonly CadBlockPreviewService _previewService;
     private readonly CadBlockEditorService _blockEditorService;
+    private readonly CadSelectionService _selectionService;
     private CancellationTokenSource? _previewCts;
     private const int PreviewSize = 72;
+    private bool _suppressSelection;
 
     [Reactive]
     public partial string SearchText { get; set; } = string.Empty;
@@ -43,11 +49,13 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     public CadBlocksToolViewModel(
         CadDocumentContextService documentContext,
         CadBlockPreviewService previewService,
-        CadBlockEditorService blockEditorService)
+        CadBlockEditorService blockEditorService,
+        CadSelectionService selectionService)
     {
         _documentContext = documentContext;
         _previewService = previewService;
         _blockEditorService = blockEditorService;
+        _selectionService = selectionService;
 
         BlocksView = new DataGridCollectionView(_blockRows);
         ColumnDefinitions = CadBlockColumnDefinitions.Create();
@@ -67,6 +75,12 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
                 static (selected, active) => selected is not null && active is not null);
         OpenBlockCommand = ReactiveCommand.Create<CadBlockRowViewModel?>(OpenSelectedBlock, canOpen);
 
+        this.WhenAnyValue(x => x.SelectedBlock)
+            .Subscribe(OnSelectedBlockChanged);
+
+        _selectionService.WhenAnyValue(x => x.SelectedObject)
+            .Subscribe(UpdateSelectionFromService);
+
         _documentContext.WhenAnyValue(x => x.ActiveDocument)
             .Subscribe(LoadBlocks);
     }
@@ -74,6 +88,7 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     private void LoadBlocks(CadDocumentViewModel? documentViewModel)
     {
         _blockRows.Clear();
+        _rowMap.Clear();
         _previewCts?.Cancel();
         _previewCts = new CancellationTokenSource();
 
@@ -93,11 +108,13 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
 
             var row = new CadBlockRowViewModel(record);
             _blockRows.Add(row);
+            _rowMap[record] = row;
             QueuePreview(documentViewModel, row);
         }
 
         BlocksView.Refresh();
         ApplySearch();
+        UpdateSelectionFromService(_selectionService.SelectedObject);
     }
 
     private void ApplySearch()
@@ -128,6 +145,44 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
         }
 
         _blockEditorService.TryOpenBlockEditor(selected.Block, activeDocument);
+    }
+
+    private void OnSelectedBlockChanged(CadBlockRowViewModel? row)
+    {
+        if (_suppressSelection)
+        {
+            return;
+        }
+
+        _selectionService.SelectedObject = row?.Block;
+    }
+
+    private void UpdateSelectionFromService(object? selected)
+    {
+        if (_suppressSelection)
+        {
+            return;
+        }
+
+        var block = ResolveBlockRecord(selected);
+        _suppressSelection = true;
+        SelectedBlock = block is not null && _rowMap.TryGetValue(block, out var row) ? row : null;
+        _suppressSelection = false;
+    }
+
+    private static BlockRecord? ResolveBlockRecord(object? selected)
+    {
+        switch (selected)
+        {
+            case CadDocumentTreeNode node:
+                return ResolveBlockRecord(node.Source);
+            case BlockRecord block:
+                return block;
+            case ACadSharp.Entities.Insert insert:
+                return insert.Block;
+        }
+
+        return null;
     }
 
     private void QueuePreview(CadDocumentViewModel? documentViewModel, CadBlockRowViewModel row)
