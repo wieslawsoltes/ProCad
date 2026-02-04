@@ -6,11 +6,31 @@
              mc:Ignorable="d"
              x:Class="ACadInspector.Views.CadIoOptionsView"
              x:DataType="vm:CadIoOptionsViewModel">
-  <Grid RowDefinitions="Auto,*,Auto,*"
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,*"
         Margin="12">
     <TextBlock Text="Read Options"
                FontWeight="SemiBold" />
-    <DataGrid Grid.Row="1"
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                Spacing="8"
+                Margin="0,6,0,4">
+      <TextBlock Text="Search"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Search..."
+               Text="{CompiledBinding ReadSearchText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Content="Clear"
+              Command="{CompiledBinding ClearReadSearchCommand}" />
+      <TextBlock Text="Filter"
+                 Margin="12,0,0,0"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Filter..."
+               Text="{CompiledBinding ReadFilterText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Content="Clear"
+              Command="{CompiledBinding ClearReadFilterCommand}" />
+    </StackPanel>
+    <DataGrid Grid.Row="2"
               ItemsSource="{CompiledBinding ReadOptionsView}"
               ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
               SortingModel="{CompiledBinding ReadSortingModel}"
@@ -23,10 +43,30 @@
               GridLinesVisibility="All"
               IsReadOnly="False"
               Margin="0,6,0,10" />
-    <TextBlock Grid.Row="2"
+    <TextBlock Grid.Row="3"
                Text="Write Options"
                FontWeight="SemiBold" />
-    <DataGrid Grid.Row="3"
+    <StackPanel Grid.Row="4"
+                Orientation="Horizontal"
+                Spacing="8"
+                Margin="0,6,0,4">
+      <TextBlock Text="Search"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Search..."
+               Text="{CompiledBinding WriteSearchText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Content="Clear"
+              Command="{CompiledBinding ClearWriteSearchCommand}" />
+      <TextBlock Text="Filter"
+                 Margin="12,0,0,0"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Filter..."
+               Text="{CompiledBinding WriteFilterText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Content="Clear"
+              Command="{CompiledBinding ClearWriteFilterCommand}" />
+    </StackPanel>
+    <DataGrid Grid.Row="5"
               ItemsSource="{CompiledBinding WriteOptionsView}"
               ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
               SortingModel="{CompiledBinding WriteSortingModel}"

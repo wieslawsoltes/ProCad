@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Reactive;
 using System.Reactive.Linq;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
@@ -46,10 +47,35 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
     public SearchModel SummarySearchModel { get; } = new();
 
     [Reactive]
+    public partial string HeaderSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string HeaderFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ClassSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ClassFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string SummarySearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string SummaryFilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial string DwgDocumentTitle { get; set; } = "No document";
 
     [Reactive]
     public partial bool IsActive { get; set; }
+
+    public ReactiveCommand<Unit, Unit> ClearHeaderSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearHeaderFilterCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearClassSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearClassFilterCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearSummarySearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearSummaryFilterCommand { get; }
 
     public CadDwgSemanticsViewModel(
         CadSelectionService selectionService,
@@ -66,9 +92,43 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
         SummaryRowsView = new DataGridCollectionView(_summaryRows);
         SummaryColumnDefinitions = CadDwgSummaryColumnDefinitions.Create();
 
+        HeaderSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        HeaderSearchModel.HighlightCurrent = true;
+        HeaderSearchModel.WrapNavigation = true;
+
+        ClassSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        ClassSearchModel.HighlightCurrent = true;
+        ClassSearchModel.WrapNavigation = true;
+
+        SummarySearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        SummarySearchModel.HighlightCurrent = true;
+        SummarySearchModel.WrapNavigation = true;
+
+        this.WhenAnyValue(x => x.HeaderSearchText)
+            .Subscribe(_ => ApplyHeaderSearch());
+        this.WhenAnyValue(x => x.HeaderFilterText)
+            .Subscribe(_ => ApplyHeaderFilter());
+
+        this.WhenAnyValue(x => x.ClassSearchText)
+            .Subscribe(_ => ApplyClassSearch());
+        this.WhenAnyValue(x => x.ClassFilterText)
+            .Subscribe(_ => ApplyClassFilter());
+
+        this.WhenAnyValue(x => x.SummarySearchText)
+            .Subscribe(_ => ApplySummarySearch());
+        this.WhenAnyValue(x => x.SummaryFilterText)
+            .Subscribe(_ => ApplySummaryFilter());
+
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(UpdateDwgSemantics);
+
+        ClearHeaderSearchCommand = ReactiveCommand.Create(() => { HeaderSearchText = string.Empty; });
+        ClearHeaderFilterCommand = ReactiveCommand.Create(() => { HeaderFilterText = string.Empty; });
+        ClearClassSearchCommand = ReactiveCommand.Create(() => { ClassSearchText = string.Empty; });
+        ClearClassFilterCommand = ReactiveCommand.Create(() => { ClassFilterText = string.Empty; });
+        ClearSummarySearchCommand = ReactiveCommand.Create(() => { SummarySearchText = string.Empty; });
+        ClearSummaryFilterCommand = ReactiveCommand.Create(() => { SummaryFilterText = string.Empty; });
     }
 
     private void UpdateDwgSemantics(object? selected)
@@ -116,6 +176,36 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
         HeaderRowsView.Refresh();
         ClassRowsView.Refresh();
         SummaryRowsView.Refresh();
+    }
+
+    private void ApplyHeaderSearch()
+    {
+        DataGridFilterHelper.ApplySearch(HeaderSearchModel, HeaderSearchText);
+    }
+
+    private void ApplyHeaderFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(HeaderFilteringModel, HeaderColumnDefinitions, HeaderFilterText);
+    }
+
+    private void ApplyClassSearch()
+    {
+        DataGridFilterHelper.ApplySearch(ClassSearchModel, ClassSearchText);
+    }
+
+    private void ApplyClassFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(ClassFilteringModel, ClassColumnDefinitions, ClassFilterText);
+    }
+
+    private void ApplySummarySearch()
+    {
+        DataGridFilterHelper.ApplySearch(SummarySearchModel, SummarySearchText);
+    }
+
+    private void ApplySummaryFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(SummaryFilteringModel, SummaryColumnDefinitions, SummaryFilterText);
     }
 
     private static string FormatHeaderValue(CadHeader header, CadHeaderVariableDescriptor descriptor)

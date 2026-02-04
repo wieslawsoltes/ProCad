@@ -72,6 +72,24 @@ public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathD
     public SearchModel ScriptResultSearchModel { get; } = new();
 
     [Reactive]
+    public partial string ItemsSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ItemsFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ResultsSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ResultsFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ScriptResultsSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ScriptResultsFilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial CadBatchItemViewModel? SelectedItem { get; set; }
 
     [Reactive]
@@ -128,6 +146,18 @@ public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathD
 
     public ReactiveCommand<Unit, Unit> ExportJsonCommand { get; }
 
+    public ReactiveCommand<Unit, Unit> ClearItemsSearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearItemsFilterCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearResultsSearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearResultsFilterCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearScriptResultsSearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearScriptResultsFilterCommand { get; }
+
     public CadBatchViewModel(
         ICadBatchFileDialogService batchDialogService,
         ICadBatchExportService exportService,
@@ -153,6 +183,31 @@ public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathD
         ResultColumnDefinitions = CadBatchResultColumnDefinitions.Create();
         ScriptResultsView = new DataGridCollectionView(_scriptResults);
         ScriptResultColumnDefinitions = CadBatchScriptResultColumnDefinitions.Create();
+
+        SearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        SearchModel.HighlightCurrent = true;
+        SearchModel.WrapNavigation = true;
+
+        ResultSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        ResultSearchModel.HighlightCurrent = true;
+        ResultSearchModel.WrapNavigation = true;
+
+        ScriptResultSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        ScriptResultSearchModel.HighlightCurrent = true;
+        ScriptResultSearchModel.WrapNavigation = true;
+
+        this.WhenAnyValue(x => x.ItemsSearchText)
+            .Subscribe(_ => ApplyItemsSearch());
+        this.WhenAnyValue(x => x.ItemsFilterText)
+            .Subscribe(_ => ApplyItemsFilter());
+        this.WhenAnyValue(x => x.ResultsSearchText)
+            .Subscribe(_ => ApplyResultsSearch());
+        this.WhenAnyValue(x => x.ResultsFilterText)
+            .Subscribe(_ => ApplyResultsFilter());
+        this.WhenAnyValue(x => x.ScriptResultsSearchText)
+            .Subscribe(_ => ApplyScriptResultsSearch());
+        this.WhenAnyValue(x => x.ScriptResultsFilterText)
+            .Subscribe(_ => ApplyScriptResultsFilter());
 
         _items.CollectionChanged += (_, _) => UpdateCounts();
         _scriptResults.CollectionChanged += (_, _) => UpdateScriptResultsCount();
@@ -187,6 +242,13 @@ public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathD
         ClearScriptResultsCommand = ReactiveCommand.Create(ClearScriptResults, canSearch);
         ExportCsvCommand = ReactiveCommand.CreateFromTask(ExportCsvAsync, canExport);
         ExportJsonCommand = ReactiveCommand.CreateFromTask(ExportJsonAsync, canExport);
+
+        ClearItemsSearchCommand = ReactiveCommand.Create(() => { ItemsSearchText = string.Empty; });
+        ClearItemsFilterCommand = ReactiveCommand.Create(() => { ItemsFilterText = string.Empty; });
+        ClearResultsSearchCommand = ReactiveCommand.Create(() => { ResultsSearchText = string.Empty; });
+        ClearResultsFilterCommand = ReactiveCommand.Create(() => { ResultsFilterText = string.Empty; });
+        ClearScriptResultsSearchCommand = ReactiveCommand.Create(() => { ScriptResultsSearchText = string.Empty; });
+        ClearScriptResultsFilterCommand = ReactiveCommand.Create(() => { ScriptResultsFilterText = string.Empty; });
     }
 
     private async Task AddFilesAsync(CancellationToken cancellationToken)
@@ -455,6 +517,36 @@ public sealed partial class CadBatchViewModel : CadToolViewModelBase, IFastPathD
     {
         ItemsCount = _items.Count;
         UpdateProgress(0, _items.Count);
+    }
+
+    private void ApplyItemsSearch()
+    {
+        DataGridFilterHelper.ApplySearch(SearchModel, ItemsSearchText);
+    }
+
+    private void ApplyItemsFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(FilteringModel, ColumnDefinitions, ItemsFilterText);
+    }
+
+    private void ApplyResultsSearch()
+    {
+        DataGridFilterHelper.ApplySearch(ResultSearchModel, ResultsSearchText);
+    }
+
+    private void ApplyResultsFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(ResultFilteringModel, ResultColumnDefinitions, ResultsFilterText);
+    }
+
+    private void ApplyScriptResultsSearch()
+    {
+        DataGridFilterHelper.ApplySearch(ScriptResultSearchModel, ScriptResultsSearchText);
+    }
+
+    private void ApplyScriptResultsFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(ScriptResultFilteringModel, ScriptResultColumnDefinitions, ScriptResultsFilterText);
     }
 
     private void UpdateScriptResultsCount()

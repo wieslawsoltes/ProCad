@@ -76,14 +76,34 @@
 
     <Grid Grid.Row="3"
           Grid.ColumnSpan="2"
-          RowDefinitions="Auto,Auto,*"
+          RowDefinitions="Auto,Auto,Auto,*"
           ColumnDefinitions="*,*"
           RowSpacing="8"
           ColumnSpacing="12">
       <TextBlock Grid.ColumnSpan="2"
                  Text="Diff Summary"
                  FontWeight="SemiBold" />
-      <DataGrid Grid.Row="1"
+      <StackPanel Grid.Row="1"
+                  Grid.ColumnSpan="2"
+                  Orientation="Horizontal"
+                  Spacing="8">
+        <TextBlock Text="Search"
+                   VerticalAlignment="Center" />
+        <TextBox Width="200"
+                 Watermark="Search..."
+                 Text="{CompiledBinding SummarySearchText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding ClearSummarySearchCommand}" />
+        <TextBlock Text="Filter"
+                   Margin="12,0,0,0"
+                   VerticalAlignment="Center" />
+        <TextBox Width="200"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding SummaryFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding ClearSummaryFilterCommand}" />
+      </StackPanel>
+      <DataGrid Grid.Row="2"
                 Grid.ColumnSpan="2"
                 ItemsSource="{CompiledBinding SummaryView}"
                 ColumnDefinitionsSource="{CompiledBinding SummaryColumnDefinitions}"
@@ -97,10 +117,10 @@
                 GridLinesVisibility="All"
                 IsReadOnly="True" />
 
-      <TabControl Grid.Row="2"
+      <TabControl Grid.Row="3"
                   Grid.ColumnSpan="2">
         <TabItem Header="Object Model">
-          <Grid RowDefinitions="Auto,*"
+          <Grid RowDefinitions="Auto,Auto,*"
                 ColumnDefinitions="*,*"
                 RowSpacing="8"
                 ColumnSpacing="12">
@@ -111,7 +131,37 @@
                        FontWeight="SemiBold"
                        TextTrimming="CharacterEllipsis" />
 
-            <DataGrid Grid.Row="1"
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        Spacing="8">
+              <TextBox Width="180"
+                       Watermark="Search..."
+                       Text="{CompiledBinding ObjectSearchText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearObjectSearchCommand}" />
+              <TextBox Width="180"
+                       Watermark="Filter..."
+                       Text="{CompiledBinding ObjectFilterText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearObjectFilterCommand}" />
+            </StackPanel>
+            <StackPanel Grid.Row="1"
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8">
+              <TextBox Width="180"
+                       Watermark="Search..."
+                       Text="{CompiledBinding PropertySearchText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearPropertySearchCommand}" />
+              <TextBox Width="180"
+                       Watermark="Filter..."
+                       Text="{CompiledBinding PropertyFilterText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearPropertyFilterCommand}" />
+            </StackPanel>
+
+            <DataGrid Grid.Row="2"
                       ItemsSource="{CompiledBinding ObjectDiffsView}"
                       ColumnDefinitionsSource="{CompiledBinding ObjectDiffColumnDefinitions}"
                       SortingModel="{CompiledBinding ObjectSortingModel}"
@@ -125,7 +175,7 @@
                       GridLinesVisibility="All"
                       IsReadOnly="True" />
 
-            <DataGrid Grid.Row="1"
+            <DataGrid Grid.Row="2"
                       Grid.Column="1"
                       ItemsSource="{CompiledBinding PropertyDiffsView}"
                       ColumnDefinitionsSource="{CompiledBinding PropertyDiffColumnDefinitions}"
@@ -141,12 +191,26 @@
           </Grid>
         </TabItem>
         <TabItem Header="DXF Text">
-          <Grid RowDefinitions="Auto,*"
+          <Grid RowDefinitions="Auto,Auto,*"
                 RowSpacing="8">
             <TextBlock Text="{CompiledBinding DxfTextStatusMessage}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource ThemeForegroundLowBrush}" />
-            <DataGrid Grid.Row="1"
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        Spacing="8">
+              <TextBox Width="220"
+                       Watermark="Search..."
+                       Text="{CompiledBinding DxfTextSearchText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearDxfTextSearchCommand}" />
+              <TextBox Width="220"
+                       Watermark="Filter..."
+                       Text="{CompiledBinding DxfTextFilterText, UpdateSourceTrigger=PropertyChanged}" />
+              <Button Content="Clear"
+                      Command="{CompiledBinding ClearDxfTextFilterCommand}" />
+            </StackPanel>
+            <DataGrid Grid.Row="2"
                       ItemsSource="{CompiledBinding DxfTextDiffsView}"
                       ColumnDefinitionsSource="{CompiledBinding DxfTextColumnDefinitions}"
                       SortingModel="{CompiledBinding DxfTextSortingModel}"

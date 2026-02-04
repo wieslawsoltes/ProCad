@@ -87,12 +87,31 @@
 
     <TabControl Grid.Row="5">
       <TabItem Header="Queue">
-        <Grid RowDefinitions="Auto,*"
+        <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
           <TextBlock Text="{CompiledBinding StatusMessage}"
                      TextWrapping="Wrap"
                      Foreground="{DynamicResource ThemeForegroundLowBrush}" />
-          <DataGrid Grid.Row="1"
+          <StackPanel Grid.Row="1"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding ItemsSearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearItemsSearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding ItemsFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearItemsFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="2"
                     ItemsSource="{CompiledBinding ItemsView}"
                     ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
                     SortingModel="{CompiledBinding SortingModel}"
@@ -108,12 +127,31 @@
         </Grid>
       </TabItem>
       <TabItem Header="Results">
-        <Grid RowDefinitions="Auto,*"
+        <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
           <TextBlock Text="{CompiledBinding ResultsStatusMessage}"
                      TextWrapping="Wrap"
                      Foreground="{DynamicResource ThemeForegroundLowBrush}" />
-          <DataGrid Grid.Row="1"
+          <StackPanel Grid.Row="1"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding ResultsSearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearResultsSearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding ResultsFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearResultsFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="2"
                     ItemsSource="{CompiledBinding ResultsView}"
                     ColumnDefinitionsSource="{CompiledBinding ResultColumnDefinitions}"
                     SortingModel="{CompiledBinding ResultSortingModel}"
@@ -128,12 +166,31 @@
         </Grid>
       </TabItem>
       <TabItem Header="Script Results">
-        <Grid RowDefinitions="Auto,*"
+        <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
           <TextBlock Text="{CompiledBinding ScriptResultsStatusMessage}"
                      TextWrapping="Wrap"
                      Foreground="{DynamicResource ThemeForegroundLowBrush}" />
-          <DataGrid Grid.Row="1"
+          <StackPanel Grid.Row="1"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding ScriptResultsSearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearScriptResultsSearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding ScriptResultsFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearScriptResultsFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="2"
                     ItemsSource="{CompiledBinding ScriptResultsView}"
                     ColumnDefinitionsSource="{CompiledBinding ScriptResultColumnDefinitions}"
                     SortingModel="{CompiledBinding ScriptResultSortingModel}"

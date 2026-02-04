@@ -35,6 +35,9 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     public partial string SearchText { get; set; } = string.Empty;
 
     [Reactive]
+    public partial string FilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial CadBlockRowViewModel? SelectedBlock { get; set; }
 
     public DataGridCollectionView BlocksView { get; }
@@ -44,6 +47,7 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     public SearchModel SearchModel { get; } = new();
 
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
     public ReactiveCommand<CadBlockRowViewModel?, Unit> OpenBlockCommand { get; }
 
     public CadBlocksToolViewModel(
@@ -67,7 +71,11 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
         this.WhenAnyValue(x => x.SearchText)
             .Subscribe(_ => ApplySearch());
 
+        this.WhenAnyValue(x => x.FilterText)
+            .Subscribe(_ => ApplyFilter());
+
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
+        ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
 
         var canOpen = this.WhenAnyValue(x => x.SelectedBlock)
             .CombineLatest(
@@ -119,20 +127,12 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
 
     private void ApplySearch()
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
-        {
-            SearchModel.Clear();
-            return;
-        }
+        DataGridFilterHelper.ApplySearch(SearchModel, SearchText);
+    }
 
-        var descriptor = new SearchDescriptor(
-            SearchText.Trim(),
-            matchMode: SearchMatchMode.Contains,
-            termMode: SearchTermCombineMode.Any,
-            scope: SearchScope.VisibleColumns,
-            comparison: StringComparison.OrdinalIgnoreCase);
-
-        SearchModel.SetOrUpdate(descriptor);
+    private void ApplyFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(FilteringModel, ColumnDefinitions, FilterText);
     }
 
     private void OpenSelectedBlock(CadBlockRowViewModel? row)

@@ -22,6 +22,11 @@
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
         <Button Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
+        <TextBox Width="160"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding ClearFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"
                 ItemsSource="{CompiledBinding LineTypesView}"

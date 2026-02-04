@@ -24,6 +24,11 @@
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
         <Button Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
+        <TextBox Width="160"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding ClearFilterCommand}" />
         <Button Content="Open"
                 Command="{CompiledBinding OpenBlockCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
@@ -42,8 +47,16 @@
                 CanUserResizeColumns="True"
                 GridLinesVisibility="All"
                 IsReadOnly="True">
+        <DataGrid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Edit Block"
+                      Command="{CompiledBinding OpenBlockCommand}"
+                      CommandParameter="{CompiledBinding SelectedBlock}" />
+          </ContextMenu>
+        </DataGrid.ContextMenu>
         <i:Interaction.Behaviors>
           <behaviors:DataGridRowDoubleClickBehavior Command="{CompiledBinding OpenBlockCommand}" />
+          <behaviors:DataGridBringSelectedIntoViewBehavior />
         </i:Interaction.Behaviors>
       </DataGrid>
     </Grid>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Reactive;
 using System.Reactive.Linq;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
@@ -28,10 +29,19 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
     public SearchModel SearchModel { get; } = new();
 
     [Reactive]
+    public partial string SearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string FilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial string SelectedTitle { get; set; } = "No selection";
 
     [Reactive]
     public partial bool IsActive { get; set; }
+
+    public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
 
     public CadDxfSemanticsViewModel(
         CadSelectionService selectionService,
@@ -42,9 +52,22 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
         PropertyRowsView = new DataGridCollectionView(_propertyRows);
         PropertyColumnDefinitions = CadDxfPropertyColumnDefinitions.Create();
 
+        SearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        SearchModel.HighlightCurrent = true;
+        SearchModel.WrapNavigation = true;
+
+        this.WhenAnyValue(x => x.SearchText)
+            .Subscribe(_ => ApplySearch());
+
+        this.WhenAnyValue(x => x.FilterText)
+            .Subscribe(_ => ApplyFilter());
+
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(UpdateRows);
+
+        ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
+        ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
     }
 
     private void UpdateRows(object? selected)
@@ -78,6 +101,16 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
         }
 
         PropertyRowsView.Refresh();
+    }
+
+    private void ApplySearch()
+    {
+        DataGridFilterHelper.ApplySearch(SearchModel, SearchText);
+    }
+
+    private void ApplyFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(FilteringModel, PropertyColumnDefinitions, FilterText);
     }
 
     private static string FormatValue(object target, CadPropertyDescriptor descriptor)

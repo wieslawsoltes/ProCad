@@ -80,6 +80,30 @@ public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFas
 
     public SearchModel DxfTextSearchModel { get; } = new();
 
+    [Reactive]
+    public partial string SummarySearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string SummaryFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ObjectSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ObjectFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string PropertySearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string PropertyFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string DxfTextSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string DxfTextFilterText { get; set; } = string.Empty;
+
     public ReactiveCommand<Unit, Unit> LoadLeftCommand { get; }
 
     public ReactiveCommand<Unit, Unit> LoadRightCommand { get; }
@@ -89,6 +113,22 @@ public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFas
     public ReactiveCommand<Unit, Unit> UseActiveAsRightCommand { get; }
 
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearSummarySearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearSummaryFilterCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearObjectSearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearObjectFilterCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearPropertySearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearPropertyFilterCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearDxfTextSearchCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ClearDxfTextFilterCommand { get; }
 
     [Reactive]
     public partial CadObjectDiffRowViewModel? SelectedObjectDiff { get; set; }
@@ -136,6 +176,22 @@ public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFas
         PropertyDiffColumnDefinitions = CadPropertyDiffColumnDefinitions.Create();
         DxfTextColumnDefinitions = global::ACadInspector.ViewModels.DxfTextDiffColumnDefinitions.Create();
 
+        SummarySearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        SummarySearchModel.HighlightCurrent = true;
+        SummarySearchModel.WrapNavigation = true;
+
+        ObjectSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        ObjectSearchModel.HighlightCurrent = true;
+        ObjectSearchModel.WrapNavigation = true;
+
+        PropertySearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        PropertySearchModel.HighlightCurrent = true;
+        PropertySearchModel.WrapNavigation = true;
+
+        DxfTextSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        DxfTextSearchModel.HighlightCurrent = true;
+        DxfTextSearchModel.WrapNavigation = true;
+
         LoadLeftCommand = ReactiveCommand.CreateFromTask(LoadLeftAsync);
         LoadRightCommand = ReactiveCommand.CreateFromTask(LoadRightAsync);
         UseActiveAsLeftCommand = ReactiveCommand.Create(UseActiveAsLeft);
@@ -147,12 +203,41 @@ public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFas
             static (left, right) => left && right);
         RefreshCommand = ReactiveCommand.Create(RefreshDiff, canRefresh);
 
+        this.WhenAnyValue(x => x.SummarySearchText)
+            .Subscribe(_ => ApplySummarySearch());
+        this.WhenAnyValue(x => x.SummaryFilterText)
+            .Subscribe(_ => ApplySummaryFilter());
+
+        this.WhenAnyValue(x => x.ObjectSearchText)
+            .Subscribe(_ => ApplyObjectSearch());
+        this.WhenAnyValue(x => x.ObjectFilterText)
+            .Subscribe(_ => ApplyObjectFilter());
+
+        this.WhenAnyValue(x => x.PropertySearchText)
+            .Subscribe(_ => ApplyPropertySearch());
+        this.WhenAnyValue(x => x.PropertyFilterText)
+            .Subscribe(_ => ApplyPropertyFilter());
+
+        this.WhenAnyValue(x => x.DxfTextSearchText)
+            .Subscribe(_ => ApplyDxfTextSearch());
+        this.WhenAnyValue(x => x.DxfTextFilterText)
+            .Subscribe(_ => ApplyDxfTextFilter());
+
         this.WhenAnyValue(x => x.SelectedObjectDiff)
             .Subscribe(UpdatePropertyDiffs);
 
         Left.WhenAnyValue(x => x.Document)
             .Merge(Right.WhenAnyValue(x => x.Document))
             .Subscribe(_ => RefreshDiff());
+
+        ClearSummarySearchCommand = ReactiveCommand.Create(() => { SummarySearchText = string.Empty; });
+        ClearSummaryFilterCommand = ReactiveCommand.Create(() => { SummaryFilterText = string.Empty; });
+        ClearObjectSearchCommand = ReactiveCommand.Create(() => { ObjectSearchText = string.Empty; });
+        ClearObjectFilterCommand = ReactiveCommand.Create(() => { ObjectFilterText = string.Empty; });
+        ClearPropertySearchCommand = ReactiveCommand.Create(() => { PropertySearchText = string.Empty; });
+        ClearPropertyFilterCommand = ReactiveCommand.Create(() => { PropertyFilterText = string.Empty; });
+        ClearDxfTextSearchCommand = ReactiveCommand.Create(() => { DxfTextSearchText = string.Empty; });
+        ClearDxfTextFilterCommand = ReactiveCommand.Create(() => { DxfTextFilterText = string.Empty; });
     }
 
     private async Task LoadLeftAsync(CancellationToken cancellationToken)
@@ -293,6 +378,46 @@ public sealed partial class CadCompareViewModel : CadDocumentViewModelBase, IFas
         }
 
         PropertyDiffsView.Refresh();
+    }
+
+    private void ApplySummarySearch()
+    {
+        DataGridFilterHelper.ApplySearch(SummarySearchModel, SummarySearchText);
+    }
+
+    private void ApplySummaryFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(SummaryFilteringModel, SummaryColumnDefinitions, SummaryFilterText);
+    }
+
+    private void ApplyObjectSearch()
+    {
+        DataGridFilterHelper.ApplySearch(ObjectSearchModel, ObjectSearchText);
+    }
+
+    private void ApplyObjectFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(ObjectFilteringModel, ObjectDiffColumnDefinitions, ObjectFilterText);
+    }
+
+    private void ApplyPropertySearch()
+    {
+        DataGridFilterHelper.ApplySearch(PropertySearchModel, PropertySearchText);
+    }
+
+    private void ApplyPropertyFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(PropertyFilteringModel, PropertyDiffColumnDefinitions, PropertyFilterText);
+    }
+
+    private void ApplyDxfTextSearch()
+    {
+        DataGridFilterHelper.ApplySearch(DxfTextSearchModel, DxfTextSearchText);
+    }
+
+    private void ApplyDxfTextFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(DxfTextFilteringModel, DxfTextColumnDefinitions, DxfTextFilterText);
     }
 
     private async Task RefreshDxfTextDiffAsync()

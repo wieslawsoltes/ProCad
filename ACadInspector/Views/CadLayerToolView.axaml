@@ -22,6 +22,11 @@
                  Text="{CompiledBinding LayerList.LayerSearchText, UpdateSourceTrigger=PropertyChanged}" />
         <Button Content="Clear"
                 Command="{CompiledBinding LayerList.ClearLayerSearchCommand}" />
+        <TextBox Width="140"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding LayerList.LayerFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding LayerList.ClearLayerFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"
                 ItemsSource="{CompiledBinding LayerList.LayerRowsView}"

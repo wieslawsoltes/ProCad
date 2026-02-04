@@ -16,6 +16,9 @@
             <Setter Property="behaviors:DataGridFastPath.IsEnabled" Value="True" />
             <Setter Property="behaviors:DataGridFastPathDiagnostics.UseDataContext" Value="True" />
         </Style>
+        <Style Selector="DataGridColumn">
+            <Setter Property="ShowFilterButton" Value="True" />
+        </Style>
     </Application.Styles>
 
     <Application.DataTemplates>

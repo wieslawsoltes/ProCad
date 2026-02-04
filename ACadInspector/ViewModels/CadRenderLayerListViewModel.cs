@@ -21,6 +21,9 @@ public sealed partial class CadRenderLayerListViewModel : ViewModelBase
     public partial string LayerSearchText { get; set; } = string.Empty;
 
     [Reactive]
+    public partial string LayerFilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial IReadOnlyDictionary<string, bool>? LayerVisibilityOverrides { get; set; }
 
     public DataGridCollectionView LayerRowsView { get; }
@@ -30,6 +33,7 @@ public sealed partial class CadRenderLayerListViewModel : ViewModelBase
     public SearchModel LayerSearchModel { get; } = new();
 
     public ReactiveCommand<Unit, Unit> ClearLayerSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearLayerFilterCommand { get; }
 
     public CadRenderLayerListViewModel(CadDocument? document)
     {
@@ -38,7 +42,10 @@ public sealed partial class CadRenderLayerListViewModel : ViewModelBase
 
         this.WhenAnyValue(x => x.LayerSearchText)
             .Subscribe(_ => ApplyLayerSearch());
+        this.WhenAnyValue(x => x.LayerFilterText)
+            .Subscribe(_ => ApplyLayerFilter());
         ClearLayerSearchCommand = ReactiveCommand.Create(() => { LayerSearchText = string.Empty; });
+        ClearLayerFilterCommand = ReactiveCommand.Create(() => { LayerFilterText = string.Empty; });
 
         LayerSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
         LayerSearchModel.HighlightCurrent = true;
@@ -92,19 +99,11 @@ public sealed partial class CadRenderLayerListViewModel : ViewModelBase
 
     private void ApplyLayerSearch()
     {
-        if (string.IsNullOrWhiteSpace(LayerSearchText))
-        {
-            LayerSearchModel.Clear();
-            return;
-        }
+        DataGridFilterHelper.ApplySearch(LayerSearchModel, LayerSearchText);
+    }
 
-        var descriptor = new SearchDescriptor(
-            LayerSearchText.Trim(),
-            matchMode: SearchMatchMode.Contains,
-            termMode: SearchTermCombineMode.Any,
-            scope: SearchScope.VisibleColumns,
-            comparison: StringComparison.OrdinalIgnoreCase);
-
-        LayerSearchModel.SetOrUpdate(descriptor);
+    private void ApplyLayerFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(LayerFilteringModel, LayerColumnDefinitions, LayerFilterText);
     }
 }

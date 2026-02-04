@@ -34,6 +34,9 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
     public partial string SearchText { get; set; } = string.Empty;
 
     [Reactive]
+    public partial string FilterText { get; set; } = string.Empty;
+
+    [Reactive]
     public partial CadLineTypeRowViewModel? SelectedLineType { get; set; }
 
     public DataGridCollectionView LineTypesView { get; }
@@ -43,6 +46,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
     public SearchModel SearchModel { get; } = new();
 
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
 
     public CadLineTypeToolViewModel(
         CadSelectionService selectionService,
@@ -63,6 +67,9 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
         this.WhenAnyValue(x => x.SearchText)
             .Subscribe(_ => ApplySearch());
 
+        this.WhenAnyValue(x => x.FilterText)
+            .Subscribe(_ => ApplyFilter());
+
         this.WhenAnyValue(x => x.SelectedLineType)
             .Subscribe(OnSelectedLineTypeChanged);
 
@@ -73,6 +80,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
             .Subscribe(LoadLineTypes);
 
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
+        ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
     }
 
     private void LoadLineTypes(CadDocumentViewModel? documentViewModel)
@@ -137,20 +145,12 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
 
     private void ApplySearch()
     {
-        if (string.IsNullOrWhiteSpace(SearchText))
-        {
-            SearchModel.Clear();
-            return;
-        }
+        DataGridFilterHelper.ApplySearch(SearchModel, SearchText);
+    }
 
-        var descriptor = new SearchDescriptor(
-            SearchText.Trim(),
-            matchMode: SearchMatchMode.Contains,
-            termMode: SearchTermCombineMode.Any,
-            scope: SearchScope.VisibleColumns,
-            comparison: StringComparison.OrdinalIgnoreCase);
-
-        SearchModel.SetOrUpdate(descriptor);
+    private void ApplyFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(FilteringModel, ColumnDefinitions, FilterText);
     }
 
     private void OnSelectedLineTypeChanged(CadLineTypeRowViewModel? row)

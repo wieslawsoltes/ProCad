@@ -13,43 +13,109 @@
     <TabControl Grid.Row="1"
                 Margin="0,8,0,0">
       <TabItem Header="Header">
-        <DataGrid ItemsSource="{CompiledBinding HeaderRowsView}"
-                  ColumnDefinitionsSource="{CompiledBinding HeaderColumnDefinitions}"
-                  SortingModel="{CompiledBinding HeaderSortingModel}"
-                  FilteringModel="{CompiledBinding HeaderFilteringModel}"
-                  SearchModel="{CompiledBinding HeaderSearchModel}"
-                  AutoGenerateColumns="False"
-                  CanUserSortColumns="True"
-                  CanUserReorderColumns="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="All"
-                  IsReadOnly="True" />
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="6">
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding HeaderSearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearHeaderSearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding HeaderFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearHeaderFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding HeaderRowsView}"
+                    ColumnDefinitionsSource="{CompiledBinding HeaderColumnDefinitions}"
+                    SortingModel="{CompiledBinding HeaderSortingModel}"
+                    FilteringModel="{CompiledBinding HeaderFilteringModel}"
+                    SearchModel="{CompiledBinding HeaderSearchModel}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
       </TabItem>
       <TabItem Header="Classes">
-        <DataGrid ItemsSource="{CompiledBinding ClassRowsView}"
-                  ColumnDefinitionsSource="{CompiledBinding ClassColumnDefinitions}"
-                  SortingModel="{CompiledBinding ClassSortingModel}"
-                  FilteringModel="{CompiledBinding ClassFilteringModel}"
-                  SearchModel="{CompiledBinding ClassSearchModel}"
-                  AutoGenerateColumns="False"
-                  CanUserSortColumns="True"
-                  CanUserReorderColumns="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="All"
-                  IsReadOnly="True" />
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="6">
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding ClassSearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearClassSearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding ClassFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearClassFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding ClassRowsView}"
+                    ColumnDefinitionsSource="{CompiledBinding ClassColumnDefinitions}"
+                    SortingModel="{CompiledBinding ClassSortingModel}"
+                    FilteringModel="{CompiledBinding ClassFilteringModel}"
+                    SearchModel="{CompiledBinding ClassSearchModel}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
       </TabItem>
       <TabItem Header="Summary">
-        <DataGrid ItemsSource="{CompiledBinding SummaryRowsView}"
-                  ColumnDefinitionsSource="{CompiledBinding SummaryColumnDefinitions}"
-                  SortingModel="{CompiledBinding SummarySortingModel}"
-                  FilteringModel="{CompiledBinding SummaryFilteringModel}"
-                  SearchModel="{CompiledBinding SummarySearchModel}"
-                  AutoGenerateColumns="False"
-                  CanUserSortColumns="True"
-                  CanUserReorderColumns="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="All"
-                  IsReadOnly="True" />
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="6">
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Search"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Search..."
+                     Text="{CompiledBinding SummarySearchText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearSummarySearchCommand}" />
+            <TextBlock Text="Filter"
+                       Margin="12,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBox Width="200"
+                     Watermark="Filter..."
+                     Text="{CompiledBinding SummaryFilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Content="Clear"
+                    Command="{CompiledBinding ClearSummaryFilterCommand}" />
+          </StackPanel>
+          <DataGrid Grid.Row="1"
+                    ItemsSource="{CompiledBinding SummaryRowsView}"
+                    ColumnDefinitionsSource="{CompiledBinding SummaryColumnDefinitions}"
+                    SortingModel="{CompiledBinding SummarySortingModel}"
+                    FilteringModel="{CompiledBinding SummaryFilteringModel}"
+                    SearchModel="{CompiledBinding SummarySearchModel}"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    CanUserResizeColumns="True"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True" />
+        </Grid>
       </TabItem>
     </TabControl>
   </Grid>

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Reactive;
+using System.Reactive.Linq;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
 using Avalonia.Collections;
@@ -7,10 +9,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.DataGridFiltering;
 using Avalonia.Controls.DataGridSearching;
 using Avalonia.Controls.DataGridSorting;
+using ReactiveUI;
+using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed class CadIoOptionsViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
+public sealed partial class CadIoOptionsViewModel : CadToolViewModelBase, IFastPathDiagnosticsSource
 {
     private readonly ObservableCollection<CadOptionRowViewModel> _readRows = new();
     private readonly ObservableCollection<CadOptionRowViewModel> _writeRows = new();
@@ -28,6 +32,23 @@ public sealed class CadIoOptionsViewModel : CadToolViewModelBase, IFastPathDiagn
     public FilteringModel WriteFilteringModel { get; } = new();
     public SearchModel WriteSearchModel { get; } = new();
     public FastPathDiagnosticsService FastPathDiagnostics { get; }
+
+    [Reactive]
+    public partial string ReadSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string ReadFilterText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string WriteSearchText { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string WriteFilterText { get; set; } = string.Empty;
+
+    public ReactiveCommand<Unit, Unit> ClearReadSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearReadFilterCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearWriteSearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearWriteFilterCommand { get; }
 
     private readonly CadOptionRowViewModel _readSummaryInfo;
     private readonly CadOptionRowViewModel _clearDxfCache;
@@ -77,6 +98,48 @@ public sealed class CadIoOptionsViewModel : CadToolViewModelBase, IFastPathDiagn
         ReadOptionsView = new DataGridCollectionView(_readRows);
         WriteOptionsView = new DataGridCollectionView(_writeRows);
         ColumnDefinitions = CadIoOptionsColumnDefinitions.Create();
+
+        ReadSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        ReadSearchModel.HighlightCurrent = true;
+        ReadSearchModel.WrapNavigation = true;
+
+        WriteSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
+        WriteSearchModel.HighlightCurrent = true;
+        WriteSearchModel.WrapNavigation = true;
+
+        this.WhenAnyValue(x => x.ReadSearchText)
+            .Subscribe(_ => ApplyReadSearch());
+        this.WhenAnyValue(x => x.ReadFilterText)
+            .Subscribe(_ => ApplyReadFilter());
+        this.WhenAnyValue(x => x.WriteSearchText)
+            .Subscribe(_ => ApplyWriteSearch());
+        this.WhenAnyValue(x => x.WriteFilterText)
+            .Subscribe(_ => ApplyWriteFilter());
+
+        ClearReadSearchCommand = ReactiveCommand.Create(() => { ReadSearchText = string.Empty; });
+        ClearReadFilterCommand = ReactiveCommand.Create(() => { ReadFilterText = string.Empty; });
+        ClearWriteSearchCommand = ReactiveCommand.Create(() => { WriteSearchText = string.Empty; });
+        ClearWriteFilterCommand = ReactiveCommand.Create(() => { WriteFilterText = string.Empty; });
+    }
+
+    private void ApplyReadSearch()
+    {
+        DataGridFilterHelper.ApplySearch(ReadSearchModel, ReadSearchText);
+    }
+
+    private void ApplyReadFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(ReadFilteringModel, ColumnDefinitions, ReadFilterText);
+    }
+
+    private void ApplyWriteSearch()
+    {
+        DataGridFilterHelper.ApplySearch(WriteSearchModel, WriteSearchText);
+    }
+
+    private void ApplyWriteFilter()
+    {
+        DataGridFilterHelper.ApplyFilter(WriteFilteringModel, ColumnDefinitions, WriteFilterText);
     }
 
     public CadReadOptions BuildReadOptions(CadFileFormat format)
