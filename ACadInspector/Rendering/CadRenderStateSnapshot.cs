@@ -9,6 +9,7 @@ public sealed class CadRenderStateSnapshot
         scene: null,
         showGrid: true,
         showAxes: true,
+        enableInteractionOptimization: false,
         layerVisibilityOverrides: null,
         zoom: 1.0,
         minPixelThickness: 0.6,
@@ -24,6 +25,7 @@ public sealed class CadRenderStateSnapshot
     public RenderScene? Scene { get; }
     public bool ShowGrid { get; }
     public bool ShowAxes { get; }
+    public bool EnableInteractionOptimization { get; }
     public IReadOnlyDictionary<string, bool>? LayerVisibilityOverrides { get; }
     public double Zoom { get; }
     public double MinPixelThickness { get; }
@@ -40,6 +42,7 @@ public sealed class CadRenderStateSnapshot
         RenderScene? scene,
         bool showGrid,
         bool showAxes,
+        bool enableInteractionOptimization,
         IReadOnlyDictionary<string, bool>? layerVisibilityOverrides,
         double zoom,
         double minPixelThickness,
@@ -55,6 +58,7 @@ public sealed class CadRenderStateSnapshot
         Scene = scene;
         ShowGrid = showGrid;
         ShowAxes = showAxes;
+        EnableInteractionOptimization = enableInteractionOptimization;
         LayerVisibilityOverrides = layerVisibilityOverrides;
         Zoom = zoom;
         MinPixelThickness = minPixelThickness;

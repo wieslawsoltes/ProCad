@@ -93,7 +93,6 @@ public sealed class CadRenderControl : Control
     private double _cachedZoom = 1.0;
     private bool _isInteracting;
     private bool _pendingFit;
-    private bool _enableInteractionOptimization;
     private DateTime _interactionUntilUtc;
     private DispatcherTimer? _interactionTimer;
     private static readonly TimeSpan InteractionHold = TimeSpan.FromMilliseconds(150);
@@ -229,7 +228,6 @@ public sealed class CadRenderControl : Control
     public CadRenderControl()
     {
         ClipToBounds = true;
-        Volatile.Write(ref _enableInteractionOptimization, EnableInteractionOptimization);
         UpdateRenderState();
     }
 
@@ -247,7 +245,7 @@ public sealed class CadRenderControl : Control
     private void RenderSkia(SKCanvas canvas, Size size)
     {
         var state = Volatile.Read(ref _renderState);
-        var isInteractive = _isInteracting && Volatile.Read(ref _enableInteractionOptimization);
+        var isInteractive = _isInteracting && state.EnableInteractionOptimization;
         _renderer.Render(canvas, size, state, isInteractive);
     }
 
@@ -273,6 +271,7 @@ public sealed class CadRenderControl : Control
         {
             _renderer.ClearImageCache();
             _renderer.InvalidateHiddenLineCache();
+            _renderer.InvalidateInteractionCache();
             if (FitOnSceneChange)
             {
                 _pendingFit = !TryFitToScene();
@@ -288,7 +287,7 @@ public sealed class CadRenderControl : Control
 
         if (change.Property == EnableInteractionOptimizationProperty)
         {
-            Volatile.Write(ref _enableInteractionOptimization, change.GetNewValue<bool>());
+            _renderer.InvalidateInteractionCache();
         }
 
         if (change.Property == FitToViewTriggerProperty)
@@ -380,6 +379,7 @@ public sealed class CadRenderControl : Control
         base.OnDetachedFromVisualTree(e);
         _interactionTimer?.Stop();
         _renderer.ClearImageCache();
+        _renderer.InvalidateInteractionCache();
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -583,6 +583,7 @@ public sealed class CadRenderControl : Control
             Scene,
             ShowGrid,
             ShowAxes,
+            EnableInteractionOptimization,
             LayerVisibilityOverrides,
             Zoom,
             MinPixelThickness,

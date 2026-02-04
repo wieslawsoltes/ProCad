@@ -115,6 +115,7 @@ public sealed class CadBlockPreviewService
             scene,
             showGrid: false,
             showAxes: false,
+            enableInteractionOptimization: false,
             layerVisibilityOverrides: null,
             zoom: 1.0,
             minPixelThickness: 0.6,
