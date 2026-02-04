@@ -40,7 +40,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
         var fontFamily = ResolveFontFamily(text.Style);
 
-        var parsed = ParseFormattedText(text.Value);
+        var parsed = ParseFormattedText(text.Value, context.Settings);
         if (parsed.Lines.Count == 0)
         {
             return;
@@ -109,6 +109,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
 
         var columnOffset = 0f;
+        var textLineCap = context.ResolveLineCap(text);
+        var textLineJoin = context.ResolveLineJoin(text);
+        var textLineWeight = context.ResolveLineWeight(text);
         foreach (var column in columns)
         {
             var y = 0f;
@@ -129,13 +132,18 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                 foreach (var run in line.Runs)
                 {
                     var offset = new Vector2(baseOffset.X + columnOffset + lineAdjust + x, baseOffset.Y - y);
+                    var hasStack = run.StackedLayout.HasValue;
 
-                    if (run.BackgroundColor.HasValue && run.Advance > 0f && !string.IsNullOrWhiteSpace(run.Layout.Text))
+                    if (run.BackgroundColor.HasValue && run.Advance > 0f && (hasStack || !string.IsNullOrWhiteSpace(run.Layout.Text)))
                     {
                         var padding = run.BackgroundPadding * scale;
                         var backgroundOffset = new Vector2(offset.X - padding, offset.Y - padding);
                         var backgroundWidth = run.Advance + padding * 2f;
-                        var backgroundHeight = run.Layout.Height * scale + padding * 2f;
+                        var stackedLayout = run.StackedLayout;
+                        var contentHeight = stackedLayout.HasValue
+                            ? stackedLayout.Value.Height * scale
+                            : run.Layout.Height * scale;
+                        var backgroundHeight = contentHeight + padding * 2f;
                         var quad = RenderTextUtils.BuildTextQuad(
                             anchor,
                             backgroundOffset,
@@ -149,10 +157,29 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         builder.Add(new RenderFill(quad, run.BackgroundColor.Value));
                     }
 
-                    if (!string.IsNullOrWhiteSpace(run.Layout.Text))
+                    if (hasStack)
+                    {
+                        AppendStackedRun(
+                            builder,
+                            context,
+                            text,
+                            run,
+                            line,
+                            anchor,
+                            offset,
+                            scale,
+                            rotation,
+                            mirrorX,
+                            mirrorY,
+                            textLineCap,
+                            textLineJoin,
+                            textLineWeight);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(run.Layout.Text))
                     {
                         var runStyle = ResolveRunTextStyle(text.Style, run);
                         var runHeight = run.FontSize * scale;
+                        var trackedWidth = ApplyTrackingWidth(run.Layout.Width, run.Layout.Text.Length, run.TrackingFactor) * scale;
                         if (!ShxTextGeometryBuilder.TryAddText(
                                 builder,
                                 run.Layout.Text,
@@ -172,7 +199,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                                 run.Layout.Text,
                                 anchor,
                                 offset,
-                                run.Layout.Width * scale,
+                                trackedWidth,
                                 run.Layout.Height * scale,
                                 runHeight,
                                 run.WidthFactor,
@@ -183,7 +210,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                                 mirrorX,
                                 mirrorY,
                                 run.Color,
-                                run.FontFamily));
+                                run.FontFamily,
+                                run.Decorations,
+                                run.TrackingFactor));
                         }
                     }
 
@@ -494,11 +523,11 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return (byte)Math.Clamp(alpha, 0, 255);
     }
 
-    private static MTextLayout ParseFormattedText(string value)
+    private static MTextLayout ParseFormattedText(string value, CadRenderSceneSettings settings)
     {
         var lines = new List<MTextLine> { new MTextLine(null) };
         var buffer = new StringBuilder();
-        var state = MTextFormatState.Default;
+        var state = MTextFormatState.Default.WithStackAlignment(ResolveStackAlignment(settings.StackedTextAlignment));
         var stack = new Stack<MTextFormatState>();
 
         void Flush()
@@ -535,6 +564,15 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                 continue;
             }
 
+            if (current == '%' && i + 2 < value.Length && value[i + 1] == '%')
+            {
+                if (TryParsePercentCode(value[i + 2], ref state, buffer))
+                {
+                    i += 2;
+                    continue;
+                }
+            }
+
             if (current == '\\' && i + 1 < value.Length)
             {
                 var code = value[i + 1];
@@ -560,19 +598,66 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         i++;
                         continue;
                     case 't':
-                    case 'T':
                         Flush();
                         lines[^1].Runs.Add(new MTextRun("\t", state, isTab: true));
                         i++;
                         continue;
+                    case 'T':
+                        Flush();
+                        var trackingValue = ReadDelimitedValue(value, i + 2, out var trackingEnd);
+                        state = state.WithTracking(ParseTracking(trackingValue));
+                        i = trackingEnd - 1;
+                        continue;
                     case 'S':
                         Flush();
-                        var stacked = ReadDelimitedValue(value, i + 2, out var stackEnd);
-                        if (!string.IsNullOrEmpty(stacked))
+                        var stackedValue = ReadDelimitedValue(value, i + 2, out var stackEnd);
+                        if (TryParseStacked(stackedValue, out var stacked))
                         {
-                            buffer.Append(ParseStackedText(stacked));
+                            lines[^1].Runs.Add(new MTextRun(stacked, state));
+                        }
+                        else if (!string.IsNullOrEmpty(stackedValue))
+                        {
+                            buffer.Append(stackedValue);
                         }
                         i = stackEnd - 1;
+                        continue;
+                    case 'U':
+                        if (TryParseUnicode(value, i + 2, out var unicode, out var unicodeEnd))
+                        {
+                            buffer.Append(unicode);
+                            i = unicodeEnd - 1;
+                            continue;
+                        }
+                        break;
+                    case 'L':
+                        Flush();
+                        state = state.EnableDecoration(RenderTextDecoration.Underline);
+                        i++;
+                        continue;
+                    case 'l':
+                        Flush();
+                        state = state.DisableDecoration(RenderTextDecoration.Underline);
+                        i++;
+                        continue;
+                    case 'O':
+                        Flush();
+                        state = state.EnableDecoration(RenderTextDecoration.Overline);
+                        i++;
+                        continue;
+                    case 'o':
+                        Flush();
+                        state = state.DisableDecoration(RenderTextDecoration.Overline);
+                        i++;
+                        continue;
+                    case 'K':
+                        Flush();
+                        state = state.EnableDecoration(RenderTextDecoration.StrikeThrough);
+                        i++;
+                        continue;
+                    case 'k':
+                        Flush();
+                        state = state.DisableDecoration(RenderTextDecoration.StrikeThrough);
+                        i++;
                         continue;
                     case 'C':
                     case 'c':
@@ -610,11 +695,17 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         i = obliqueEnd - 1;
                         continue;
                     case 'A':
-                    case 'p':
+                    case 'a':
                         Flush();
                         var alignValue = ReadDelimitedValue(value, i + 2, out var alignEnd);
-                        state = state.WithAlignment(ParseAlignment(alignValue));
+                        state = state.WithStackAlignment(ParseStackAlignment(alignValue));
                         i = alignEnd - 1;
+                        continue;
+                    case 'p':
+                        Flush();
+                        var paragraphValue = ReadDelimitedValue(value, i + 2, out var paragraphEnd);
+                        _ = paragraphValue;
+                        i = paragraphEnd - 1;
                         continue;
                     default:
                         i++;
@@ -766,23 +857,6 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return (float)(parsed.Value * MathHelper.DegToRadFactor);
     }
 
-    private static MTextAlignment? ParseAlignment(string value)
-    {
-        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return null;
-        }
-
-        return parsed switch
-        {
-            0 => MTextAlignment.Left,
-            1 => MTextAlignment.Center,
-            2 => MTextAlignment.Right,
-            3 => MTextAlignment.Justify,
-            _ => null
-        };
-    }
-
     private static float? ParseFloat(string value)
     {
         if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
@@ -793,14 +867,208 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return null;
     }
 
-    private static string ParseStackedText(string value)
+    private static bool TryParseStacked(string value, out MTextStacked stacked)
     {
+        stacked = default;
         if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var separatorIndex = -1;
+        var separator = '\0';
+        for (var i = 0; i < value.Length; i++)
+        {
+            var current = value[i];
+            if (current is '/' or '#' or '^')
+            {
+                separatorIndex = i;
+                separator = current;
+                break;
+            }
+        }
+
+        if (separatorIndex < 0)
+        {
+            return false;
+        }
+
+        var upper = DecodeStackedPart(value.Substring(0, separatorIndex));
+        var lower = DecodeStackedPart(value.Substring(separatorIndex + 1));
+        var kind = separator switch
+        {
+            '/' => MTextStackedKind.Horizontal,
+            '#' => MTextStackedKind.Diagonal,
+            '^' => MTextStackedKind.Tolerance,
+            _ => MTextStackedKind.Horizontal
+        };
+
+        stacked = new MTextStacked(upper, lower, kind);
+        return true;
+    }
+
+    private static string DecodeStackedPart(string value)
+    {
+        if (string.IsNullOrEmpty(value))
         {
             return string.Empty;
         }
 
-        return value.Replace('#', '/').Replace('^', '/');
+        var buffer = new StringBuilder(value.Length);
+        for (var i = 0; i < value.Length; i++)
+        {
+            var current = value[i];
+            if (current == '\\' && i + 1 < value.Length)
+            {
+                var next = value[i + 1];
+                if (next is '\\' or '{' or '}')
+                {
+                    buffer.Append(next);
+                    i++;
+                    continue;
+                }
+
+                if (next == '~')
+                {
+                    buffer.Append(' ');
+                    i++;
+                    continue;
+                }
+            }
+
+            if (current == '%' && i + 2 < value.Length && value[i + 1] == '%')
+            {
+                var tempState = MTextFormatState.Default;
+                if (TryParsePercentCode(value[i + 2], ref tempState, buffer))
+                {
+                    i += 2;
+                    continue;
+                }
+            }
+
+            buffer.Append(current);
+        }
+
+        return buffer.ToString();
+    }
+
+    private static bool TryParseUnicode(string text, int start, out string value, out int end)
+    {
+        value = string.Empty;
+        end = start;
+        if (start + 2 > text.Length || text[start] != '+')
+        {
+            return false;
+        }
+
+        var i = start + 1;
+        var hexStart = i;
+        while (i < text.Length && IsHexDigit(text[i]))
+        {
+            i++;
+        }
+
+        if (i == hexStart)
+        {
+            return false;
+        }
+
+        var hex = text.Substring(hexStart, i - hexStart);
+        if (!int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var codePoint))
+        {
+            return false;
+        }
+
+        value = char.ConvertFromUtf32(codePoint);
+        if (i < text.Length && text[i] == ';')
+        {
+            i++;
+        }
+        end = i;
+        return true;
+    }
+
+    private static bool IsHexDigit(char value)
+    {
+        return (value >= '0' && value <= '9')
+            || (value >= 'a' && value <= 'f')
+            || (value >= 'A' && value <= 'F');
+    }
+
+    private static float ParseTracking(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 1f;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.EndsWith("x", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(0, trimmed.Length - 1);
+        }
+
+        var parsed = ParseFloat(trimmed) ?? 1f;
+        if (parsed <= 0f)
+        {
+            return 1f;
+        }
+
+        return Math.Clamp(parsed, 0.75f, 4f);
+    }
+
+    private static MTextStackAlignment? ParseStackAlignment(string value)
+    {
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed switch
+        {
+            0 => MTextStackAlignment.Bottom,
+            1 => MTextStackAlignment.Center,
+            2 => MTextStackAlignment.Top,
+            _ => null
+        };
+    }
+
+    private static MTextStackAlignment ResolveStackAlignment(short value)
+    {
+        return value switch
+        {
+            0 => MTextStackAlignment.Bottom,
+            1 => MTextStackAlignment.Center,
+            2 => MTextStackAlignment.Top,
+            _ => MTextStackAlignment.Bottom
+        };
+    }
+
+    private static bool TryParsePercentCode(char code, ref MTextFormatState state, StringBuilder buffer)
+    {
+        switch (char.ToLowerInvariant(code))
+        {
+            case 'd':
+                buffer.Append('\u00B0');
+                return true;
+            case 'p':
+                buffer.Append('\u00B1');
+                return true;
+            case 'c':
+                buffer.Append('\u2300');
+                return true;
+            case 'u':
+                state = state.ToggleDecoration(RenderTextDecoration.Underline);
+                return true;
+            case 'o':
+                state = state.ToggleDecoration(RenderTextDecoration.Overline);
+                return true;
+            case '%':
+                buffer.Append('%');
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static IReadOnlyList<MTextLineLayout> BuildLineLayouts(
@@ -840,6 +1108,8 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             {
                 var resolved = ResolveRunStyle(text, run.State, baseWidthFactor, baseObliqueAngle, baseBold, baseItalic, baseFontFamily, baseColor);
                 var runHeight = resolved.Height;
+                var decorations = run.State.Decorations;
+                var tracking = resolved.TrackingFactor;
                 var style = CreateRunStyle(text.Style, resolved);
 
                 if (run.IsTab)
@@ -858,8 +1128,43 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                         runHeight,
                         tabWidth * scale,
                         0,
+                        decorations,
+                        tracking,
+                        run.State.StackAlignment,
+                        null,
                         null,
                         0f));
+                    continue;
+                }
+
+                if (run.IsStacked)
+                {
+                    var stackedLayout = BuildStackedLayout(run.Stacked!.Value, runHeight, tracking, style, context);
+                    var stackWidthWorld = stackedLayout.Width * scale * resolved.WidthFactor;
+                    var stackHeightWorld = stackedLayout.Height * scale;
+                    lineWidth += stackWidthWorld;
+                    maxRunHeight = MathF.Max(maxRunHeight, stackHeightWorld);
+
+                    var stackBackgroundColor = ResolveRunBackground(text, context.Settings);
+                    var stackBackgroundPadding = runHeight * 0.15f;
+
+                    runLayouts.Add(new MTextRunLayout(
+                        new RenderTextLayout(string.Empty, 0f, 0f),
+                        resolved.Color,
+                        resolved.FontFamily,
+                        resolved.WidthFactor,
+                        resolved.ObliqueAngle,
+                        resolved.IsBold,
+                        resolved.IsItalic,
+                        runHeight,
+                        stackWidthWorld,
+                        0,
+                        decorations,
+                        tracking,
+                        run.State.StackAlignment,
+                        stackedLayout,
+                        stackBackgroundColor,
+                        stackBackgroundPadding));
                     continue;
                 }
 
@@ -869,7 +1174,8 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                     continue;
                 }
 
-                var runWidth = layout.Width * scale * resolved.WidthFactor;
+                var trackedWidth = ApplyTrackingWidth(layout.Width, run.Text.Length, tracking);
+                var runWidth = trackedWidth * scale * resolved.WidthFactor;
                 var runHeightWorld = layout.Height * scale;
                 lineWidth += runWidth;
                 maxRunHeight = MathF.Max(maxRunHeight, runHeightWorld);
@@ -891,6 +1197,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                     runHeight,
                     runWidth,
                     runSpaces,
+                    decorations,
+                    tracking,
+                    run.State.StackAlignment,
+                    null,
                     backgroundColor,
                     backgroundPadding));
             }
@@ -905,6 +1215,76 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
 
         return layouts;
+    }
+
+    private static MTextStackedLayout BuildStackedLayout(
+        MTextStacked stacked,
+        float runHeight,
+        float tracking,
+        TextStyle style,
+        RenderBuildContext context)
+    {
+        var stackScale = ResolveStackScale(context.Settings);
+        var upperHeight = runHeight * stackScale;
+        var lowerHeight = runHeight * stackScale;
+
+        var upperLayout = MeasureRunLayout(stacked.Upper, upperHeight, style, context);
+        var lowerLayout = MeasureRunLayout(stacked.Lower, lowerHeight, style, context);
+
+        var upperAdvance = ApplyTrackingWidth(upperLayout.Width, stacked.Upper.Length, tracking);
+        var lowerAdvance = ApplyTrackingWidth(lowerLayout.Width, stacked.Lower.Length, tracking);
+
+        var gap = MathF.Max(runHeight * 0.15f, runHeight * 0.05f);
+        if (string.IsNullOrEmpty(upperLayout.Text) || string.IsNullOrEmpty(lowerLayout.Text))
+        {
+            gap = MathF.Max(runHeight * 0.1f, runHeight * 0.03f);
+        }
+
+        var width = stacked.Kind == MTextStackedKind.Diagonal
+            ? upperAdvance + lowerAdvance + gap
+            : MathF.Max(upperAdvance, lowerAdvance);
+
+        var height = upperLayout.Height + lowerLayout.Height + gap;
+        if (string.IsNullOrEmpty(upperLayout.Text))
+        {
+            height = lowerLayout.Height;
+        }
+        else if (string.IsNullOrEmpty(lowerLayout.Text))
+        {
+            height = upperLayout.Height;
+        }
+
+        return new MTextStackedLayout(
+            upperLayout,
+            lowerLayout,
+            upperAdvance,
+            lowerAdvance,
+            width,
+            height,
+            gap,
+            stackScale,
+            stacked.Kind);
+    }
+
+    private static float ResolveStackScale(CadRenderSceneSettings settings)
+    {
+        var percent = settings.StackedTextSizePercentage;
+        if (percent <= 0)
+        {
+            return 0.7f;
+        }
+
+        return Math.Clamp(percent / 100f, 0.1f, 1f);
+    }
+
+    private static float ApplyTrackingWidth(float width, int length, float tracking)
+    {
+        if (length < 2 || tracking <= 0f || float.IsNaN(tracking) || float.IsInfinity(tracking))
+        {
+            return width;
+        }
+
+        return width * tracking;
     }
 
     private static MTextResolvedStyle ResolveRunStyle(
@@ -942,13 +1322,14 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         var isBold = state.IsBold ?? baseBold;
         var isItalic = state.IsItalic ?? baseItalic;
         var fontFamily = !string.IsNullOrWhiteSpace(state.FontFamily) ? state.FontFamily : baseFontFamily;
+        var tracking = state.TrackingFactor > 0f ? state.TrackingFactor : 1f;
         var color = state.Color ?? baseColor;
         if (state.Color.HasValue)
         {
             color = new RenderColor(state.Color.Value.R, state.Color.Value.G, state.Color.Value.B, baseColor.A);
         }
 
-        return new MTextResolvedStyle(height, widthFactor, oblique, isBold, isItalic, fontFamily, color);
+        return new MTextResolvedStyle(height, widthFactor, oblique, isBold, isItalic, fontFamily, tracking, color);
     }
 
     private static MTextAlignment ResolveLineAlignment(MTextLine line, MText text)
@@ -1130,6 +1511,228 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return runStyle;
     }
 
+    private static void AppendStackedRun(
+        RenderLayerBuilder builder,
+        RenderBuildContext context,
+        MText text,
+        MTextRunLayout run,
+        MTextLineLayout line,
+        Vector2 anchor,
+        Vector2 offset,
+        float scale,
+        float rotation,
+        bool mirrorX,
+        bool mirrorY,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        float lineWeight)
+    {
+        var stacked = run.StackedLayout!.Value;
+        var stackHeight = stacked.Height * scale;
+        var stackTop = offset.Y + ResolveStackAlignmentOffset(run.StackAlignment, line.Height, stackHeight);
+        var stackWidth = run.Advance;
+
+        var upperText = stacked.UpperLayout.Text;
+        var lowerText = stacked.LowerLayout.Text;
+        var hasUpper = !string.IsNullOrWhiteSpace(upperText);
+        var hasLower = !string.IsNullOrWhiteSpace(lowerText);
+
+        var upperWidth = stacked.UpperAdvance * scale * run.WidthFactor;
+        var lowerWidth = stacked.LowerAdvance * scale * run.WidthFactor;
+        var upperHeight = stacked.UpperLayout.Height * scale;
+        var lowerHeight = stacked.LowerLayout.Height * scale;
+        var gap = stacked.Gap * scale;
+
+        var upperOffsetX = stacked.Kind == MTextStackedKind.Diagonal
+            ? offset.X
+            : offset.X + (stackWidth - upperWidth) * 0.5f;
+        var lowerOffsetX = stacked.Kind == MTextStackedKind.Diagonal
+            ? offset.X + stackWidth - lowerWidth
+            : offset.X + (stackWidth - lowerWidth) * 0.5f;
+
+        var upperOffset = new Vector2(upperOffsetX, stackTop);
+        var lowerOffset = new Vector2(lowerOffsetX, stackTop + (hasUpper ? upperHeight + gap : 0f));
+
+        var runStyle = ResolveRunTextStyle(text.Style, run);
+        var fontSize = run.FontSize * stacked.Scale * scale;
+        var decoration = RenderTextDecoration.None;
+
+        if (hasUpper)
+        {
+            var trackedWidth = ApplyTrackingWidth(stacked.UpperLayout.Width, upperText.Length, run.TrackingFactor) * scale;
+            if (!ShxTextGeometryBuilder.TryAddText(
+                    builder,
+                    upperText,
+                    runStyle,
+                    context,
+                    anchor,
+                    upperOffset,
+                    fontSize,
+                    run.WidthFactor,
+                    rotation,
+                    run.ObliqueAngle,
+                    mirrorX,
+                    mirrorY,
+                    run.Color))
+            {
+                builder.Add(new RenderText(
+                    upperText,
+                    anchor,
+                    upperOffset,
+                    trackedWidth,
+                    stacked.UpperLayout.Height * scale,
+                    fontSize,
+                    run.WidthFactor,
+                    rotation,
+                    run.ObliqueAngle,
+                    run.IsBold,
+                    run.IsItalic,
+                    mirrorX,
+                    mirrorY,
+                    run.Color,
+                    run.FontFamily,
+                    decoration,
+                    run.TrackingFactor));
+            }
+        }
+
+        if (hasLower)
+        {
+            var trackedWidth = ApplyTrackingWidth(stacked.LowerLayout.Width, lowerText.Length, run.TrackingFactor) * scale;
+            if (!ShxTextGeometryBuilder.TryAddText(
+                    builder,
+                    lowerText,
+                    runStyle,
+                    context,
+                    anchor,
+                    lowerOffset,
+                    fontSize,
+                    run.WidthFactor,
+                    rotation,
+                    run.ObliqueAngle,
+                    mirrorX,
+                    mirrorY,
+                    run.Color))
+            {
+                builder.Add(new RenderText(
+                    lowerText,
+                    anchor,
+                    lowerOffset,
+                    trackedWidth,
+                    stacked.LowerLayout.Height * scale,
+                    fontSize,
+                    run.WidthFactor,
+                    rotation,
+                    run.ObliqueAngle,
+                    run.IsBold,
+                    run.IsItalic,
+                    mirrorX,
+                    mirrorY,
+                    run.Color,
+                    run.FontFamily,
+                    decoration,
+                    run.TrackingFactor));
+            }
+        }
+
+        var lineThickness = MathF.Max(run.FontSize * scale * 0.05f, lineWeight);
+
+        if (hasUpper && hasLower)
+        {
+            if (stacked.Kind == MTextStackedKind.Horizontal)
+            {
+                var y = stackTop + upperHeight + gap * 0.5f;
+                AddTextLine(builder, anchor, new Vector2(offset.X, y), new Vector2(offset.X + stackWidth, y), run, rotation, mirrorX, mirrorY, lineCap, lineJoin, lineThickness);
+            }
+            else if (stacked.Kind == MTextStackedKind.Diagonal)
+            {
+                var start = new Vector2(offset.X, stackTop + upperHeight + gap);
+                var end = new Vector2(offset.X + stackWidth, stackTop);
+                AddTextLine(builder, anchor, start, end, run, rotation, mirrorX, mirrorY, lineCap, lineJoin, lineThickness);
+            }
+        }
+
+        if (run.Decorations != RenderTextDecoration.None)
+        {
+            var top = stackTop;
+            var bottom = stackTop + stackHeight;
+            var middle = stackTop + stackHeight * 0.5f;
+            if (run.Decorations.HasFlag(RenderTextDecoration.Overline))
+            {
+                AddTextLine(builder, anchor, new Vector2(offset.X, top), new Vector2(offset.X + stackWidth, top), run, rotation, mirrorX, mirrorY, lineCap, lineJoin, lineThickness);
+            }
+            if (run.Decorations.HasFlag(RenderTextDecoration.Underline))
+            {
+                AddTextLine(builder, anchor, new Vector2(offset.X, bottom), new Vector2(offset.X + stackWidth, bottom), run, rotation, mirrorX, mirrorY, lineCap, lineJoin, lineThickness);
+            }
+            if (run.Decorations.HasFlag(RenderTextDecoration.StrikeThrough))
+            {
+                AddTextLine(builder, anchor, new Vector2(offset.X, middle), new Vector2(offset.X + stackWidth, middle), run, rotation, mirrorX, mirrorY, lineCap, lineJoin, lineThickness);
+            }
+        }
+    }
+
+    private static float ResolveStackAlignmentOffset(MTextStackAlignment alignment, float lineHeight, float stackHeight)
+    {
+        var delta = MathF.Max(0f, lineHeight - stackHeight);
+        return alignment switch
+        {
+            MTextStackAlignment.Center => delta * 0.5f,
+            MTextStackAlignment.Top => 0f,
+            _ => delta
+        };
+    }
+
+    private static void AddTextLine(
+        RenderLayerBuilder builder,
+        Vector2 anchor,
+        Vector2 start,
+        Vector2 end,
+        MTextRunLayout run,
+        float rotation,
+        bool mirrorX,
+        bool mirrorY,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        float thickness)
+    {
+        var worldStart = TransformTextPoint(anchor, start, run.WidthFactor, rotation, run.ObliqueAngle, mirrorX, mirrorY);
+        var worldEnd = TransformTextPoint(anchor, end, run.WidthFactor, rotation, run.ObliqueAngle, mirrorX, mirrorY);
+        builder.Add(new RenderLine(worldStart, worldEnd, run.Color, thickness, lineCap, lineJoin));
+    }
+
+    private static Vector2 TransformTextPoint(
+        Vector2 anchor,
+        Vector2 point,
+        float widthFactor,
+        float rotation,
+        float obliqueAngle,
+        bool mirrorX,
+        bool mirrorY)
+    {
+        var scaleX = widthFactor * (mirrorX ? -1f : 1f);
+        var scaleY = mirrorY ? 1f : -1f;
+        var transformed = new Vector2(point.X * scaleX, point.Y * scaleY);
+
+        var hasOblique = MathF.Abs(obliqueAngle) > 0.0001f;
+        if (hasOblique)
+        {
+            var shear = MathF.Tan(obliqueAngle);
+            transformed = new Vector2(transformed.X + transformed.Y * shear, transformed.Y);
+        }
+
+        if (MathF.Abs(rotation) > 0.0001f)
+        {
+            var sin = MathF.Sin(rotation);
+            var cos = MathF.Cos(rotation);
+            transformed = new Vector2(
+                transformed.X * cos - transformed.Y * sin,
+                transformed.X * sin + transformed.Y * cos);
+        }
+
+        return anchor + transformed;
+    }
+
     private enum HorizontalAdjustment
     {
         Left = 0,
@@ -1182,12 +1785,26 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         Paragraph
     }
 
+    private enum MTextStackAlignment
+    {
+        Bottom = 0,
+        Center = 1,
+        Top = 2
+    }
+
     private enum MTextAlignment
     {
         Left,
         Center,
         Right,
         Justify
+    }
+
+    private enum MTextStackedKind
+    {
+        Horizontal,
+        Diagonal,
+        Tolerance
     }
 
     private sealed class MTextLine
@@ -1202,17 +1819,42 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
     }
 
+    private readonly struct MTextStacked
+    {
+        public string Upper { get; }
+        public string Lower { get; }
+        public MTextStackedKind Kind { get; }
+
+        public MTextStacked(string upper, string lower, MTextStackedKind kind)
+        {
+            Upper = upper ?? string.Empty;
+            Lower = lower ?? string.Empty;
+            Kind = kind;
+        }
+    }
+
     private readonly struct MTextRun
     {
         public string Text { get; }
+        public MTextStacked? Stacked { get; }
         public MTextFormatState State { get; }
         public bool IsTab { get; }
+        public bool IsStacked => Stacked.HasValue;
 
         public MTextRun(string text, MTextFormatState state, bool isTab)
         {
             Text = text;
+            Stacked = null;
             State = state;
             IsTab = isTab;
+        }
+
+        public MTextRun(MTextStacked stacked, MTextFormatState state)
+        {
+            Text = string.Empty;
+            Stacked = stacked;
+            State = state;
+            IsTab = false;
         }
     }
 
@@ -1256,6 +1898,41 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         }
     }
 
+    private readonly struct MTextStackedLayout
+    {
+        public RenderTextLayout UpperLayout { get; }
+        public RenderTextLayout LowerLayout { get; }
+        public float UpperAdvance { get; }
+        public float LowerAdvance { get; }
+        public float Width { get; }
+        public float Height { get; }
+        public float Gap { get; }
+        public float Scale { get; }
+        public MTextStackedKind Kind { get; }
+
+        public MTextStackedLayout(
+            RenderTextLayout upperLayout,
+            RenderTextLayout lowerLayout,
+            float upperAdvance,
+            float lowerAdvance,
+            float width,
+            float height,
+            float gap,
+            float scale,
+            MTextStackedKind kind)
+        {
+            UpperLayout = upperLayout;
+            LowerLayout = lowerLayout;
+            UpperAdvance = upperAdvance;
+            LowerAdvance = lowerAdvance;
+            Width = width;
+            Height = height;
+            Gap = gap;
+            Scale = scale;
+            Kind = kind;
+        }
+    }
+
     private readonly struct MTextRunLayout
     {
         public RenderTextLayout Layout { get; }
@@ -1268,6 +1945,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public float FontSize { get; }
         public float Advance { get; }
         public int SpaceCount { get; }
+        public RenderTextDecoration Decorations { get; }
+        public float TrackingFactor { get; }
+        public MTextStackAlignment StackAlignment { get; }
+        public MTextStackedLayout? StackedLayout { get; }
         public RenderColor? BackgroundColor { get; }
         public float BackgroundPadding { get; }
 
@@ -1282,6 +1963,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             float fontSize,
             float advance,
             int spaceCount,
+            RenderTextDecoration decorations,
+            float trackingFactor,
+            MTextStackAlignment stackAlignment,
+            MTextStackedLayout? stackedLayout,
             RenderColor? backgroundColor,
             float backgroundPadding)
         {
@@ -1295,6 +1980,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             FontSize = fontSize;
             Advance = advance;
             SpaceCount = spaceCount;
+            Decorations = decorations;
+            TrackingFactor = trackingFactor;
+            StackAlignment = stackAlignment;
+            StackedLayout = stackedLayout;
             BackgroundColor = backgroundColor;
             BackgroundPadding = backgroundPadding;
         }
@@ -1308,6 +1997,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public bool IsBold { get; }
         public bool IsItalic { get; }
         public string? FontFamily { get; }
+        public float TrackingFactor { get; }
         public RenderColor Color { get; }
 
         public MTextResolvedStyle(
@@ -1317,6 +2007,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             bool isBold,
             bool isItalic,
             string? fontFamily,
+            float trackingFactor,
             RenderColor color)
         {
             Height = height;
@@ -1325,6 +2016,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             IsBold = isBold;
             IsItalic = isItalic;
             FontFamily = fontFamily;
+            TrackingFactor = trackingFactor;
             Color = color;
         }
     }
@@ -1357,7 +2049,18 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
 
     private readonly struct MTextFormatState
     {
-        public static MTextFormatState Default => new(null, null, null, null, null, null, null, null);
+        public static MTextFormatState Default => new(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            RenderTextDecoration.None,
+            1f,
+            MTextStackAlignment.Bottom);
 
         public RenderColor? Color { get; }
         public string? FontFamily { get; }
@@ -1367,6 +2070,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         public float? WidthFactor { get; }
         public float? ObliqueAngle { get; }
         public MTextAlignment? Alignment { get; }
+        public RenderTextDecoration Decorations { get; }
+        public float TrackingFactor { get; }
+        public MTextStackAlignment StackAlignment { get; }
 
         public MTextFormatState(
             RenderColor? color,
@@ -1376,7 +2082,10 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             MTextHeight? height,
             float? widthFactor,
             float? obliqueAngle,
-            MTextAlignment? alignment)
+            MTextAlignment? alignment,
+            RenderTextDecoration decorations,
+            float trackingFactor,
+            MTextStackAlignment stackAlignment)
         {
             Color = color;
             FontFamily = fontFamily;
@@ -1386,11 +2095,14 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             WidthFactor = widthFactor;
             ObliqueAngle = obliqueAngle;
             Alignment = alignment;
+            Decorations = decorations;
+            TrackingFactor = trackingFactor;
+            StackAlignment = stackAlignment;
         }
 
         public MTextFormatState WithColor(RenderColor? color)
         {
-            return new MTextFormatState(color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment);
+            return new MTextFormatState(color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations, TrackingFactor, StackAlignment);
         }
 
         public MTextFormatState WithFont(MTextFont font)
@@ -1398,27 +2110,55 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             var name = !string.IsNullOrWhiteSpace(font.Name) ? font.Name : FontFamily;
             var bold = font.IsBold ?? IsBold;
             var italic = font.IsItalic ?? IsItalic;
-            return new MTextFormatState(Color, name, bold, italic, Height, WidthFactor, ObliqueAngle, Alignment);
+            return new MTextFormatState(Color, name, bold, italic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations, TrackingFactor, StackAlignment);
         }
 
         public MTextFormatState WithHeight(MTextHeight height)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, height, WidthFactor, ObliqueAngle, Alignment);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, height, WidthFactor, ObliqueAngle, Alignment, Decorations, TrackingFactor, StackAlignment);
         }
 
         public MTextFormatState WithWidthFactor(float? widthFactor)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, widthFactor, ObliqueAngle, Alignment);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, widthFactor, ObliqueAngle, Alignment, Decorations, TrackingFactor, StackAlignment);
         }
 
         public MTextFormatState WithOblique(float? obliqueAngle)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, obliqueAngle, Alignment);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, obliqueAngle, Alignment, Decorations, TrackingFactor, StackAlignment);
         }
 
         public MTextFormatState WithAlignment(MTextAlignment? alignment)
         {
-            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, alignment);
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, alignment, Decorations, TrackingFactor, StackAlignment);
+        }
+
+        public MTextFormatState WithTracking(float trackingFactor)
+        {
+            var next = trackingFactor <= 0f || float.IsNaN(trackingFactor) || float.IsInfinity(trackingFactor)
+                ? 1f
+                : trackingFactor;
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations, next, StackAlignment);
+        }
+
+        public MTextFormatState WithStackAlignment(MTextStackAlignment? alignment)
+        {
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations, TrackingFactor, alignment ?? StackAlignment);
+        }
+
+        public MTextFormatState EnableDecoration(RenderTextDecoration decoration)
+        {
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations | decoration, TrackingFactor, StackAlignment);
+        }
+
+        public MTextFormatState DisableDecoration(RenderTextDecoration decoration)
+        {
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations & ~decoration, TrackingFactor, StackAlignment);
+        }
+
+        public MTextFormatState ToggleDecoration(RenderTextDecoration decoration)
+        {
+            return new MTextFormatState(Color, FontFamily, IsBold, IsItalic, Height, WidthFactor, ObliqueAngle, Alignment, Decorations ^ decoration, TrackingFactor, StackAlignment);
         }
     }
 }

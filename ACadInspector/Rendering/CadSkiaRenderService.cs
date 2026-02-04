@@ -38,6 +38,9 @@ public sealed class CadSkiaRenderService
     private Size _hiddenLineCacheSize;
     private Matrix3x2 _hiddenLineCacheTransform = Matrix3x2.Identity;
     private bool _hiddenLineCacheValid;
+    private SKImage? _interactionSnapshot;
+    private CadRenderStateSnapshot? _interactionSnapshotState;
+    private Size _interactionSnapshotSize;
     private Size _renderSize;
 
     public void ClearStrokePaintCache()
@@ -63,9 +66,64 @@ public sealed class CadSkiaRenderService
         _hiddenLineCacheScene = null;
     }
 
+    public void InvalidateInteractionCache()
+    {
+        _interactionSnapshot?.Dispose();
+        _interactionSnapshot = null;
+        _interactionSnapshotState = null;
+        _interactionSnapshotSize = default;
+    }
+
     public void Render(SKCanvas canvas, Size size, CadRenderStateSnapshot state, bool isInteractive)
     {
         _renderSize = size;
+        var scene = state.Scene;
+        var background = scene?.Background ?? RenderColor.DefaultBackground;
+        // Interaction snapshot caching disabled due to precision issues during pan/zoom.
+        const bool allowInteractionCache = false;
+
+        if (isInteractive && allowInteractionCache && TryDrawInteractionSnapshot(canvas, size, state, background))
+        {
+            DrawOverlays(canvas, state);
+            return;
+        }
+
+        if (!isInteractive && allowInteractionCache && TryDrawExactSnapshot(canvas, size, state, background))
+        {
+            DrawOverlays(canvas, state);
+            return;
+        }
+
+        if (!isInteractive && allowInteractionCache && scene is not null && !scene.Bounds.IsEmpty)
+        {
+            using var surface = SKSurface.Create(new SKImageInfo(
+                (int)Math.Max(1, size.Width),
+                (int)Math.Max(1, size.Height),
+                SKColorType.Bgra8888,
+                SKAlphaType.Premul));
+
+            if (surface is not null)
+            {
+                RenderScene(surface.Canvas, size, state, isInteractive: false, includeAnnotations: false, includeDebugOverlay: false);
+                var snapshot = surface.Snapshot();
+                UpdateInteractionSnapshot(snapshot, size, state);
+                canvas.DrawImage(snapshot, 0, 0);
+                DrawOverlays(canvas, state);
+                return;
+            }
+        }
+
+        RenderScene(canvas, size, state, isInteractive, includeAnnotations: true, includeDebugOverlay: true);
+    }
+
+    private void RenderScene(
+        SKCanvas canvas,
+        Size size,
+        CadRenderStateSnapshot state,
+        bool isInteractive,
+        bool includeAnnotations,
+        bool includeDebugOverlay)
+    {
         var scene = state.Scene;
         var background = scene?.Background ?? RenderColor.DefaultBackground;
         canvas.Clear(ToSkiaColor(background));
@@ -114,6 +172,30 @@ public sealed class CadSkiaRenderService
             DrawLayer(canvas, layer, renderStyle, hiddenLine, hiddenLineSettings, hasViewport, viewport, isInteractive, state);
         }
 
+        if (includeAnnotations)
+        {
+            DrawAnnotations(canvas, state);
+        }
+
+        if (includeDebugOverlay && state.ShowDebugOverlay)
+        {
+            DrawDebugOverlay(canvas, state);
+        }
+
+        canvas.Restore();
+    }
+
+    private void DrawOverlays(SKCanvas canvas, CadRenderStateSnapshot state)
+    {
+        if (!state.SelectionAnnotation.HasValue && !state.HoverAnnotation.HasValue && !state.ShowDebugOverlay)
+        {
+            return;
+        }
+
+        var matrix = ToSkiaMatrix(state.ViewTransform);
+        canvas.Save();
+        canvas.Concat(ref matrix);
+
         DrawAnnotations(canvas, state);
 
         if (state.ShowDebugOverlay)
@@ -122,6 +204,103 @@ public sealed class CadSkiaRenderService
         }
 
         canvas.Restore();
+    }
+
+    private bool TryDrawInteractionSnapshot(
+        SKCanvas canvas,
+        Size size,
+        CadRenderStateSnapshot state,
+        RenderColor background)
+    {
+        if (_interactionSnapshot is null || _interactionSnapshotState is null)
+        {
+            return false;
+        }
+
+        if (!IsSnapshotCompatible(state, size, requireViewTransformMatch: false))
+        {
+            return false;
+        }
+
+        if (!Matrix3x2.Invert(_interactionSnapshotState.ViewTransform, out var inverse))
+        {
+            return false;
+        }
+
+        // System.Numerics uses row-vector multiplication, so compose as old^-1 * new.
+        var delta = inverse * state.ViewTransform;
+        var deltaMatrix = ToSkiaMatrix(delta);
+        canvas.Clear(ToSkiaColor(background));
+        canvas.Save();
+        canvas.Concat(ref deltaMatrix);
+        canvas.DrawImage(_interactionSnapshot, 0, 0);
+        canvas.Restore();
+        return true;
+    }
+
+    private bool TryDrawExactSnapshot(
+        SKCanvas canvas,
+        Size size,
+        CadRenderStateSnapshot state,
+        RenderColor background)
+    {
+        if (_interactionSnapshot is null || _interactionSnapshotState is null)
+        {
+            return false;
+        }
+
+        if (!IsSnapshotCompatible(state, size, requireViewTransformMatch: true))
+        {
+            return false;
+        }
+
+        canvas.Clear(ToSkiaColor(background));
+        canvas.DrawImage(_interactionSnapshot, 0, 0);
+        return true;
+    }
+
+    private bool IsSnapshotCompatible(
+        CadRenderStateSnapshot state,
+        Size size,
+        bool requireViewTransformMatch)
+    {
+        if (_interactionSnapshotState is null || _interactionSnapshot is null)
+        {
+            return false;
+        }
+
+        if (!ReferenceEquals(_interactionSnapshotState.Scene, state.Scene))
+        {
+            return false;
+        }
+
+        if (Math.Abs(_interactionSnapshotSize.Width - size.Width) > 0.1 ||
+            Math.Abs(_interactionSnapshotSize.Height - size.Height) > 0.1)
+        {
+            return false;
+        }
+
+        if (_interactionSnapshotState.ShowGrid != state.ShowGrid ||
+            _interactionSnapshotState.ShowAxes != state.ShowAxes ||
+            !ReferenceEquals(_interactionSnapshotState.LayerVisibilityOverrides, state.LayerVisibilityOverrides))
+        {
+            return false;
+        }
+
+        if (requireViewTransformMatch && !MatrixEquals(_interactionSnapshotState.ViewTransform, state.ViewTransform))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void UpdateInteractionSnapshot(SKImage snapshot, Size size, CadRenderStateSnapshot state)
+    {
+        _interactionSnapshot?.Dispose();
+        _interactionSnapshot = snapshot;
+        _interactionSnapshotState = state;
+        _interactionSnapshotSize = size;
     }
 
     private void DrawLayer(
@@ -1030,7 +1209,82 @@ public sealed class CadSkiaRenderService
         var metrics = paint.FontMetrics;
         var baseline = text.Offset.Y - metrics.Ascent;
         canvas.DrawText(blob, text.Offset.X, baseline, paint);
+
+        if (text.Decorations != RenderTextDecoration.None)
+        {
+            DrawTextDecorations(canvas, text, metrics, baseline);
+        }
         canvas.Restore();
+    }
+
+    private static void DrawTextDecorations(SKCanvas canvas, RenderText text, SKFontMetrics metrics, float baseline)
+    {
+        var thickness = ResolveDecorationThickness(metrics.UnderlineThickness, text.FontSize);
+        var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = thickness,
+            Color = ToSkiaColor(text.Color)
+        };
+
+        var startX = text.Offset.X;
+        var endX = text.Offset.X + text.LayoutWidth;
+
+        if (text.Decorations.HasFlag(RenderTextDecoration.Underline))
+        {
+            var underlinePos = ResolveDecorationPosition(metrics.UnderlinePosition, baseline, thickness * 0.5f);
+            canvas.DrawLine(startX, underlinePos, endX, underlinePos, paint);
+        }
+
+        if (text.Decorations.HasFlag(RenderTextDecoration.StrikeThrough))
+        {
+            var strikePos = ResolveStrikePosition(metrics.StrikeoutPosition, baseline, thickness * 0.5f);
+            canvas.DrawLine(startX, strikePos, endX, strikePos, paint);
+        }
+
+        if (text.Decorations.HasFlag(RenderTextDecoration.Overline))
+        {
+            var overlinePos = baseline + metrics.Ascent + thickness * 0.5f;
+            canvas.DrawLine(startX, overlinePos, endX, overlinePos, paint);
+        }
+    }
+
+    private static float ResolveDecorationThickness(float? metricThickness, float fontSize)
+    {
+        if (metricThickness.HasValue &&
+            metricThickness.Value > 0f &&
+            !float.IsNaN(metricThickness.Value) &&
+            !float.IsInfinity(metricThickness.Value))
+        {
+            return metricThickness.Value;
+        }
+
+        return MathF.Max(fontSize * 0.05f, 0.5f);
+    }
+
+    private static float ResolveDecorationPosition(float? metricPosition, float baseline, float offset)
+    {
+        if (metricPosition.HasValue &&
+            !float.IsNaN(metricPosition.Value) &&
+            !float.IsInfinity(metricPosition.Value))
+        {
+            return baseline + metricPosition.Value + offset;
+        }
+
+        return baseline + offset;
+    }
+
+    private static float ResolveStrikePosition(float? metricPosition, float baseline, float offset)
+    {
+        if (metricPosition.HasValue &&
+            !float.IsNaN(metricPosition.Value) &&
+            !float.IsInfinity(metricPosition.Value))
+        {
+            return baseline + metricPosition.Value - offset;
+        }
+
+        return baseline - offset;
     }
 
     private LayerDrawCache GetLayerDrawCache(RenderLayer layer)
@@ -1339,7 +1593,35 @@ public sealed class CadSkiaRenderService
         return _textCache.GetValue(text, _ =>
         {
             using var font = new SKFont(paint.Typeface, paint.TextSize);
-            return SKTextBlob.Create(text.Text, font);
+            if (text.TrackingFactor <= 0f ||
+                MathF.Abs(text.TrackingFactor - 1f) < 0.001f ||
+                text.Text.Length < 2)
+            {
+                return SKTextBlob.Create(text.Text, font);
+            }
+
+            var glyphs = paint.GetGlyphs(text.Text);
+            var count = glyphs.Length;
+            if (count <= 0)
+            {
+                return SKTextBlob.Create(text.Text, font);
+            }
+
+            var widths = new float[count];
+            font.GetGlyphWidths(glyphs.AsSpan(0, count), widths, null, paint);
+
+            var positions = new float[count];
+            var x = 0f;
+            var tracking = text.TrackingFactor;
+            for (var i = 0; i < count; i++)
+            {
+                positions[i] = x;
+                x += widths[i] * tracking;
+            }
+
+            using var builder = new SKTextBlobBuilder();
+            builder.AddHorizontalRun(glyphs.AsSpan(0, count), font, positions.AsSpan(0, count), 0f);
+            return builder.Build();
         });
     }
 

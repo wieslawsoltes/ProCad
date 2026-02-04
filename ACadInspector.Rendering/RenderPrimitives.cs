@@ -519,6 +519,15 @@ public sealed class RenderPoint : IRenderPrimitive
 /// <summary>
 /// Represents a text label with approximate layout metrics.
 /// </summary>
+[Flags]
+public enum RenderTextDecoration
+{
+    None = 0,
+    Underline = 1,
+    Overline = 2,
+    StrikeThrough = 4
+}
+
 public sealed class RenderText : IRenderPrimitive
 {
     public string Text { get; }
@@ -551,6 +560,8 @@ public sealed class RenderText : IRenderPrimitive
     public bool MirrorY { get; }
     public string? FontFamily { get; }
     public RenderColor Color { get; }
+    public RenderTextDecoration Decorations { get; }
+    public float TrackingFactor { get; }
     public float Thickness { get; }
     public RenderBounds Bounds { get; }
 
@@ -569,7 +580,9 @@ public sealed class RenderText : IRenderPrimitive
         bool mirrorX,
         bool mirrorY,
         RenderColor color,
-        string? fontFamily)
+        string? fontFamily,
+        RenderTextDecoration decorations = RenderTextDecoration.None,
+        float trackingFactor = 1f)
     {
         Text = text;
         Anchor = anchor;
@@ -586,6 +599,10 @@ public sealed class RenderText : IRenderPrimitive
         MirrorY = mirrorY;
         Color = color;
         FontFamily = fontFamily;
+        Decorations = decorations;
+        TrackingFactor = trackingFactor <= 0f || float.IsNaN(trackingFactor) || float.IsInfinity(trackingFactor)
+            ? 1f
+            : trackingFactor;
         Thickness = 0f;
         Bounds = ComputeBounds(anchor, offset, layoutWidth, layoutHeight, widthFactor, rotation, obliqueAngle, mirrorX, mirrorY);
     }

@@ -155,6 +155,16 @@ public sealed class CadRenderSceneSettings
     /// </summary>
     public float AnnotationScaleFactor { get; init; } = 1f;
 
+    /// <summary>
+    /// Gets the stacked text alignment (STACKEDTEXTALIGN).
+    /// </summary>
+    public short StackedTextAlignment { get; init; } = 1;
+
+    /// <summary>
+    /// Gets the stacked text size percentage (STACKEDTEXTSIZE).
+    /// </summary>
+    public short StackedTextSizePercentage { get; init; } = 70;
+
     public bool IncludeInvisible { get; init; }
     public bool IncludeOffLayers { get; init; }
     public bool IncludeUnsupportedAsPoints { get; init; } = true;
@@ -213,6 +223,8 @@ public sealed class CadRenderSceneSettings
             ViewportScale = ViewportScale,
             ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
             AnnotationScaleFactor = AnnotationScaleFactor,
+            StackedTextAlignment = StackedTextAlignment,
+            StackedTextSizePercentage = StackedTextSizePercentage,
             IncludeInvisible = IncludeInvisible,
             IncludeOffLayers = IncludeOffLayers,
             IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,

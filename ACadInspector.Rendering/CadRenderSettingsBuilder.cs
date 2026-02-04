@@ -51,6 +51,8 @@ public static class CadRenderSettingsBuilder
             ? NormalizeScale(viewport?.ScaleFactor ?? 1.0)
             : ResolveModelSpaceViewportScale(document);
         var annotationScale = ResolveAnnotationScaleFactor(document);
+        var stackedTextAlignment = header?.StackedTextAlignment ?? baseSettings.StackedTextAlignment;
+        var stackedTextSizePercentage = header?.StackedTextSizePercentage ?? baseSettings.StackedTextSizePercentage;
         var supportPaths = BuildSupportPaths(documentPath);
         var visualStyle = ResolveVisualStyle(document, baseSettings.VisualStyle, selection, layout);
         var millimetersPerUnit = ResolveMillimetersPerUnit(header, baseSettings.MillimetersPerUnit);
@@ -106,6 +108,8 @@ public static class CadRenderSettingsBuilder
             ViewportScale = viewportScale,
             ModelSpaceLineTypeScaling = baseSettings.ModelSpaceLineTypeScaling,
             AnnotationScaleFactor = annotationScale,
+            StackedTextAlignment = stackedTextAlignment,
+            StackedTextSizePercentage = stackedTextSizePercentage,
             IncludeInvisible = baseSettings.IncludeInvisible,
             IncludeOffLayers = baseSettings.IncludeOffLayers,
             IncludeUnsupportedAsPoints = baseSettings.IncludeUnsupportedAsPoints,
