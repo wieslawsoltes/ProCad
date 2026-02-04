@@ -188,6 +188,7 @@ public partial class App : Application
         services.AddSingleton<PropertyGridViewModel>();
         services.AddSingleton<CadDocumentTreeViewModel>();
         services.AddSingleton<CadLayerToolViewModel>();
+        services.AddSingleton<CadEntityTypeToolViewModel>();
         services.AddSingleton<CadBlocksToolViewModel>();
         services.AddSingleton<CadTextStyleToolViewModel>();
         services.AddSingleton<CadLineTypeToolViewModel>();

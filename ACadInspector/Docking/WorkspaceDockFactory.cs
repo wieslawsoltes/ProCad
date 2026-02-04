@@ -13,6 +13,7 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadIoOptionsViewModel _ioOptions;
     private readonly CadDocumentTreeViewModel _documentTree;
     private readonly CadLayerToolViewModel _layerTool;
+    private readonly CadEntityTypeToolViewModel _entityTypeTool;
     private readonly CadBlocksToolViewModel _blocksTool;
     private readonly CadTextStyleToolViewModel _textStyleTool;
     private readonly CadLineTypeToolViewModel _lineTypeTool;
@@ -31,6 +32,7 @@ public sealed class WorkspaceDockFactory : Factory
         CadIoOptionsViewModel ioOptions,
         CadDocumentTreeViewModel documentTree,
         CadLayerToolViewModel layerTool,
+        CadEntityTypeToolViewModel entityTypeTool,
         CadBlocksToolViewModel blocksTool,
         CadTextStyleToolViewModel textStyleTool,
         CadLineTypeToolViewModel lineTypeTool,
@@ -48,6 +50,7 @@ public sealed class WorkspaceDockFactory : Factory
         _ioOptions = ioOptions;
         _documentTree = documentTree;
         _layerTool = layerTool;
+        _entityTypeTool = entityTypeTool;
         _blocksTool = blocksTool;
         _textStyleTool = textStyleTool;
         _lineTypeTool = lineTypeTool;
@@ -79,6 +82,9 @@ public sealed class WorkspaceDockFactory : Factory
 
         _layerTool.Id = "Layers";
         _layerTool.Title = "Layers";
+
+        _entityTypeTool.Id = "EntityTypes";
+        _entityTypeTool.Title = "Entity Types";
 
         _blocksTool.Id = "Blocks";
         _blocksTool.Title = "Blocks";
@@ -130,6 +136,7 @@ public sealed class WorkspaceDockFactory : Factory
         rightTopTools.VisibleDockables = CreateList<IDockable>(
             _propertyGrid,
             _layerTool,
+            _entityTypeTool,
             _blocksTool,
             _textStyleTool,
             _lineTypeTool,

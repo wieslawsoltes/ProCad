@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadEntityTypeToolView"
+             x:DataType="vm:CadEntityTypeToolViewModel">
+  <Border Background="{DynamicResource ThemeControlLowBrush}"
+          BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+          BorderThickness="1"
+          Padding="10">
+    <Grid RowDefinitions="Auto,*"
+          RowSpacing="8">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <TextBlock Text="Entity Types"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <Button Content="Select All"
+                Command="{CompiledBinding EntityTypeList.SelectAllCommand}" />
+        <Button Content="Select None"
+                Command="{CompiledBinding EntityTypeList.SelectNoneCommand}" />
+        <TextBox Width="160"
+                 Watermark="Search..."
+                 Text="{CompiledBinding EntityTypeList.SearchText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding EntityTypeList.ClearSearchCommand}" />
+        <TextBox Width="160"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding EntityTypeList.FilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Content="Clear"
+                Command="{CompiledBinding EntityTypeList.ClearFilterCommand}" />
+      </StackPanel>
+      <DataGrid Grid.Row="1"
+                ItemsSource="{CompiledBinding EntityTypeList.RowsView}"
+                ColumnDefinitionsSource="{CompiledBinding EntityTypeList.ColumnDefinitions}"
+                SortingModel="{CompiledBinding EntityTypeList.SortingModel}"
+                FilteringModel="{CompiledBinding EntityTypeList.FilteringModel}"
+                SearchModel="{CompiledBinding EntityTypeList.SearchModel}"
+                AutoGenerateColumns="False"
+                CanUserSortColumns="True"
+                CanUserReorderColumns="True"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="All"
+                IsReadOnly="False" />
+    </Grid>
+  </Border>
+</UserControl>
