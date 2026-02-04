@@ -51,6 +51,8 @@ public sealed class CadLayerToolViewModelTests
             new CadRenderSceneSettings(),
             CadRenderLayoutSelection.ModelSpace,
             documentPath: null,
+            dynamicBlockOverrides: null,
+            dynamicBlockOverrideChanges: null,
             new CadSelectionService(),
             new CadSelectionFocusService(),
             new NullRenderStatsExportService(),
@@ -67,6 +69,11 @@ public sealed class CadLayerToolViewModelTests
         }
 
         public RenderScene Build(CadDocument document, CadRenderSceneSettings settings)
+        {
+            return _scene;
+        }
+
+        public RenderScene BuildBlock(CadDocument document, ACadSharp.Tables.BlockRecord block, CadRenderSceneSettings settings)
         {
             return _scene;
         }

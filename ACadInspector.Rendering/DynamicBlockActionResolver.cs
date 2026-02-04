@@ -84,7 +84,7 @@ internal sealed class DynamicBlockActionMap
 
 internal static class DynamicBlockActionResolver
 {
-    public static DynamicBlockActionMap? TryCreate(BlockRecord block, DynamicBlockPropertySet? properties)
+    public static DynamicBlockActionMap? TryCreate(BlockRecord block, IDynamicBlockPropertyProvider? properties)
     {
         if (block?.EvaluationGraph is null || properties is null)
         {
@@ -105,7 +105,7 @@ internal static class DynamicBlockActionResolver
 
     internal static DynamicBlockActionMap? TryCreateFromExpressions(
         IEnumerable<EvaluationExpression> expressions,
-        DynamicBlockPropertySet? properties)
+        IDynamicBlockPropertyProvider? properties)
     {
         if (properties is null)
         {
@@ -146,7 +146,7 @@ internal static class DynamicBlockActionResolver
     private static void ApplyFlipActions(
         IReadOnlyList<BlockFlipParameter> parameters,
         IReadOnlyList<BlockFlipAction> actions,
-        DynamicBlockPropertySet properties,
+        IDynamicBlockPropertyProvider properties,
         DynamicBlockActionMap map)
     {
         if (parameters.Count == 0 || actions.Count == 0)
@@ -180,7 +180,7 @@ internal static class DynamicBlockActionResolver
     private static void ApplyStretchActions(
         IReadOnlyList<BlockLinearParameter> parameters,
         IReadOnlyList<BlockAction> actions,
-        DynamicBlockPropertySet properties,
+        IDynamicBlockPropertyProvider properties,
         DynamicBlockActionMap map)
     {
         if (parameters.Count == 0 || actions.Count == 0)
@@ -231,7 +231,7 @@ internal static class DynamicBlockActionResolver
         }
     }
 
-    private static bool IsFlipActive(BlockFlipParameter parameter, DynamicBlockPropertySet properties)
+    private static bool IsFlipActive(BlockFlipParameter parameter, IDynamicBlockPropertyProvider properties)
     {
         if (!string.IsNullOrWhiteSpace(parameter.FlippedStateName) &&
             properties.ContainsString(parameter.FlippedStateName))
@@ -250,7 +250,7 @@ internal static class DynamicBlockActionResolver
 
     private static bool TryResolveLinearValue(
         BlockLinearParameter parameter,
-        DynamicBlockPropertySet properties,
+        IDynamicBlockPropertyProvider properties,
         out double value)
     {
         return properties.TryGetNumericValue(

@@ -1,8 +1,11 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
 using ACadInspector.Rendering;
 using ACadInspector.Services;
+using ACadInspector.Tests.Rendering;
 using ACadInspector.ViewModels;
 using ACadSharp;
 using ACadSharp.Entities;
@@ -71,7 +74,28 @@ public sealed class ToolActivationTests
         var diagnostics = new FastPathDiagnosticsService();
         var pipeline = new CadPropertyEditPipeline(Array.Empty<ICadPropertyValidator>());
         var stampProvider = new RenderCacheStampProvider();
-        var viewModel = new PropertyGridViewModel(pipeline, stampProvider, selection, diagnostics);
+        var context = new CadDocumentContextService();
+        var dockService = new CadDocumentDockService();
+        var scene = RenderSceneSamples.CreateBaselineScene();
+        var sceneBuilder = new NullSceneBuilder(scene);
+        var focusService = new CadSelectionFocusService();
+        var baseSettings = new CadRenderSceneSettings();
+        var statsExport = new NullRenderStatsExportService();
+        var blockEditorFactory = new CadBlockEditorViewModelFactory(
+            sceneBuilder,
+            baseSettings,
+            selection,
+            focusService,
+            statsExport);
+        var blockEditorService = new CadBlockEditorService(context, dockService, blockEditorFactory);
+        var dynamicOverrides = new CadDynamicBlockOverrideService();
+        var viewModel = new PropertyGridViewModel(
+            pipeline,
+            stampProvider,
+            selection,
+            blockEditorService,
+            dynamicOverrides,
+            diagnostics);
 
         viewModel.IsActive = false;
         selection.SelectedObject = new Line();
@@ -81,5 +105,33 @@ public sealed class ToolActivationTests
         viewModel.IsActive = true;
 
         Assert.True(viewModel.Rows.Count > 0);
+    }
+
+    private sealed class NullSceneBuilder : ICadRenderSceneBuilder
+    {
+        private readonly RenderScene _scene;
+
+        public NullSceneBuilder(RenderScene scene)
+        {
+            _scene = scene;
+        }
+
+        public RenderScene Build(CadDocument document, CadRenderSceneSettings settings)
+        {
+            return _scene;
+        }
+
+        public RenderScene BuildBlock(CadDocument document, ACadSharp.Tables.BlockRecord block, CadRenderSceneSettings settings)
+        {
+            return _scene;
+        }
+    }
+
+    private sealed class NullRenderStatsExportService : IRenderStatsExportService
+    {
+        public Task<RenderStatsExportResult?> SaveStatsAsync(string? suggestedFileName, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<RenderStatsExportResult?>(null);
+        }
     }
 }

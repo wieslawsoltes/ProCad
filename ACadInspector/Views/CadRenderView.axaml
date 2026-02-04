@@ -54,6 +54,7 @@
                                Scene="{CompiledBinding Scene}"
                                ShowGrid="{CompiledBinding ShowGrid}"
                                ShowAxes="{CompiledBinding ShowAxes}"
+                               EnableInteractionOptimization="{CompiledBinding EnableInteractionOptimization}"
                                LayerVisibilityOverrides="{CompiledBinding LayerList.LayerVisibilityOverrides}"
                                FitToViewTrigger="{CompiledBinding FitRequest}"
                                ResetViewTrigger="{CompiledBinding ResetRequest}"

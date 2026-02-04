@@ -41,6 +41,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     private readonly CadSelectionFocusService _focusService;
     private readonly CadDocumentContextService _documentContext;
     private readonly CadDocumentDockService _documentDockService;
+    private readonly CadDynamicBlockOverrideService _dynamicBlockOverrides;
     private readonly Docking.WorkspaceDockFactory _dockFactory;
     private readonly CadCompareViewModelFactory _compareFactory;
     private readonly ICadRenderSceneBuilder _renderSceneBuilder;
@@ -56,6 +57,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         CadSelectionFocusService focusService,
         CadDocumentContextService documentContext,
         CadDocumentDockService documentDockService,
+        CadDynamicBlockOverrideService dynamicBlockOverrides,
         ICadDocumentService documentService,
         ICadFileDialogService fileDialogService,
         Docking.WorkspaceDockFactory dockFactory,
@@ -75,6 +77,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _focusService = focusService;
         _documentContext = documentContext;
         _documentDockService = documentDockService;
+        _dynamicBlockOverrides = dynamicBlockOverrides;
         _documentService = documentService;
         _fileDialogService = fileDialogService;
         _dockFactory = dockFactory;
@@ -115,7 +118,11 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         }
 
         var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
-        var settings = CadRenderSettingsBuilder.Build(document, result.Path, _renderSceneSettings, selection);
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            result.Path,
+            _renderSceneSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides),
+            selection);
         var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
         var statsFileName = BuildStatsFileName(result.FileName);
         var renderViewModel = new CadRenderViewModel(
@@ -125,6 +132,8 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             _renderSceneSettings,
             selection,
             result.Path,
+            _dynamicBlockOverrides,
+            _dynamicBlockOverrides.WhenAnyValue(x => x.ChangeStamp),
             _selectionService,
             _focusService,
             _statsExportService,

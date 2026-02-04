@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              x:Class="ACadInspector.Views.PropertyGridView"
              x:DataType="vm:PropertyGridViewModel">
-  <Grid RowDefinitions="Auto,*">
+  <Grid RowDefinitions="Auto,Auto,*">
     <StackPanel Orientation="Horizontal"
                 Spacing="8"
                 Margin="0,0,0,8">
@@ -34,7 +34,110 @@
               IsVisible="{CompiledBinding CanEditBlock}"
               Command="{CompiledBinding EditBlockCommand}" />
     </StackPanel>
-    <DataGrid Grid.Row="1"
+    <Border Grid.Row="1"
+            Padding="8"
+            Margin="0,0,0,8"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            IsVisible="{CompiledBinding HasDynamicBlockInspector}">
+      <StackPanel DataContext="{CompiledBinding DynamicBlockInspector}"
+                  Spacing="6">
+        <TextBlock Text="Dynamic Block"
+                   FontWeight="SemiBold" />
+        <ItemsControl ItemsSource="{CompiledBinding Parameters}">
+          <ItemsControl.DataTemplates>
+            <DataTemplate x:DataType="vm:CadDynamicBlockLinearParameterViewModel">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                    ColumnSpacing="8"
+                    Margin="0,2">
+                <TextBlock Text="{CompiledBinding Name}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{CompiledBinding Label}"
+                           VerticalAlignment="Center"
+                           Opacity="0.7" />
+                <TextBlock Grid.Column="2"
+                           Text="{CompiledBinding CurrentValueLabel}"
+                           VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="3"
+                              Content="Override"
+                              IsChecked="{CompiledBinding OverrideEnabled}" />
+                <NumericUpDown Grid.Column="4"
+                               Width="90"
+                               Value="{CompiledBinding OverrideValue}"
+                               IsEnabled="{CompiledBinding OverrideEnabled}" />
+              </Grid>
+            </DataTemplate>
+            <DataTemplate x:DataType="vm:CadDynamicBlockFlipParameterViewModel">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                    ColumnSpacing="8"
+                    Margin="0,2">
+                <TextBlock Text="{CompiledBinding Name}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{CompiledBinding Label}"
+                           VerticalAlignment="Center"
+                           Opacity="0.7" />
+                <TextBlock Grid.Column="2"
+                           Text="{CompiledBinding CurrentStateLabel}"
+                           VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="3"
+                              Content="Override"
+                              IsChecked="{CompiledBinding OverrideEnabled}" />
+                <ToggleButton Grid.Column="4"
+                              Content="Flipped"
+                              IsChecked="{CompiledBinding IsFlipped}"
+                              IsEnabled="{CompiledBinding OverrideEnabled}" />
+              </Grid>
+            </DataTemplate>
+            <DataTemplate x:DataType="vm:CadDynamicBlockVisibilityParameterViewModel">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                    ColumnSpacing="8"
+                    Margin="0,2">
+                <TextBlock Text="{CompiledBinding Name}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{CompiledBinding CurrentState}"
+                           VerticalAlignment="Center"
+                           Opacity="0.7" />
+                <ToggleButton Grid.Column="2"
+                              Content="Override"
+                              IsChecked="{CompiledBinding OverrideEnabled}" />
+                <ComboBox Grid.Column="3"
+                          Width="180"
+                          ItemsSource="{CompiledBinding States}"
+                          SelectedItem="{CompiledBinding SelectedState}"
+                          IsEnabled="{CompiledBinding OverrideEnabled}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+
+        <ItemsControl ItemsSource="{CompiledBinding Actions}"
+                      IsVisible="{CompiledBinding HasActions}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:CadDynamicBlockActionViewModel">
+              <Grid ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8"
+                    Margin="0,2">
+                <TextBlock Text="{CompiledBinding Type}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{CompiledBinding Name}"
+                           VerticalAlignment="Center"
+                           Opacity="0.7" />
+                <TextBlock Grid.Column="2"
+                           Text="{CompiledBinding EntityCount}"
+                           VerticalAlignment="Center" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+    <DataGrid Grid.Row="2"
               ItemsSource="{CompiledBinding RowsView}"
               ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
               SortingModel="{CompiledBinding SortingModel}"

@@ -4,12 +4,12 @@ using ACadSharp.Objects;
 
 namespace ACadInspector.Rendering;
 
-internal sealed class DynamicBlockPropertySet
+public sealed class DynamicBlockPropertySet : IDynamicBlockPropertyProvider
 {
     private readonly List<DynamicBlockPropertyRecord> _records;
     private readonly HashSet<string> _strings;
 
-    public IReadOnlyList<DynamicBlockPropertyRecord> Records => _records;
+    internal IReadOnlyList<DynamicBlockPropertyRecord> Records => _records;
     public IReadOnlyCollection<string> Strings => _strings;
 
     private DynamicBlockPropertySet(List<DynamicBlockPropertyRecord> records, HashSet<string> strings)

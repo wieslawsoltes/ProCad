@@ -60,6 +60,9 @@ public sealed class CadRenderControl : Control
     public static readonly StyledProperty<double> MinPixelThicknessProperty =
         AvaloniaProperty.Register<CadRenderControl, double>(nameof(MinPixelThickness), 0.6);
 
+    public static readonly StyledProperty<bool> EnableInteractionOptimizationProperty =
+        AvaloniaProperty.Register<CadRenderControl, bool>(nameof(EnableInteractionOptimization), false);
+
     public static readonly StyledProperty<bool> ShowDebugOverlayProperty =
         AvaloniaProperty.Register<CadRenderControl, bool>(nameof(ShowDebugOverlay), false);
 
@@ -90,6 +93,7 @@ public sealed class CadRenderControl : Control
     private double _cachedZoom = 1.0;
     private bool _isInteracting;
     private bool _pendingFit;
+    private bool _enableInteractionOptimization;
     private DateTime _interactionUntilUtc;
     private DispatcherTimer? _interactionTimer;
     private static readonly TimeSpan InteractionHold = TimeSpan.FromMilliseconds(150);
@@ -174,6 +178,12 @@ public sealed class CadRenderControl : Control
         set => SetValue(MinPixelThicknessProperty, value);
     }
 
+    public bool EnableInteractionOptimization
+    {
+        get => GetValue(EnableInteractionOptimizationProperty);
+        set => SetValue(EnableInteractionOptimizationProperty, value);
+    }
+
     public bool ShowDebugOverlay
     {
         get => GetValue(ShowDebugOverlayProperty);
@@ -219,6 +229,7 @@ public sealed class CadRenderControl : Control
     public CadRenderControl()
     {
         ClipToBounds = true;
+        Volatile.Write(ref _enableInteractionOptimization, EnableInteractionOptimization);
         UpdateRenderState();
     }
 
@@ -236,7 +247,8 @@ public sealed class CadRenderControl : Control
     private void RenderSkia(SKCanvas canvas, Size size)
     {
         var state = Volatile.Read(ref _renderState);
-        _renderer.Render(canvas, size, state, _isInteracting);
+        var isInteractive = _isInteracting && Volatile.Read(ref _enableInteractionOptimization);
+        _renderer.Render(canvas, size, state, isInteractive);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -274,6 +286,11 @@ public sealed class CadRenderControl : Control
             return;
         }
 
+        if (change.Property == EnableInteractionOptimizationProperty)
+        {
+            Volatile.Write(ref _enableInteractionOptimization, change.GetNewValue<bool>());
+        }
+
         if (change.Property == FitToViewTriggerProperty)
         {
             FitToScene();
@@ -292,6 +309,7 @@ public sealed class CadRenderControl : Control
             change.Property == ShowAxesProperty ||
             change.Property == LayerVisibilityOverridesProperty ||
             change.Property == MinPixelThicknessProperty ||
+            change.Property == EnableInteractionOptimizationProperty ||
             change.Property == ShowDebugOverlayProperty ||
             change.Property == HoverBoundsProperty ||
             change.Property == SelectionBoundsProperty ||
@@ -428,7 +446,7 @@ public sealed class CadRenderControl : Control
         }
 
         MarkInteraction();
-        var scaleFactor = Math.Pow(1.1, delta);
+        var scaleFactor = Math.Pow(1.2, delta);
         var currentZoom = Zoom;
         var nextZoom = Math.Clamp(currentZoom * scaleFactor, MinZoom, MaxZoom);
         if (Math.Abs(nextZoom - currentZoom) < 0.0001)

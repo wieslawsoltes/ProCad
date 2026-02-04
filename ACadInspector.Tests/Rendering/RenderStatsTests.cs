@@ -51,6 +51,8 @@ public sealed class RenderStatsTests
                 new CadRenderSceneSettings(),
                 CadRenderLayoutSelection.ModelSpace,
                 documentPath: null,
+                dynamicBlockOverrides: null,
+                dynamicBlockOverrideChanges: null,
                 new CadSelectionService(),
                 new CadSelectionFocusService(),
                 service,

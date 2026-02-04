@@ -451,8 +451,11 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var visibilityFilter = TryCreateVisibilityFilter(insert, block, dynamicInfo?.Properties);
-        var actionMap = TryCreateActionMap(block, dynamicInfo);
+        var overrideProvider = context.Settings.DynamicBlockOverrideProvider;
+        var overrides = overrideProvider?.GetInsertOverrides(insert, block);
+        var propertyProvider = DynamicBlockPropertyProvider.Create(dynamicInfo?.Properties, overrides);
+        var visibilityFilter = TryCreateVisibilityFilter(insert, block, dynamicInfo?.Properties, overrides?.VisibilityStateName);
+        var actionMap = TryCreateActionMap(block, dynamicInfo, propertyProvider);
         var ordered = context.EntityOrderResolver.OrderEntities(block.Entities, block);
 
         using (blockScope)
@@ -605,7 +608,8 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
     private static DynamicBlockVisibilityFilter? TryCreateVisibilityFilter(
         Insert insert,
         BlockRecord block,
-        DynamicBlockPropertySet? properties)
+        DynamicBlockPropertySet? properties,
+        string? stateNameOverride)
     {
         if (block.IsAnonymous && block.Source is not null)
         {
@@ -618,7 +622,9 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             return null;
         }
 
-        var stateName = DynamicBlockVisibilityResolver.ResolveStateName(properties, visibilityParameter.States)
+        var stateName = !string.IsNullOrWhiteSpace(stateNameOverride)
+            ? stateNameOverride
+            : DynamicBlockVisibilityResolver.ResolveStateName(properties, visibilityParameter.States)
             ?? DynamicBlockVisibilityResolver.ResolveStateName(insert.XDictionary, visibilityParameter.States);
         if (string.IsNullOrWhiteSpace(stateName))
         {
@@ -635,14 +641,15 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
 
     private static DynamicBlockActionMap? TryCreateActionMap(
         BlockRecord block,
-        DynamicBlockRepresentationInfo? dynamicInfo)
+        DynamicBlockRepresentationInfo? dynamicInfo,
+        IDynamicBlockPropertyProvider? properties)
     {
         if (block.IsAnonymous && block.Source is not null)
         {
             return null;
         }
 
-        return DynamicBlockActionResolver.TryCreate(block, dynamicInfo?.Properties);
+        return DynamicBlockActionResolver.TryCreate(block, properties);
     }
 
     private static BlockRecord? ResolveRenderBlock(

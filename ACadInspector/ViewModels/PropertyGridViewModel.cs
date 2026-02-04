@@ -59,19 +59,28 @@ public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastP
     private readonly IRenderCacheStampProvider _stampProvider;
     private readonly CadSelectionService _selectionService;
     private readonly CadBlockEditorService _blockEditorService;
+    private readonly CadDynamicBlockOverrideService _dynamicBlockOverrides;
     private bool _suppressSelection;
+    private CadDynamicBlockInspectorViewModel? _dynamicInspector;
 
+    [Reactive]
+    public partial CadDynamicBlockInspectorViewModel? DynamicBlockInspector { get; set; }
+
+    [Reactive]
+    public partial bool HasDynamicBlockInspector { get; set; }
     public PropertyGridViewModel(
         ICadPropertyEditPipeline pipeline,
         IRenderCacheStampProvider stampProvider,
         CadSelectionService selectionService,
         CadBlockEditorService blockEditorService,
+        CadDynamicBlockOverrideService dynamicBlockOverrides,
         FastPathDiagnosticsService fastPathDiagnostics)
     {
         _pipeline = pipeline;
         _stampProvider = stampProvider;
         _selectionService = selectionService;
         _blockEditorService = blockEditorService;
+        _dynamicBlockOverrides = dynamicBlockOverrides;
         FastPathDiagnostics = fastPathDiagnostics;
         _rowsReadOnly = new ReadOnlyObservableCollection<PropertyGridRowViewModel>(_rows);
         RowsView = new DataGridCollectionView(_rows);
@@ -103,6 +112,13 @@ public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastP
 
         this.WhenAnyValue(x => x.SelectedObject)
             .Subscribe(PublishSelection);
+
+        this.WhenAnyValue(x => x.SelectedObject)
+            .Subscribe(UpdateDynamicInspector);
+
+        this.WhenAnyValue(x => x.DynamicBlockInspector)
+            .Select(inspector => inspector is not null)
+            .Subscribe(hasInspector => HasDynamicBlockInspector = hasInspector);
 
         this.WhenAnyValue(x => x.SelectedObject)
             .Select(selected => _blockEditorService.CanOpen(selected))
@@ -162,6 +178,27 @@ public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastP
         RowsView.Refresh();
         ApplyFilter();
         ApplySearch();
+    }
+
+    private void UpdateDynamicInspector(object? target)
+    {
+        _dynamicInspector?.Dispose();
+        _dynamicInspector = null;
+        DynamicBlockInspector = null;
+
+        if (target is not ACadSharp.Entities.Insert insert || insert.Block is null)
+        {
+            return;
+        }
+
+        if (insert.Block.EvaluationGraph is null)
+        {
+            return;
+        }
+
+        var inspector = new CadDynamicBlockInspectorViewModel(insert, insert.Block, _dynamicBlockOverrides);
+        _dynamicInspector = inspector;
+        DynamicBlockInspector = inspector;
     }
 
     private static CadTypeDescriptor? FindDescriptor(Type type)

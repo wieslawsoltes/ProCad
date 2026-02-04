@@ -176,6 +176,7 @@ public partial class App : Application
         services.AddSingleton<IRenderStatsExportService, AvaloniaRenderStatsExportService>();
         services.AddSingleton<CadSelectionService>();
         services.AddSingleton<CadSelectionFocusService>();
+        services.AddSingleton<CadDynamicBlockOverrideService>();
         services.AddSingleton<CadDocumentContextService>();
         services.AddSingleton<CadDocumentDockService>();
         services.AddSingleton<CadScriptWorkspaceService>();

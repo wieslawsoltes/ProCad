@@ -47,6 +47,7 @@ public sealed class CadBlockEditorViewModelFactory
             _baseSettings,
             selection);
 
+        var overrideProvider = new BlockEditorDynamicOverrideProvider();
         var scene = _sceneBuilder.BuildBlock(documentViewModel.Document, block, settings);
         var statsFileName = $"block-{block.Name}-stats.json";
         var render = new CadRenderViewModel(
@@ -56,12 +57,16 @@ public sealed class CadBlockEditorViewModelFactory
             _baseSettings,
             selection,
             documentViewModel.Path,
+            overrideProvider,
+            dynamicBlockOverrideChanges: null,
             _selectionService,
             _focusService,
             _statsExportService,
-            statsFileName);
+            statsFileName,
+            allowLayoutUpdates: false);
         render.ShowLayoutTabs = false;
         render.FitOnLoad = true;
+        render.FitRequest++;
 
         var viewModel = new CadBlockEditorViewModel(
             documentViewModel.Document,
@@ -70,7 +75,8 @@ public sealed class CadBlockEditorViewModelFactory
             _sceneBuilder,
             _baseSettings,
             selection,
-            documentViewModel.Path);
+            documentViewModel.Path,
+            overrideProvider);
         viewModel.ShowAttributes = _baseSettings.RenderAttributes;
         viewModel.ShowAttributeDefinitions = _baseSettings.RenderAttributeDefinitions;
         return viewModel;

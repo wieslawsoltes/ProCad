@@ -23,6 +23,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private readonly string? _documentPath;
     private readonly ICadRenderSceneBuilder _sceneBuilder;
     private readonly CadRenderSceneSettings _baseSettings;
+    private readonly IDynamicBlockOverrideProvider? _dynamicBlockOverrides;
     private readonly CadSelectionService _selectionService;
     private readonly CadSelectionAnnotationService _annotationService;
     private readonly CadToolManager _toolManager;
@@ -30,6 +31,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private readonly List<RenderBounds> _bvhBounds = new();
     private RenderSpatialIndex? _hitTestIndex;
     private CancellationTokenSource? _layoutRebuildCts;
+    private readonly bool _allowLayoutUpdates;
     private bool _suppressLayoutUpdates;
 
     [Reactive]
@@ -46,6 +48,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
     [Reactive]
     public partial bool FitOnLoad { get; set; } = true;
+
+    [Reactive]
+    public partial bool EnableInteractionOptimization { get; set; } = false;
 
     [Reactive]
     public partial int FitRequest { get; set; }
@@ -107,17 +112,22 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         CadRenderSceneSettings baseSettings,
         CadRenderLayoutSelection selection,
         string? documentPath,
+        IDynamicBlockOverrideProvider? dynamicBlockOverrides,
+        IObservable<int>? dynamicBlockOverrideChanges,
         CadSelectionService selectionService,
         CadSelectionFocusService focusService,
         IRenderStatsExportService statsExportService,
-        string? statsFileName)
+        string? statsFileName,
+        bool allowLayoutUpdates = true)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _documentPath = documentPath;
         _sceneBuilder = sceneBuilder ?? throw new ArgumentNullException(nameof(sceneBuilder));
         _baseSettings = baseSettings ?? throw new ArgumentNullException(nameof(baseSettings));
+        _dynamicBlockOverrides = dynamicBlockOverrides;
         _selectionService = selectionService ?? throw new ArgumentNullException(nameof(selectionService));
         _focusService = focusService ?? throw new ArgumentNullException(nameof(focusService));
+        _allowLayoutUpdates = allowLayoutUpdates;
         _annotationService = new CadSelectionAnnotationService();
         _toolManager = new CadToolManager();
         Scene = scene;
@@ -180,6 +190,19 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _annotationService.WhenAnyValue(x => x.HoveredObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(obj => HoveredObject = obj);
+
+        if (dynamicBlockOverrideChanges is not null)
+        {
+            dynamicBlockOverrideChanges
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(stamp =>
+                {
+                    if (SelectedLayout is not null)
+                    {
+                        _ = RebuildSceneAsync(SelectedLayout);
+                    }
+                });
+        }
 
         _focusService.WhenAnyValue(x => x.FocusRequest)
             .ObserveOn(RxApp.MainThreadScheduler)
@@ -276,7 +299,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
     private void OnLayoutChanged(CadRenderLayoutViewModel layout)
     {
-        if (_suppressLayoutUpdates)
+        if (_suppressLayoutUpdates || !_allowLayoutUpdates)
         {
             return;
         }
@@ -293,7 +316,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         var selection = layout.IsPaperSpace
             ? new CadRenderLayoutSelection(true, layout.Name)
             : CadRenderLayoutSelection.ModelSpace;
-        var settings = CadRenderSettingsBuilder.Build(_document, _documentPath, _baseSettings, selection);
+        var baseSettings = _dynamicBlockOverrides is null
+            ? _baseSettings
+            : _baseSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides);
+        var settings = CadRenderSettingsBuilder.Build(_document, _documentPath, baseSettings, selection);
 
         RenderScene? scene = null;
         try

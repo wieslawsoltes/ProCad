@@ -6,6 +6,7 @@ using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.Header;
 using ACadSharp.Objects;
+using ACadSharp.Objects.Evaluations;
 using ACadSharp.Tables;
 using CSMath;
 
@@ -140,8 +141,94 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         var offset = new XYZ(-basePoint.X, -basePoint.Y, -basePoint.Z);
         var transform = new Transform(Matrix4.CreateTranslation(offset));
         using var rootScope = context.BlockContext.EnterRoot(block);
-        AppendEntities(block.Entities, block, transform, context);
+        var overrideSet = settings.DynamicBlockOverrideProvider?.GetBlockOverrides(block);
+        var propertyProvider = DynamicBlockPropertyProvider.Create(null, overrideSet);
+        var actionMap = DynamicBlockActionResolver.TryCreate(block, propertyProvider);
+        var visibilityFilter = ResolveVisibilityFilter(block, settings.DynamicBlockVisibilityStateName ?? overrideSet?.VisibilityStateName);
+        AppendBlockEntities(block, transform, context, visibilityFilter, actionMap);
         return BuildScene(context, stats, stopwatch);
+    }
+
+    private void AppendBlockEntities(
+        BlockRecord block,
+        Transform transform,
+        RenderBuildContext context,
+        DynamicBlockVisibilityFilter? visibilityFilter,
+        DynamicBlockActionMap? actionMap)
+    {
+        var ordered = context.EntityOrderResolver.OrderEntities(block.Entities, block);
+        foreach (var child in ordered)
+        {
+            if (child is null)
+            {
+                continue;
+            }
+
+            if (visibilityFilter is not null && !visibilityFilter.IsVisible(child))
+            {
+                continue;
+            }
+
+            if (!context.VisibilityResolver.ShouldRender(child, context.Settings))
+            {
+                continue;
+            }
+
+            var childTransform = transform;
+            if (actionMap is not null && actionMap.TryGetTransform(child, out var actionTransform))
+            {
+                childTransform = RenderTransformUtils.Combine(transform, actionTransform);
+            }
+
+            context.Dispatcher.Append(child, childTransform, context);
+        }
+    }
+
+    private static DynamicBlockVisibilityFilter? ResolveVisibilityFilter(
+        BlockRecord block,
+        string? stateName)
+    {
+        if (block?.EvaluationGraph is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(stateName))
+        {
+            return null;
+        }
+
+        var parameter = ResolveVisibilityParameter(block);
+        if (parameter is null)
+        {
+            return null;
+        }
+
+        if (!parameter.States.TryGetValue(stateName, out var state))
+        {
+            return null;
+        }
+
+        return new DynamicBlockVisibilityFilter(parameter, state);
+    }
+
+    private static BlockVisibilityParameter? ResolveVisibilityParameter(BlockRecord block)
+    {
+        var graph = block.EvaluationGraph;
+        if (graph is null)
+        {
+            return null;
+        }
+
+        foreach (var node in graph.Nodes)
+        {
+            if (node?.Expression is BlockVisibilityParameter parameter)
+            {
+                return parameter;
+            }
+        }
+
+        return null;
     }
 
     private void BuildPaperSpace(

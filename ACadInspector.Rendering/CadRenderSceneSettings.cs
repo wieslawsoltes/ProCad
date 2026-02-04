@@ -101,6 +101,16 @@ public sealed class CadRenderSceneSettings
     public bool RenderAttributeDefinitions { get; init; } = true;
 
     /// <summary>
+    /// Gets an optional visibility state name for dynamic block preview.
+    /// </summary>
+    public string? DynamicBlockVisibilityStateName { get; init; }
+
+    /// <summary>
+    /// Gets a provider for dynamic block preview overrides.
+    /// </summary>
+    public IDynamicBlockOverrideProvider? DynamicBlockOverrideProvider { get; init; }
+
+    /// <summary>
     /// Gets the frame visibility for XClip boundaries (XCLIPFRAME).
     /// </summary>
     public RenderFrameVisibility XClipFrameVisibility { get; init; } = RenderFrameVisibility.DisplayNotPlot;
@@ -192,6 +202,117 @@ public sealed class CadRenderSceneSettings
             MirrorText = MirrorText,
             RenderAttributes = renderAttributes,
             RenderAttributeDefinitions = renderAttributeDefinitions,
+            DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
+            DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
+            XClipFrameVisibility = XClipFrameVisibility,
+            WipeoutFrameVisibility = WipeoutFrameVisibility,
+            UnderlayFrameVisibility = UnderlayFrameVisibility,
+            IsPaperSpace = IsPaperSpace,
+            LayoutName = LayoutName,
+            PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
+            ViewportScale = ViewportScale,
+            ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = AnnotationScaleFactor,
+            IncludeInvisible = IncludeInvisible,
+            IncludeOffLayers = IncludeOffLayers,
+            IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
+            PerformanceBudget = PerformanceBudget,
+            PlotStyleTable = PlotStyleTable
+        };
+    }
+
+    public CadRenderSceneSettings WithDynamicBlockVisibilityState(string? stateName)
+    {
+        if (string.IsNullOrWhiteSpace(stateName))
+        {
+            stateName = null;
+        }
+
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = SupportPaths,
+            Quality = Quality,
+            VisualStyle = VisualStyle,
+            Lighting = Lighting,
+            EnableHatchFills = EnableHatchFills,
+            EnableHatchPatterns = EnableHatchPatterns,
+            EnableHatchGradients = EnableHatchGradients,
+            HiddenLineSettings = HiddenLineSettings,
+            ShadeEdge = ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = ShadeDiffuseToAmbientPercentage,
+            Background = Background,
+            FallbackColor = FallbackColor,
+            MillimetersPerUnit = MillimetersPerUnit,
+            DefaultLineWeightMm = DefaultLineWeightMm,
+            MinLineWeightMm = MinLineWeightMm,
+            DisplayLineWeight = DisplayLineWeight,
+            LineTypeDotLengthMm = LineTypeDotLengthMm,
+            PolylineArcPrecision = PolylineArcPrecision,
+            SplinePrecision = SplinePrecision,
+            CirclePrecision = CirclePrecision,
+            TextWidthFactor = TextWidthFactor,
+            PointDisplayMode = PointDisplayMode,
+            PointDisplaySize = PointDisplaySize,
+            QuickTextMode = QuickTextMode,
+            FillMode = FillMode,
+            PolylineLineTypeGeneration = PolylineLineTypeGeneration,
+            MirrorText = MirrorText,
+            RenderAttributes = RenderAttributes,
+            RenderAttributeDefinitions = RenderAttributeDefinitions,
+            DynamicBlockVisibilityStateName = stateName,
+            DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
+            XClipFrameVisibility = XClipFrameVisibility,
+            WipeoutFrameVisibility = WipeoutFrameVisibility,
+            UnderlayFrameVisibility = UnderlayFrameVisibility,
+            IsPaperSpace = IsPaperSpace,
+            LayoutName = LayoutName,
+            PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
+            ViewportScale = ViewportScale,
+            ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = AnnotationScaleFactor,
+            IncludeInvisible = IncludeInvisible,
+            IncludeOffLayers = IncludeOffLayers,
+            IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
+            PerformanceBudget = PerformanceBudget,
+            PlotStyleTable = PlotStyleTable
+        };
+    }
+
+    public CadRenderSceneSettings WithDynamicBlockOverrides(IDynamicBlockOverrideProvider? provider)
+    {
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = SupportPaths,
+            Quality = Quality,
+            VisualStyle = VisualStyle,
+            Lighting = Lighting,
+            EnableHatchFills = EnableHatchFills,
+            EnableHatchPatterns = EnableHatchPatterns,
+            EnableHatchGradients = EnableHatchGradients,
+            HiddenLineSettings = HiddenLineSettings,
+            ShadeEdge = ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = ShadeDiffuseToAmbientPercentage,
+            Background = Background,
+            FallbackColor = FallbackColor,
+            MillimetersPerUnit = MillimetersPerUnit,
+            DefaultLineWeightMm = DefaultLineWeightMm,
+            MinLineWeightMm = MinLineWeightMm,
+            DisplayLineWeight = DisplayLineWeight,
+            LineTypeDotLengthMm = LineTypeDotLengthMm,
+            PolylineArcPrecision = PolylineArcPrecision,
+            SplinePrecision = SplinePrecision,
+            CirclePrecision = CirclePrecision,
+            TextWidthFactor = TextWidthFactor,
+            PointDisplayMode = PointDisplayMode,
+            PointDisplaySize = PointDisplaySize,
+            QuickTextMode = QuickTextMode,
+            FillMode = FillMode,
+            PolylineLineTypeGeneration = PolylineLineTypeGeneration,
+            MirrorText = MirrorText,
+            RenderAttributes = RenderAttributes,
+            RenderAttributeDefinitions = RenderAttributeDefinitions,
+            DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
+            DynamicBlockOverrideProvider = provider,
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
