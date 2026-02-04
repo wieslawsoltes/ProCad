@@ -208,8 +208,14 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         var mirrorY = mirror.HasFlag(TextMirrorFlag.UpsideDown);
         var fontFamily = ResolveFontFamily(style);
 
+        var effectiveLength = length;
+        if (effectiveLength <= MinSegmentLength && layoutWidth > 0f)
+        {
+            effectiveLength = MathF.Max(layoutWidth, MinSegmentLength);
+        }
+
         return RenderLinePatternSegment.CreateText(
-            length,
+            effectiveLength,
             offset,
             rotation,
             rotationIsAbsolute,
@@ -266,8 +272,11 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         var rotation = (float)segment.Rotation;
         var rotationIsAbsolute = segment.Flags.HasFlag(LineTypeShapeFlags.RotationIsAbsolute);
         var shapeScale = (float)segment.Scale * scale;
+        var effectiveLength = length <= MinSegmentLength
+            ? MathF.Max(shapeScale, MinSegmentLength)
+            : length;
         return RenderLinePatternSegment.CreateShape(
-            length,
+            effectiveLength,
             offset,
             rotation,
             rotationIsAbsolute,

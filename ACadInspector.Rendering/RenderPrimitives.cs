@@ -19,6 +19,8 @@ public sealed class RenderLine : IRenderPrimitive
     public RenderLineJoin LineJoin { get; }
     public float? StartDepth { get; }
     public float? EndDepth { get; }
+    public float[]? DashPattern { get; }
+    public float DashPhase { get; }
     public RenderBounds Bounds { get; }
 
     public RenderLine(
@@ -29,7 +31,9 @@ public sealed class RenderLine : IRenderPrimitive
         RenderLineCap lineCap,
         RenderLineJoin lineJoin,
         float? startDepth = null,
-        float? endDepth = null)
+        float? endDepth = null,
+        float[]? dashPattern = null,
+        float dashPhase = 0f)
     {
         Start = start;
         End = end;
@@ -39,11 +43,14 @@ public sealed class RenderLine : IRenderPrimitive
         LineJoin = lineJoin;
         StartDepth = startDepth;
         EndDepth = endDepth;
+        DashPattern = dashPattern;
+        DashPhase = dashPhase;
         var bounds = RenderBounds.Empty.Expand(start).Expand(end);
         Bounds = RenderBoundsUtils.InflateForStroke(bounds, thickness);
     }
 
     public bool HasDepth => StartDepth.HasValue && EndDepth.HasValue;
+    public bool HasDashPattern => DashPattern is { Length: > 0 };
 }
 
 public sealed class RenderPolyline : IRenderPrimitive
@@ -55,6 +62,8 @@ public sealed class RenderPolyline : IRenderPrimitive
     public RenderLineCap LineCap { get; }
     public RenderLineJoin LineJoin { get; }
     public IReadOnlyList<float>? Depths { get; }
+    public float[]? DashPattern { get; }
+    public float DashPhase { get; }
     public RenderBounds Bounds { get; }
 
     public RenderPolyline(
@@ -64,7 +73,9 @@ public sealed class RenderPolyline : IRenderPrimitive
         float thickness,
         RenderLineCap lineCap,
         RenderLineJoin lineJoin,
-        IReadOnlyList<float>? depths = null)
+        IReadOnlyList<float>? depths = null,
+        float[]? dashPattern = null,
+        float dashPhase = 0f)
     {
         Points = points;
         IsClosed = isClosed;
@@ -73,6 +84,8 @@ public sealed class RenderPolyline : IRenderPrimitive
         LineCap = lineCap;
         LineJoin = lineJoin;
         Depths = depths;
+        DashPattern = dashPattern;
+        DashPhase = dashPhase;
 
         var bounds = RenderBounds.Empty;
         foreach (var point in points)
@@ -83,6 +96,7 @@ public sealed class RenderPolyline : IRenderPrimitive
     }
 
     public bool HasDepths => Depths is not null && Depths.Count == Points.Count;
+    public bool HasDashPattern => DashPattern is { Length: > 0 };
 }
 
 public sealed class RenderFill : IRenderPrimitive

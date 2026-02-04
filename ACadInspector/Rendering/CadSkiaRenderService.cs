@@ -11,8 +11,10 @@ namespace ACadInspector.Rendering;
 public sealed class CadSkiaRenderService
 {
     private readonly Dictionary<PenKey, SKPaint> _strokePaintCache = new();
+    private readonly Dictionary<DashPenKey, SKPaint> _dashStrokePaintCache = new();
     private readonly Dictionary<ObscuredPenKey, SKPaint> _obscuredPaintCache = new();
     private readonly Dictionary<RenderObscuredLineType, SKPathEffect> _obscuredEffectCache = new();
+    private readonly Dictionary<DashPatternKey, SKPathEffect> _dashEffectCache = new();
     private readonly Dictionary<RenderColor, SKPaint> _fillPaintCache = new();
     private readonly Dictionary<TypefaceKey, SKTypeface> _typefaceCache = new();
     private readonly ConditionalWeakTable<RenderPolyline, SKPath> _polylineGeometryCache = new();
@@ -41,12 +43,18 @@ public sealed class CadSkiaRenderService
     public void ClearStrokePaintCache()
     {
         _strokePaintCache.Clear();
+        _dashStrokePaintCache.Clear();
         _obscuredPaintCache.Clear();
         foreach (var effect in _obscuredEffectCache.Values)
         {
             effect.Dispose();
         }
         _obscuredEffectCache.Clear();
+        foreach (var effect in _dashEffectCache.Values)
+        {
+            effect.Dispose();
+        }
+        _dashEffectCache.Clear();
     }
 
     public void InvalidateHiddenLineCache()
@@ -349,7 +357,7 @@ public sealed class CadSkiaRenderService
         {
             case RenderLine line:
                 {
-                    var paint = GetStrokePaint(line.Color, line.Thickness, line.LineCap, line.LineJoin, state);
+                    var paint = GetStrokePaint(line.Color, line.Thickness, line.LineCap, line.LineJoin, line.DashPattern, line.DashPhase, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
                         DrawHiddenLine(canvas, paint, line, hiddenLine.Value, hiddenLineSettings, layerColor, state);
@@ -362,7 +370,7 @@ public sealed class CadSkiaRenderService
                 }
             case RenderPolyline polyline:
                 {
-                    var paint = GetStrokePaint(polyline.Color, polyline.Thickness, polyline.LineCap, polyline.LineJoin, state);
+                    var paint = GetStrokePaint(polyline.Color, polyline.Thickness, polyline.LineCap, polyline.LineJoin, polyline.DashPattern, polyline.DashPhase, state);
                     if (style == RenderVisualStyle.HiddenLine && hiddenLine.HasValue)
                     {
                         DrawHiddenPolyline(canvas, paint, polyline, hiddenLine.Value, hiddenLineSettings, layerColor, state);
@@ -1107,6 +1115,13 @@ public sealed class CadSkiaRenderService
         {
             if (primitive is RenderLine line)
             {
+                if (line.HasDashPattern)
+                {
+                    FlushRuns();
+                    ops.Add(new LayerDrawOp(line));
+                    continue;
+                }
+
                 FlushPolylineRun();
                 FlushArcRun();
                 FlushCircleRun();
@@ -1127,6 +1142,13 @@ public sealed class CadSkiaRenderService
 
             if (primitive is RenderPolyline polyline)
             {
+                if (polyline.HasDashPattern)
+                {
+                    FlushRuns();
+                    ops.Add(new LayerDrawOp(polyline));
+                    continue;
+                }
+
                 FlushRun();
                 FlushArcRun();
                 FlushCircleRun();
@@ -1459,6 +1481,54 @@ public sealed class CadSkiaRenderService
         };
         _strokePaintCache[key] = paint;
         return paint;
+    }
+
+    private SKPaint GetStrokePaint(
+        RenderColor color,
+        float thickness,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        float[]? dashPattern,
+        float dashPhase,
+        CadRenderStateSnapshot state)
+    {
+        if (dashPattern is null || dashPattern.Length == 0)
+        {
+            return GetStrokePaint(color, thickness, lineCap, lineJoin, state);
+        }
+
+        var worldThickness = ResolveWorldThickness(thickness, state);
+        var dashKey = new DashPatternKey(dashPattern, dashPhase);
+        var key = new DashPenKey(color, worldThickness, lineCap, lineJoin, dashKey);
+        if (_dashStrokePaintCache.TryGetValue(key, out var paint))
+        {
+            return paint;
+        }
+
+        paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = worldThickness,
+            StrokeCap = ToSkiaLineCap(lineCap),
+            StrokeJoin = ToSkiaLineJoin(lineJoin),
+            Color = ToSkiaColor(color),
+            PathEffect = ResolveDashEffect(dashKey)
+        };
+        _dashStrokePaintCache[key] = paint;
+        return paint;
+    }
+
+    private SKPathEffect ResolveDashEffect(DashPatternKey key)
+    {
+        if (_dashEffectCache.TryGetValue(key, out var effect))
+        {
+            return effect;
+        }
+
+        effect = SKPathEffect.CreateDash(key.Pattern, key.Phase);
+        _dashEffectCache[key] = effect;
+        return effect;
     }
 
     private static float ResolveWorldThickness(float thickness, CadRenderStateSnapshot state)
@@ -2375,6 +2445,80 @@ public sealed class CadSkiaRenderService
         float Thickness,
         RenderLineCap LineCap,
         RenderLineJoin LineJoin);
+
+    private readonly record struct DashPenKey(
+        RenderColor Color,
+        float Thickness,
+        RenderLineCap LineCap,
+        RenderLineJoin LineJoin,
+        DashPatternKey Dash);
+
+    private readonly struct DashPatternKey : IEquatable<DashPatternKey>
+    {
+        private const float Epsilon = 0.0001f;
+
+        public float[] Pattern { get; }
+        public float Phase { get; }
+        private readonly int _hash;
+
+        public DashPatternKey(float[] pattern, float phase)
+        {
+            Pattern = pattern;
+            Phase = phase;
+            _hash = ComputeHash(pattern, phase);
+        }
+
+        public bool Equals(DashPatternKey other)
+        {
+            if (_hash != other._hash)
+            {
+                return false;
+            }
+
+            if (Pattern.Length != other.Pattern.Length)
+            {
+                return false;
+            }
+
+            if (MathF.Abs(Phase - other.Phase) > Epsilon)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < Pattern.Length; i++)
+            {
+                if (MathF.Abs(Pattern[i] - other.Pattern[i]) > Epsilon)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is DashPatternKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return _hash;
+        }
+
+        private static int ComputeHash(float[] pattern, float phase)
+        {
+            var hash = new HashCode();
+            hash.Add(pattern.Length);
+            hash.Add(phase);
+            foreach (var value in pattern)
+            {
+                hash.Add(value);
+            }
+
+            return hash.ToHashCode();
+        }
+    }
 
     private readonly record struct ObscuredPenKey(
         RenderColor Color,

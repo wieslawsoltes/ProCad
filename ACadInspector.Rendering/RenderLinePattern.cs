@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace ACadInspector.Rendering;
@@ -23,12 +24,130 @@ public readonly struct RenderLinePattern
     public bool IsContinuous => _segments.Length == 0;
 
     /// <summary>
+    /// Gets a value indicating whether the pattern includes complex text/shape segments.
+    /// </summary>
+    public bool HasDecorations
+    {
+        get
+        {
+            foreach (var segment in _segments)
+            {
+                if (segment.IsText || segment.IsShape)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Attempts to extract a simple dash pattern (no text/shape segments).
+    /// </summary>
+    public bool TryGetDashPattern(out float[] intervals, out float phase)
+    {
+        intervals = Array.Empty<float>();
+        phase = 0f;
+
+        if (_segments.Length == 0)
+        {
+            return false;
+        }
+
+        if (HasDecorations)
+        {
+            return false;
+        }
+
+        var merged = new List<SegmentEntry>(_segments.Length);
+        foreach (var segment in _segments)
+        {
+            if (segment.Length <= 0f)
+            {
+                continue;
+            }
+
+            var isDraw = segment.IsDraw;
+            if (merged.Count > 0 && merged[^1].IsDraw == isDraw)
+            {
+                merged[^1] = merged[^1] with { Length = merged[^1].Length + segment.Length };
+                continue;
+            }
+
+            merged.Add(new SegmentEntry(isDraw, segment.Length));
+        }
+
+        if (merged.Count == 0)
+        {
+            return false;
+        }
+
+        if (merged.Count > 1 && merged[0].IsDraw == merged[^1].IsDraw)
+        {
+            merged[0] = merged[0] with { Length = merged[0].Length + merged[^1].Length };
+            merged.RemoveAt(merged.Count - 1);
+        }
+
+        if (merged.Count == 1 && merged[0].IsDraw)
+        {
+            return false;
+        }
+
+        var startIndex = 0;
+        if (!merged[0].IsDraw)
+        {
+            phase = merged[0].Length;
+            startIndex = 1;
+        }
+
+        if (startIndex >= merged.Count)
+        {
+            return false;
+        }
+
+        var list = new List<float>(merged.Count);
+        var expectDraw = true;
+        for (var i = startIndex; i < merged.Count; i++)
+        {
+            var entry = merged[i];
+            if (entry.Length <= 0f)
+            {
+                continue;
+            }
+
+            if (entry.IsDraw != expectDraw)
+            {
+                expectDraw = entry.IsDraw;
+            }
+
+            list.Add(entry.Length);
+            expectDraw = !expectDraw;
+        }
+
+        if (list.Count < 2)
+        {
+            return false;
+        }
+
+        if (list.Count % 2 != 0)
+        {
+            list.Add(list[^1]);
+        }
+
+        intervals = list.ToArray();
+        return true;
+    }
+
+    /// <summary>
     /// Creates a new line pattern from segments.
     /// </summary>
     public RenderLinePattern(RenderLinePatternSegment[] segments)
     {
         _segments = segments ?? Array.Empty<RenderLinePatternSegment>();
     }
+
+    private readonly record struct SegmentEntry(bool IsDraw, float Length);
 }
 
 public readonly struct RenderLinePatternSegment

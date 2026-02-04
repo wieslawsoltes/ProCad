@@ -28,6 +28,12 @@ internal static class RenderLinePatternStroker
             return;
         }
 
+        if (pattern.TryGetDashPattern(out var dashPattern, out var dashPhase))
+        {
+            builder.Add(new RenderLine(start, end, color, thickness, lineCap, lineJoin, startDepth, endDepth, dashPattern, dashPhase));
+            return;
+        }
+
         var points = new[] { start, end };
         var depths = startDepth.HasValue && endDepth.HasValue
             ? new[] { startDepth.Value, endDepth.Value }
@@ -54,6 +60,12 @@ internal static class RenderLinePatternStroker
         }
 
         var useDepths = depths is not null && depths.Count == points.Count;
+        if (pattern.TryGetDashPattern(out var dashPattern, out var dashPhase))
+        {
+            builder.Add(new RenderPolyline(points, isClosed, color, thickness, lineCap, lineJoin, useDepths ? depths : null, dashPattern, dashPhase));
+            return;
+        }
+
         if (pattern.IsContinuous)
         {
             if (points.Count == 2 && !isClosed)
@@ -127,11 +139,17 @@ internal static class RenderLinePatternStroker
                         segStartDepth,
                         segEndDepth));
                 }
-                else if (patternOffset <= Epsilon && (segment.IsText || segment.IsShape))
+                else if (segment.IsText || segment.IsShape)
                 {
-                    var decorationOffset = MathF.Min(available, remaining) * 0.5f;
-                    var decorationPosition = current + direction * decorationOffset;
-                    AddDecoration(builder, decorationPosition, direction, segment, color, thickness, lineCap, lineJoin, shapeResolver, settings);
+                    var center = segment.Length * 0.5f;
+                    var segmentStart = patternOffset;
+                    var segmentEnd = patternOffset + step;
+                    if (segmentStart <= center + Epsilon && segmentEnd >= center - Epsilon)
+                    {
+                        var decorationOffset = Math.Clamp(center - patternOffset, 0f, step);
+                        var decorationPosition = current + direction * decorationOffset;
+                        AddDecoration(builder, decorationPosition, direction, segment, color, thickness, lineCap, lineJoin, shapeResolver, settings);
+                    }
                 }
 
                 current += direction * step;

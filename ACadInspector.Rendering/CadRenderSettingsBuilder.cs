@@ -95,6 +95,8 @@ public static class CadRenderSettingsBuilder
             MirrorText = header?.MirrorText ?? baseSettings.MirrorText,
             RenderAttributes = baseSettings.RenderAttributes,
             RenderAttributeDefinitions = baseSettings.RenderAttributeDefinitions,
+            DynamicBlockVisibilityStateName = baseSettings.DynamicBlockVisibilityStateName,
+            DynamicBlockOverrideProvider = baseSettings.DynamicBlockOverrideProvider,
             XClipFrameVisibility = xclipFrameVisibility,
             WipeoutFrameVisibility = wipeoutFrameVisibility,
             UnderlayFrameVisibility = underlayFrameVisibility,
@@ -417,18 +419,44 @@ public static class CadRenderSettingsBuilder
 
     private static IReadOnlyList<string> BuildSupportPaths(string? documentPath)
     {
-        if (string.IsNullOrWhiteSpace(documentPath))
+        var paths = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        AppendSupportPaths(Environment.GetEnvironmentVariable("ACADINSPECTOR_SUPPORT_PATHS"), paths, seen);
+        AppendSupportPaths(Environment.GetEnvironmentVariable("ACAD"), paths, seen);
+
+        if (!string.IsNullOrWhiteSpace(documentPath))
         {
-            return Array.Empty<string>();
+            var directory = System.IO.Path.GetDirectoryName(documentPath);
+            if (!string.IsNullOrWhiteSpace(directory) && seen.Add(directory))
+            {
+                paths.Add(directory);
+            }
         }
 
-        var directory = System.IO.Path.GetDirectoryName(documentPath);
-        if (string.IsNullOrWhiteSpace(directory))
+        return paths.Count == 0 ? Array.Empty<string>() : paths;
+    }
+
+    private static void AppendSupportPaths(string? rawPaths, List<string> paths, HashSet<string> seen)
+    {
+        if (string.IsNullOrWhiteSpace(rawPaths))
         {
-            return Array.Empty<string>();
+            return;
         }
 
-        return new[] { directory };
+        var separators = new[] { System.IO.Path.PathSeparator };
+        foreach (var path in rawPaths.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            if (seen.Add(path))
+            {
+                paths.Add(path);
+            }
+        }
     }
 
     private static Layout? ResolvePaperSpaceLayout(CadDocument document, string? layoutName)
