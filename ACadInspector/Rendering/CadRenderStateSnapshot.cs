@@ -11,6 +11,7 @@ public sealed class CadRenderStateSnapshot
         showAxes: true,
         enableInteractionOptimization: false,
         layerVisibilityOverrides: null,
+        entityTypeVisibilityOverrides: null,
         zoom: 1.0,
         minPixelThickness: 0.6,
         baseScale: 1.0,
@@ -27,6 +28,7 @@ public sealed class CadRenderStateSnapshot
     public bool ShowAxes { get; }
     public bool EnableInteractionOptimization { get; }
     public IReadOnlyDictionary<string, bool>? LayerVisibilityOverrides { get; }
+    public IReadOnlyDictionary<string, bool>? EntityTypeVisibilityOverrides { get; }
     public double Zoom { get; }
     public double MinPixelThickness { get; }
     public double BaseScale { get; }
@@ -44,6 +46,7 @@ public sealed class CadRenderStateSnapshot
         bool showAxes,
         bool enableInteractionOptimization,
         IReadOnlyDictionary<string, bool>? layerVisibilityOverrides,
+        IReadOnlyDictionary<string, bool>? entityTypeVisibilityOverrides,
         double zoom,
         double minPixelThickness,
         double baseScale,
@@ -60,6 +63,7 @@ public sealed class CadRenderStateSnapshot
         ShowAxes = showAxes;
         EnableInteractionOptimization = enableInteractionOptimization;
         LayerVisibilityOverrides = layerVisibilityOverrides;
+        EntityTypeVisibilityOverrides = entityTypeVisibilityOverrides;
         Zoom = zoom;
         MinPixelThickness = minPixelThickness;
         BaseScale = baseScale;

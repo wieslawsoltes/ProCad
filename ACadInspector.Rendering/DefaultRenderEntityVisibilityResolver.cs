@@ -17,6 +17,16 @@ public sealed class DefaultRenderEntityVisibilityResolver : IRenderEntityVisibil
             return false;
         }
 
+        var typeOverrides = settings.EntityTypeVisibilityOverrides;
+        if (typeOverrides is not null)
+        {
+            var typeName = entity.GetType().Name;
+            if (typeOverrides.TryGetValue(typeName, out var isVisible) && !isVisible)
+            {
+                return false;
+            }
+        }
+
         if (!settings.IncludeInvisible && entity.IsInvisible)
         {
             return false;

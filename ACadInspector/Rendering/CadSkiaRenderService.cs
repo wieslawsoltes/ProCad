@@ -282,7 +282,8 @@ public sealed class CadSkiaRenderService
 
         if (_interactionSnapshotState.ShowGrid != state.ShowGrid ||
             _interactionSnapshotState.ShowAxes != state.ShowAxes ||
-            !ReferenceEquals(_interactionSnapshotState.LayerVisibilityOverrides, state.LayerVisibilityOverrides))
+            !ReferenceEquals(_interactionSnapshotState.LayerVisibilityOverrides, state.LayerVisibilityOverrides) ||
+            !ReferenceEquals(_interactionSnapshotState.EntityTypeVisibilityOverrides, state.EntityTypeVisibilityOverrides))
         {
             return false;
         }
@@ -319,7 +320,7 @@ public sealed class CadSkiaRenderService
             return;
         }
 
-        if (style == RenderVisualStyle.HiddenLine)
+        if (style == RenderVisualStyle.HiddenLine || state.EntityTypeVisibilityOverrides is not null)
         {
             foreach (var primitive in layer.Primitives)
             {
@@ -504,6 +505,25 @@ public sealed class CadSkiaRenderService
         return layer.IsVisible;
     }
 
+    private static bool IsPrimitiveVisible(
+        RenderScene scene,
+        IRenderPrimitive primitive,
+        IReadOnlyDictionary<string, bool> overrides)
+    {
+        if (!scene.PrimitiveMetadata.TryGetValue(primitive, out var metadata))
+        {
+            return true;
+        }
+
+        var entity = metadata.OwnerEntity ?? metadata.SourceEntity;
+        if (entity is null)
+        {
+            return true;
+        }
+
+        return !(overrides.TryGetValue(entity.GetType().Name, out var isVisible) && !isVisible);
+    }
+
     private void DrawPrimitive(
         SKCanvas canvas,
         IRenderPrimitive primitive,
@@ -519,6 +539,15 @@ public sealed class CadSkiaRenderService
         if (hasViewport && !BoundsIntersects(primitive.Bounds, viewport))
         {
             return;
+        }
+
+        var entityOverrides = state.EntityTypeVisibilityOverrides;
+        if (entityOverrides is not null && state.Scene is not null)
+        {
+            if (!IsPrimitiveVisible(state.Scene, primitive, entityOverrides))
+            {
+                return;
+            }
         }
 
         if (primitive is RenderClipGroup clipGroup)

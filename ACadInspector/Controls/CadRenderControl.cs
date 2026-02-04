@@ -39,6 +39,9 @@ public sealed class CadRenderControl : Control
     public static readonly StyledProperty<IReadOnlyDictionary<string, bool>?> LayerVisibilityOverridesProperty =
         AvaloniaProperty.Register<CadRenderControl, IReadOnlyDictionary<string, bool>?>(nameof(LayerVisibilityOverrides));
 
+    public static readonly StyledProperty<IReadOnlyDictionary<string, bool>?> EntityTypeVisibilityOverridesProperty =
+        AvaloniaProperty.Register<CadRenderControl, IReadOnlyDictionary<string, bool>?>(nameof(EntityTypeVisibilityOverrides));
+
     public static readonly StyledProperty<int> FitToViewTriggerProperty =
         AvaloniaProperty.Register<CadRenderControl, int>(nameof(FitToViewTrigger));
 
@@ -133,6 +136,12 @@ public sealed class CadRenderControl : Control
     {
         get => GetValue(LayerVisibilityOverridesProperty);
         set => SetValue(LayerVisibilityOverridesProperty, value);
+    }
+
+    public IReadOnlyDictionary<string, bool>? EntityTypeVisibilityOverrides
+    {
+        get => GetValue(EntityTypeVisibilityOverridesProperty);
+        set => SetValue(EntityTypeVisibilityOverridesProperty, value);
     }
 
     public int FitToViewTrigger
@@ -307,6 +316,7 @@ public sealed class CadRenderControl : Control
             change.Property == ShowGridProperty ||
             change.Property == ShowAxesProperty ||
             change.Property == LayerVisibilityOverridesProperty ||
+            change.Property == EntityTypeVisibilityOverridesProperty ||
             change.Property == MinPixelThicknessProperty ||
             change.Property == EnableInteractionOptimizationProperty ||
             change.Property == ShowDebugOverlayProperty ||
@@ -585,6 +595,7 @@ public sealed class CadRenderControl : Control
             ShowAxes,
             EnableInteractionOptimization,
             LayerVisibilityOverrides,
+            EntityTypeVisibilityOverrides,
             Zoom,
             MinPixelThickness,
             _baseScale,

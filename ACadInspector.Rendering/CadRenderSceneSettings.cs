@@ -101,6 +101,11 @@ public sealed class CadRenderSceneSettings
     public bool RenderAttributeDefinitions { get; init; } = true;
 
     /// <summary>
+    /// Gets optional visibility overrides per entity type name.
+    /// </summary>
+    public IReadOnlyDictionary<string, bool>? EntityTypeVisibilityOverrides { get; init; }
+
+    /// <summary>
     /// Gets an optional visibility state name for dynamic block preview.
     /// </summary>
     public string? DynamicBlockVisibilityStateName { get; init; }
@@ -212,6 +217,62 @@ public sealed class CadRenderSceneSettings
             MirrorText = MirrorText,
             RenderAttributes = renderAttributes,
             RenderAttributeDefinitions = renderAttributeDefinitions,
+            EntityTypeVisibilityOverrides = EntityTypeVisibilityOverrides,
+            DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
+            DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
+            XClipFrameVisibility = XClipFrameVisibility,
+            WipeoutFrameVisibility = WipeoutFrameVisibility,
+            UnderlayFrameVisibility = UnderlayFrameVisibility,
+            IsPaperSpace = IsPaperSpace,
+            LayoutName = LayoutName,
+            PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
+            ViewportScale = ViewportScale,
+            ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = AnnotationScaleFactor,
+            StackedTextAlignment = StackedTextAlignment,
+            StackedTextSizePercentage = StackedTextSizePercentage,
+            IncludeInvisible = IncludeInvisible,
+            IncludeOffLayers = IncludeOffLayers,
+            IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
+            PerformanceBudget = PerformanceBudget,
+            PlotStyleTable = PlotStyleTable
+        };
+    }
+
+    public CadRenderSceneSettings WithEntityTypeVisibilityOverrides(IReadOnlyDictionary<string, bool>? overrides)
+    {
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = SupportPaths,
+            Quality = Quality,
+            VisualStyle = VisualStyle,
+            Lighting = Lighting,
+            EnableHatchFills = EnableHatchFills,
+            EnableHatchPatterns = EnableHatchPatterns,
+            EnableHatchGradients = EnableHatchGradients,
+            HiddenLineSettings = HiddenLineSettings,
+            ShadeEdge = ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = ShadeDiffuseToAmbientPercentage,
+            Background = Background,
+            FallbackColor = FallbackColor,
+            MillimetersPerUnit = MillimetersPerUnit,
+            DefaultLineWeightMm = DefaultLineWeightMm,
+            MinLineWeightMm = MinLineWeightMm,
+            DisplayLineWeight = DisplayLineWeight,
+            LineTypeDotLengthMm = LineTypeDotLengthMm,
+            PolylineArcPrecision = PolylineArcPrecision,
+            SplinePrecision = SplinePrecision,
+            CirclePrecision = CirclePrecision,
+            TextWidthFactor = TextWidthFactor,
+            PointDisplayMode = PointDisplayMode,
+            PointDisplaySize = PointDisplaySize,
+            QuickTextMode = QuickTextMode,
+            FillMode = FillMode,
+            PolylineLineTypeGeneration = PolylineLineTypeGeneration,
+            MirrorText = MirrorText,
+            RenderAttributes = RenderAttributes,
+            RenderAttributeDefinitions = RenderAttributeDefinitions,
+            EntityTypeVisibilityOverrides = overrides,
             DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
             DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
             XClipFrameVisibility = XClipFrameVisibility,
@@ -271,6 +332,7 @@ public sealed class CadRenderSceneSettings
             MirrorText = MirrorText,
             RenderAttributes = RenderAttributes,
             RenderAttributeDefinitions = RenderAttributeDefinitions,
+            EntityTypeVisibilityOverrides = EntityTypeVisibilityOverrides,
             DynamicBlockVisibilityStateName = stateName,
             DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
             XClipFrameVisibility = XClipFrameVisibility,
@@ -323,6 +385,7 @@ public sealed class CadRenderSceneSettings
             MirrorText = MirrorText,
             RenderAttributes = RenderAttributes,
             RenderAttributeDefinitions = RenderAttributeDefinitions,
+            EntityTypeVisibilityOverrides = EntityTypeVisibilityOverrides,
             DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
             DynamicBlockOverrideProvider = provider,
             XClipFrameVisibility = XClipFrameVisibility,

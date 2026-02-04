@@ -59,6 +59,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     public partial int ResetRequest { get; set; }
 
     public CadRenderLayerListViewModel LayerList { get; }
+    public CadRenderEntityTypeListViewModel EntityTypeList { get; }
     public IReadOnlyList<CadRenderLayoutViewModel> Layouts { get; }
     public CadToolManager ToolManager => _toolManager;
 
@@ -132,6 +133,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _toolManager = new CadToolManager();
         Scene = scene;
         LayerList = new CadRenderLayerListViewModel(document);
+        EntityTypeList = new CadRenderEntityTypeListViewModel(document);
         Layouts = BuildLayouts(document);
         _statsExportService = statsExportService;
         _statsFileName = EnsureStatsFileName(statsFileName);
@@ -161,6 +163,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
         this.WhenAnyValue(x => x.LayerList.LayerVisibilityOverrides)
             .Subscribe(_ => UpdateHitTestIndex());
+
+        this.WhenAnyValue(x => x.EntityTypeList.EntityTypeVisibilityOverrides)
+            .Subscribe(_ => OnEntityTypeVisibilityChanged());
 
         this.WhenAnyValue(x => x.ShowDebugOverlay, x => x.DebugBvhDepth, x => x.Scene)
             .Subscribe(_ => UpdateDebugOverlay());
@@ -214,6 +219,17 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         {
             _ = RebuildSceneAsync(SelectedLayout);
         }
+    }
+
+    private void OnEntityTypeVisibilityChanged()
+    {
+        UpdateHitTestIndex();
+        if (SelectedLayout is null)
+        {
+            return;
+        }
+
+        _ = RebuildSceneAsync(SelectedLayout, preserveView: true);
     }
 
     private void RequestFit()
@@ -307,7 +323,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _ = RebuildSceneAsync(layout);
     }
 
-    private async Task RebuildSceneAsync(CadRenderLayoutViewModel layout)
+    private async Task RebuildSceneAsync(CadRenderLayoutViewModel layout, bool preserveView = false)
     {
         _layoutRebuildCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -319,6 +335,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         var baseSettings = _dynamicBlockOverrides is null
             ? _baseSettings
             : _baseSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides);
+        baseSettings = baseSettings.WithEntityTypeVisibilityOverrides(EntityTypeList.EntityTypeVisibilityOverrides);
         var settings = CadRenderSettingsBuilder.Build(_document, _documentPath, baseSettings, selection);
 
         RenderScene? scene = null;
@@ -339,7 +356,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         RxApp.MainThreadScheduler.Schedule(() =>
         {
             Scene = scene;
-            RequestFit();
+            if (!preserveView)
+            {
+                RequestFit();
+            }
         });
     }
 
@@ -395,7 +415,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         }
 
         var overrides = LayerList.LayerVisibilityOverrides;
-        if (overrides is null)
+        var entityOverrides = EntityTypeList.EntityTypeVisibilityOverrides;
+        if (overrides is null && entityOverrides is null)
         {
             _hitTestIndex = scene.SpatialIndex;
             return;
@@ -405,18 +426,62 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         foreach (var layer in scene.Layers)
         {
             var visible = layer.IsVisible;
-            if (overrides.TryGetValue(layer.Name, out var overrideVisible))
+            if (overrides is not null && overrides.TryGetValue(layer.Name, out var overrideVisible))
             {
                 visible = overrideVisible;
             }
 
             if (visible)
             {
-                visibleLayers.Add(layer);
+                if (entityOverrides is null)
+                {
+                    visibleLayers.Add(layer);
+                }
+                else
+                {
+                    var filteredPrimitives = FilterPrimitivesByEntityType(scene, layer, entityOverrides);
+                    if (filteredPrimitives.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var bounds = RenderBounds.Empty;
+                    foreach (var primitive in filteredPrimitives)
+                    {
+                        bounds = bounds.Expand(primitive.Bounds);
+                    }
+
+                    visibleLayers.Add(new RenderLayer(layer.Name, layer.Color, layer.IsVisible, filteredPrimitives, bounds));
+                }
             }
         }
 
         _hitTestIndex = RenderSpatialIndex.Build(visibleLayers);
+    }
+
+    private static List<IRenderPrimitive> FilterPrimitivesByEntityType(
+        RenderScene scene,
+        RenderLayer layer,
+        IReadOnlyDictionary<string, bool> overrides)
+    {
+        var filtered = new List<IRenderPrimitive>(layer.Primitives.Count);
+        foreach (var primitive in layer.Primitives)
+        {
+            if (scene.PrimitiveMetadata.TryGetValue(primitive, out var metadata))
+            {
+                var entity = metadata.OwnerEntity ?? metadata.SourceEntity;
+                if (entity is not null &&
+                    overrides.TryGetValue(entity.GetType().Name, out var isVisible) &&
+                    !isVisible)
+                {
+                    continue;
+                }
+            }
+
+            filtered.Add(primitive);
+        }
+
+        return filtered;
     }
 
     private void UpdateDebugOverlay()

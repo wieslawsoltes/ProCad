@@ -117,6 +117,7 @@ public sealed class CadBlockPreviewService
             showAxes: false,
             enableInteractionOptimization: false,
             layerVisibilityOverrides: null,
+            entityTypeVisibilityOverrides: null,
             zoom: 1.0,
             minPixelThickness: 0.6,
             baseScale: baseScale,

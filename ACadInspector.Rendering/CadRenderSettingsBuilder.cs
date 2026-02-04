@@ -51,6 +51,7 @@ public static class CadRenderSettingsBuilder
             ? NormalizeScale(viewport?.ScaleFactor ?? 1.0)
             : ResolveModelSpaceViewportScale(document);
         var annotationScale = ResolveAnnotationScaleFactor(document);
+        var entityTypeOverrides = baseSettings.EntityTypeVisibilityOverrides;
         var stackedTextAlignment = header?.StackedTextAlignment ?? baseSettings.StackedTextAlignment;
         var stackedTextSizePercentage = header?.StackedTextSizePercentage ?? baseSettings.StackedTextSizePercentage;
         var supportPaths = BuildSupportPaths(documentPath);
@@ -108,6 +109,7 @@ public static class CadRenderSettingsBuilder
             ViewportScale = viewportScale,
             ModelSpaceLineTypeScaling = baseSettings.ModelSpaceLineTypeScaling,
             AnnotationScaleFactor = annotationScale,
+            EntityTypeVisibilityOverrides = entityTypeOverrides,
             StackedTextAlignment = stackedTextAlignment,
             StackedTextSizePercentage = stackedTextSizePercentage,
             IncludeInvisible = baseSettings.IncludeInvisible,

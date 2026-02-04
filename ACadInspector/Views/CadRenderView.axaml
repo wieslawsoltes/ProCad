@@ -56,6 +56,7 @@
                                ShowAxes="{CompiledBinding ShowAxes}"
                                EnableInteractionOptimization="{CompiledBinding EnableInteractionOptimization}"
                                LayerVisibilityOverrides="{CompiledBinding LayerList.LayerVisibilityOverrides}"
+                               EntityTypeVisibilityOverrides="{CompiledBinding EntityTypeList.EntityTypeVisibilityOverrides}"
                                FitToViewTrigger="{CompiledBinding FitRequest}"
                                ResetViewTrigger="{CompiledBinding ResetRequest}"
                                FitOnSceneChange="{CompiledBinding FitOnLoad}"
