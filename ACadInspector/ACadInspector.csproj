@@ -27,6 +27,7 @@
     <PackageReference Include="AvaloniaEdit.TextMate" />
     <PackageReference Include="Avalonia.Xaml.Behaviors" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="HarfBuzzSharp" />
   </ItemGroup>
 
   <ItemGroup>

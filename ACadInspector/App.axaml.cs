@@ -122,12 +122,14 @@ public partial class App : Application
         services.AddSingleton<IRenderEntityOrderResolver, DefaultRenderEntityOrderResolver>();
         services.AddSingleton<IRenderXRefResolver, DefaultRenderXRefResolver>();
         services.AddSingleton<IShxFontResolver, DefaultShxFontResolver>();
+        services.AddSingleton<IUnicodeTextService, UnicodeTextService>();
         services.AddSingleton<SkiaRenderTextShaper>();
+        services.AddSingleton<HarfBuzzRenderTextShaper>();
         services.AddSingleton<IRenderTextShaper>(provider =>
             new CachedRenderTextShaper(
                 new ShxRenderTextShaper(
                     provider.GetRequiredService<IShxFontResolver>(),
-                    provider.GetRequiredService<SkiaRenderTextShaper>()),
+                    provider.GetRequiredService<HarfBuzzRenderTextShaper>()),
                 provider.GetRequiredService<IRenderCache>()));
         services.AddSingleton<IRenderEntityVisibilityResolver, DefaultRenderEntityVisibilityResolver>();
         services.AddSingleton<DefaultRenderGeometrySampler>();
