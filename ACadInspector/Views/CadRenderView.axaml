@@ -34,19 +34,10 @@
                 Command="{CompiledBinding FitCommand}" />
         <Button Content="Reset"
                 Command="{CompiledBinding ResetCommand}" />
-        <Button Content="Stats"
-                Command="{CompiledBinding ExportStatsCommand}" />
         <ToggleButton Content="Grid"
                       IsChecked="{CompiledBinding ShowGrid}" />
         <ToggleButton Content="Axes"
                       IsChecked="{CompiledBinding ShowAxes}" />
-        <ToggleButton Content="Debug"
-                      IsChecked="{CompiledBinding ShowDebugOverlay}" />
-        <NumericUpDown Width="56"
-                       Minimum="0"
-                       Maximum="6"
-                       Value="{CompiledBinding DebugBvhDepth}"
-                       IsEnabled="{CompiledBinding ShowDebugOverlay}" />
       </StackPanel>
     </Border>
 
