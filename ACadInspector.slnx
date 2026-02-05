@@ -7,6 +7,7 @@
   <Project Path="ACadInspector.Desktop/ACadInspector.Desktop.csproj" />
   <Project Path="ACadInspector.Generators/ACadInspector.Generators.csproj" />
   <Project Path="ACadInspector.IO/ACadInspector.IO.csproj" />
+  <Project Path="ACadInspector.TraceCli/ACadInspector.TraceCli.csproj" />
   <Project Path="ACadInspector.Rendering/ACadInspector.Rendering.csproj" />
   <Project Path="ACadInspector.Scripting/ACadInspector.Scripting.csproj" />
   <Project Path="ACadInspector.Tests/ACadInspector.Tests.csproj" />

@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ACadInspector\ACadInspector.csproj" />
     <ProjectReference Include="..\ACadInspector.Rendering\ACadInspector.Rendering.csproj" />
+    <ProjectReference Include="..\ACadInspector.TraceCli\ACadInspector.TraceCli.csproj" />
   </ItemGroup>
 
   <ItemGroup>
