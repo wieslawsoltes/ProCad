@@ -30,6 +30,9 @@ public sealed class RenderScene
     public RenderHiddenLineSettings HiddenLineSettings { get; }
     public RenderBounds Bounds { get; }
     public IReadOnlyList<RenderLayer> Layers { get; }
+    public bool IsPaperSpace { get; }
+    public RenderBounds? PaperBounds { get; }
+    public RenderColor? PaperColor { get; }
     /// <summary>
     /// Gets the spatial index for fast hit testing.
     /// </summary>
@@ -50,7 +53,10 @@ public sealed class RenderScene
         RenderSpatialIndex spatialIndex,
         IReadOnlyDictionary<IRenderPrimitive, RenderPrimitiveMetadata>? primitiveMetadata,
         RenderDiagnostics diagnostics,
-        RenderStats stats)
+        RenderStats stats,
+        bool isPaperSpace = false,
+        RenderBounds? paperBounds = null,
+        RenderColor? paperColor = null)
     {
         Layers = layers;
         Bounds = bounds;
@@ -61,5 +67,8 @@ public sealed class RenderScene
         PrimitiveMetadata = primitiveMetadata ?? EmptyMetadata;
         Diagnostics = diagnostics;
         Stats = stats;
+        IsPaperSpace = isPaperSpace;
+        PaperBounds = paperBounds;
+        PaperColor = paperColor;
     }
 }

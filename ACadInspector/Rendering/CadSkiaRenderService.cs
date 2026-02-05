@@ -150,6 +150,11 @@ public sealed class CadSkiaRenderService
         canvas.Save();
         canvas.Concat(ref matrix);
 
+        if (scene is not null && scene.IsPaperSpace && scene.PaperBounds.HasValue)
+        {
+            DrawPaper(canvas, scene.PaperBounds.Value, scene.PaperColor ?? RenderColor.DefaultPaper, state);
+        }
+
         if (state.ShowGrid && !isInteractive)
         {
             DrawGrid(canvas, size, state);
@@ -2529,6 +2534,42 @@ public sealed class CadSkiaRenderService
         }
 
         canvas.DrawRect(bounds.Min.X, bounds.Min.Y, size.X, size.Y, paint);
+    }
+
+    private static void DrawPaper(
+        SKCanvas canvas,
+        RenderBounds bounds,
+        RenderColor fillColor,
+        CadRenderStateSnapshot state)
+    {
+        var size = bounds.Size;
+        if (size.X <= 0f || size.Y <= 0f)
+        {
+            return;
+        }
+
+        var rect = new SKRect(bounds.Min.X, bounds.Min.Y, bounds.Max.X, bounds.Max.Y);
+        using (var fillPaint = new SKPaint
+        {
+            IsAntialias = false,
+            Style = SKPaintStyle.Fill,
+            Color = ToSkiaColor(fillColor)
+        })
+        {
+            canvas.DrawRect(rect, fillPaint);
+        }
+
+        var strokeWidth = PixelsToWorld(1f, state);
+        using (var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = strokeWidth,
+            Color = ToSkiaColor(RenderColor.DefaultPaperOutline)
+        })
+        {
+            canvas.DrawRect(rect, strokePaint);
+        }
     }
 
     private static SKPaint? CreateHatchPaint(RenderHatchFill fill)

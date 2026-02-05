@@ -33,6 +33,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private CancellationTokenSource? _layoutRebuildCts;
     private readonly bool _allowLayoutUpdates;
     private bool _suppressLayoutUpdates;
+    private bool _modelShowGrid = true;
+    private bool _modelShowAxes = true;
 
     [Reactive]
     public partial RenderScene? Scene { get; set; }
@@ -153,6 +155,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _suppressLayoutUpdates = true;
         SelectedLayout = ResolveSelectedLayout(selection);
         _suppressLayoutUpdates = false;
+        if (SelectedLayout is not null)
+        {
+            UpdateLayoutViewOptions(SelectedLayout);
+        }
 
         this.WhenAnyValue(x => x.SelectedLayout)
             .Where(layout => layout is not null)
@@ -319,12 +325,35 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
     private void OnLayoutChanged(CadRenderLayoutViewModel layout)
     {
-        if (_suppressLayoutUpdates || !_allowLayoutUpdates)
+        if (_suppressLayoutUpdates)
+        {
+            return;
+        }
+
+        UpdateLayoutViewOptions(layout);
+
+        if (!_allowLayoutUpdates)
         {
             return;
         }
 
         _ = RebuildSceneAsync(layout);
+    }
+
+    private void UpdateLayoutViewOptions(CadRenderLayoutViewModel layout)
+    {
+        if (layout.IsPaperSpace)
+        {
+            _modelShowGrid = ShowGrid;
+            _modelShowAxes = ShowAxes;
+            ShowGrid = false;
+            ShowAxes = false;
+        }
+        else
+        {
+            ShowGrid = _modelShowGrid;
+            ShowAxes = _modelShowAxes;
+        }
     }
 
     private async Task RebuildSceneAsync(CadRenderLayoutViewModel layout, bool preserveView = false)

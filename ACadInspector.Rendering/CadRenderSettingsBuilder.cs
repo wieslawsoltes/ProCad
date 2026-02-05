@@ -67,19 +67,27 @@ public static class CadRenderSettingsBuilder
         var layoutScaling = ResolvePaperSpaceLineTypeScaling(layout);
         var plotStyleTable = ResolvePlotStyleTable(document, documentPath, layout, selection, supportPaths);
 
+        var background = baseSettings.Background;
+        if (isPaperSpace && background.Equals(RenderColor.DefaultBackground))
+        {
+            background = RenderColor.DefaultPaperOutside;
+        }
+
         return new CadRenderSceneSettings
         {
             SupportPaths = supportPaths,
             Quality = baseSettings.Quality,
             VisualStyle = visualStyle,
             Lighting = baseSettings.Lighting,
+            ViewportBrightness = baseSettings.ViewportBrightness,
+            ViewportContrast = baseSettings.ViewportContrast,
             EnableHatchFills = baseSettings.EnableHatchFills,
             EnableHatchPatterns = baseSettings.EnableHatchPatterns,
             EnableHatchGradients = baseSettings.EnableHatchGradients,
             HiddenLineSettings = hiddenLineSettings,
             ShadeEdge = shadeEdge,
             ShadeDiffuseToAmbientPercentage = shadeDiffuse,
-            Background = baseSettings.Background,
+            Background = background,
             FallbackColor = baseSettings.FallbackColor,
             MillimetersPerUnit = millimetersPerUnit,
             DefaultLineWeightMm = baseSettings.DefaultLineWeightMm,
@@ -287,6 +295,11 @@ public static class CadRenderSettingsBuilder
         CadRenderLayoutSelection selection,
         IReadOnlyList<string> supportPaths)
     {
+        if (layout is null || !layout.Flags.HasFlag(PlotFlags.ShowPlotStyles))
+        {
+            return null;
+        }
+
         var styleSheet = layout?.StyleSheet;
         if (string.IsNullOrWhiteSpace(styleSheet))
         {
@@ -515,18 +528,37 @@ public static class CadRenderSettingsBuilder
             return null;
         }
 
+        Viewport? best = null;
+        var bestArea = 0.0;
         if (layout.Viewports is not null)
         {
             foreach (var viewport in layout.Viewports)
             {
-                if (!viewport.RepresentsPaper)
+                if (viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
                 {
-                    return viewport;
+                    continue;
+                }
+
+                if (viewport.Width <= 0 || viewport.Height <= 0 || viewport.ViewHeight <= 0)
+                {
+                    continue;
+                }
+
+                var area = viewport.Width * viewport.Height;
+                if (best is null || area > bestArea)
+                {
+                    best = viewport;
+                    bestArea = area;
                 }
             }
         }
 
-        if (layout.Viewport is not null && !layout.Viewport.RepresentsPaper)
+        if (best is not null)
+        {
+            return best;
+        }
+
+        if (layout.Viewport is not null && !layout.Viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
         {
             return layout.Viewport;
         }
