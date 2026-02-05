@@ -224,6 +224,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private void OnEntityTypeVisibilityChanged()
     {
         UpdateHitTestIndex();
+        if (!_allowLayoutUpdates)
+        {
+            return;
+        }
         if (SelectedLayout is null)
         {
             return;
