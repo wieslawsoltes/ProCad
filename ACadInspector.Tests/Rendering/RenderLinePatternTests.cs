@@ -36,6 +36,34 @@ public sealed class RenderLinePatternTests
     }
 
     [Fact]
+    public void BuildScene_DisablesDashPatternRendering_WhenOptionOff()
+    {
+        var document = new CadDocument();
+        var dashLineType = new LineType("DASH");
+        dashLineType.AddSegment(new LineType.Segment { Length = 1.0 });
+        dashLineType.AddSegment(new LineType.Segment { Length = -0.5 });
+        document.LineTypes.Add(dashLineType);
+
+        var line = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0),
+            LineType = dashLineType
+        };
+        document.Entities.Add(line);
+
+        var sceneBuilder = CreateSceneBuilder();
+        var scene = sceneBuilder.Build(document, new CadRenderSceneSettings
+        {
+            EnableDashPatternRendering = false
+        });
+        var lines = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderLine>().ToArray();
+
+        var renderLine = Assert.Single(lines);
+        Assert.False(renderLine.HasDashPattern);
+    }
+
+    [Fact]
     public void BuildScene_AddsLineTypeTextDecoration()
     {
         var document = new CadDocument();
@@ -233,6 +261,31 @@ public sealed class RenderLinePatternTests
         var pattern = resolver.ResolveLinePattern(line, document, settings);
 
         Assert.InRange(pattern.Segments[0].Length, 0.9f, 1.1f);
+    }
+
+    [Fact]
+    public void ResolveLinePattern_ReturnsContinuous_WhenDashPatternRenderingDisabled()
+    {
+        var document = new CadDocument();
+        var lineType = new LineType("DASH");
+        lineType.AddSegment(new LineType.Segment { Length = 1.0 });
+        lineType.AddSegment(new LineType.Segment { Length = -0.5 });
+        document.LineTypes.Add(lineType);
+
+        var line = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0),
+            LineType = lineType
+        };
+
+        var resolver = new DefaultRenderLinePatternResolver();
+        var pattern = resolver.ResolveLinePattern(line, document, new CadRenderSceneSettings
+        {
+            EnableDashPatternRendering = false
+        });
+
+        Assert.True(pattern.IsContinuous);
     }
 
     private static CadRenderSceneBuilder CreateSceneBuilder()

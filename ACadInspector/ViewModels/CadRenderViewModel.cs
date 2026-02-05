@@ -46,6 +46,12 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     public partial bool ShowAxes { get; set; } = true;
 
     [Reactive]
+    public partial bool EnableDashPatternRendering { get; set; } = true;
+
+    [Reactive]
+    public partial bool EnableColorRendering { get; set; } = true;
+
+    [Reactive]
     public partial bool ShowLayoutTabs { get; set; } = true;
 
     [Reactive]
@@ -134,6 +140,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         _annotationService = new CadSelectionAnnotationService();
         _toolManager = new CadToolManager();
         Scene = scene;
+        EnableDashPatternRendering = _baseSettings.EnableDashPatternRendering;
+        EnableColorRendering = _baseSettings.EnableColorRendering;
         LayerList = new CadRenderLayerListViewModel(document);
         EntityTypeList = new CadRenderEntityTypeListViewModel(document);
         Layouts = BuildLayouts(document);
@@ -172,6 +180,10 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
         this.WhenAnyValue(x => x.EntityTypeList.EntityTypeVisibilityOverrides)
             .Subscribe(_ => OnEntityTypeVisibilityChanged());
+
+        this.WhenAnyValue(x => x.EnableDashPatternRendering, x => x.EnableColorRendering)
+            .Skip(1)
+            .Subscribe(_ => OnRenderStyleOptionsChanged());
 
         this.WhenAnyValue(x => x.ShowDebugOverlay, x => x.DebugBvhDepth, x => x.Scene)
             .Subscribe(_ => UpdateDebugOverlay());
@@ -234,6 +246,21 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         {
             return;
         }
+        if (SelectedLayout is null)
+        {
+            return;
+        }
+
+        _ = RebuildSceneAsync(SelectedLayout, preserveView: true);
+    }
+
+    private void OnRenderStyleOptionsChanged()
+    {
+        if (!_allowLayoutUpdates)
+        {
+            return;
+        }
+
         if (SelectedLayout is null)
         {
             return;
@@ -369,6 +396,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase
             ? _baseSettings
             : _baseSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides);
         baseSettings = baseSettings.WithEntityTypeVisibilityOverrides(EntityTypeList.EntityTypeVisibilityOverrides);
+        baseSettings = baseSettings.WithRenderStyleOptions(EnableDashPatternRendering, EnableColorRendering);
         var settings = CadRenderSettingsBuilder.Build(_document, _documentPath, baseSettings, selection);
 
         RenderScene? scene = null;

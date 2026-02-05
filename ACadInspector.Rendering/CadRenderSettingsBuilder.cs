@@ -59,6 +59,11 @@ public static class CadRenderSettingsBuilder
         var millimetersPerUnit = ResolveMillimetersPerUnit(header, baseSettings.MillimetersPerUnit);
         var splinePrecision = ResolveSplinePrecision(header, baseSettings.SplinePrecision);
         var hiddenLineSettings = ResolveHiddenLineSettings(header, baseSettings.HiddenLineSettings);
+        if (!baseSettings.EnableDashPatternRendering)
+        {
+            hiddenLineSettings = ResolveSolidHiddenLineSettings(hiddenLineSettings);
+        }
+
         var shadeEdge = header?.ShadeEdge ?? baseSettings.ShadeEdge;
         var shadeDiffuse = header?.ShadeDiffuseToAmbientPercentage ?? baseSettings.ShadeDiffuseToAmbientPercentage;
         var xclipFrameVisibility = ResolveXClipFrameVisibility(document, header, baseSettings.XClipFrameVisibility);
@@ -93,6 +98,8 @@ public static class CadRenderSettingsBuilder
             DefaultLineWeightMm = baseSettings.DefaultLineWeightMm,
             MinLineWeightMm = baseSettings.MinLineWeightMm,
             DisplayLineWeight = header?.DisplayLineWeight ?? baseSettings.DisplayLineWeight,
+            EnableDashPatternRendering = baseSettings.EnableDashPatternRendering,
+            EnableColorRendering = baseSettings.EnableColorRendering,
             LineTypeDotLengthMm = baseSettings.LineTypeDotLengthMm,
             PolylineArcPrecision = baseSettings.PolylineArcPrecision,
             SplinePrecision = splinePrecision,
@@ -167,6 +174,16 @@ public static class CadRenderSettingsBuilder
         var lineType = ResolveObscuredLineType(header.ObscuredType, fallback.LineType);
         var (colorMode, color) = ResolveObscuredColor(header.ObscuredColor, fallback);
         return new RenderHiddenLineSettings(lineType, colorMode, color);
+    }
+
+    private static RenderHiddenLineSettings ResolveSolidHiddenLineSettings(RenderHiddenLineSettings settings)
+    {
+        if (!settings.IsEnabled || settings.LineType == RenderObscuredLineType.Solid)
+        {
+            return settings;
+        }
+
+        return new RenderHiddenLineSettings(RenderObscuredLineType.Solid, settings.ColorMode, settings.Color);
     }
 
     private static RenderObscuredLineType ResolveObscuredLineType(

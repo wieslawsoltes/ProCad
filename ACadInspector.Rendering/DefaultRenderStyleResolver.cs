@@ -13,6 +13,10 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
     {
         var color = entity.GetActiveColor();
         var baseColor = RenderStyleUtils.ResolveColorOrFallback(color, settings, settings.FallbackColor);
+        if (!settings.EnableColorRendering)
+        {
+            baseColor = new RenderColor(settings.FallbackColor.R, settings.FallbackColor.G, settings.FallbackColor.B, baseColor.A);
+        }
 
         var alpha = ResolveEntityAlpha(entity);
         var combinedAlpha = CombineAlpha(baseColor.A, alpha);
@@ -21,7 +25,13 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
 
     public RenderColor ResolveLayerColor(Layer layer, CadRenderSceneSettings settings)
     {
-        return RenderStyleUtils.ResolveColorOrFallback(layer.Color, settings, settings.FallbackColor);
+        var color = RenderStyleUtils.ResolveColorOrFallback(layer.Color, settings, settings.FallbackColor);
+        if (!settings.EnableColorRendering)
+        {
+            return new RenderColor(settings.FallbackColor.R, settings.FallbackColor.G, settings.FallbackColor.B, color.A);
+        }
+
+        return color;
     }
 
     public float ResolveLineWeight(Entity entity, CadRenderSceneSettings settings)
@@ -77,6 +87,11 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
     public RenderMaterial ResolveEntityMaterial(Entity entity, CadRenderSceneSettings settings)
     {
         var baseColor = ResolveEntityColor(entity, settings);
+        if (!settings.EnableColorRendering)
+        {
+            return RenderMaterial.FromColor(baseColor);
+        }
+
         var material = ResolveMaterial(entity);
         if (material is null)
         {

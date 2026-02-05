@@ -61,6 +61,33 @@ public sealed class RenderColorIndexTests
         Assert.Equal(255, color.B);
     }
 
+    [Fact]
+    public void ResolveEntityColor_UsesFallbackColor_WhenColorRenderingDisabled()
+    {
+        var document = new CadDocument();
+        var layer = new Layer("TestLayer") { Color = new Color(1) };
+        document.Layers.Add(layer);
+
+        var line = new Line
+        {
+            Layer = layer,
+            Color = Color.ByLayer
+        };
+
+        var settings = new CadRenderSceneSettings
+        {
+            EnableColorRendering = false,
+            FallbackColor = new RenderColor(12, 34, 56, 255)
+        };
+
+        var context = CreateContext(document, settings);
+        var color = context.ResolveEntityColor(line);
+
+        Assert.Equal(12, color.R);
+        Assert.Equal(34, color.G);
+        Assert.Equal(56, color.B);
+    }
+
     private static RenderBuildContext CreateContext(CadDocument document, CadRenderSceneSettings settings)
     {
         return new RenderBuildContext(

@@ -56,6 +56,16 @@ public sealed class CadRenderSceneSettings
     /// Gets a value indicating whether line weights should be displayed.
     /// </summary>
     public bool DisplayLineWeight { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether linetype dash patterns should be rendered.
+    /// </summary>
+    public bool EnableDashPatternRendering { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether entity and layer colors should be rendered.
+    /// </summary>
+    public bool EnableColorRendering { get; init; } = true;
     /// <summary>
     /// Default dot length used for zero-length linetype segments, in millimeters.
     /// </summary>
@@ -216,6 +226,8 @@ public sealed class CadRenderSceneSettings
             DefaultLineWeightMm = DefaultLineWeightMm,
             MinLineWeightMm = MinLineWeightMm,
             DisplayLineWeight = DisplayLineWeight,
+            EnableDashPatternRendering = EnableDashPatternRendering,
+            EnableColorRendering = EnableColorRendering,
             LineTypeDotLengthMm = LineTypeDotLengthMm,
             PolylineArcPrecision = PolylineArcPrecision,
             SplinePrecision = SplinePrecision,
@@ -273,6 +285,8 @@ public sealed class CadRenderSceneSettings
             DefaultLineWeightMm = DefaultLineWeightMm,
             MinLineWeightMm = MinLineWeightMm,
             DisplayLineWeight = DisplayLineWeight,
+            EnableDashPatternRendering = EnableDashPatternRendering,
+            EnableColorRendering = EnableColorRendering,
             LineTypeDotLengthMm = LineTypeDotLengthMm,
             PolylineArcPrecision = PolylineArcPrecision,
             SplinePrecision = SplinePrecision,
@@ -335,6 +349,8 @@ public sealed class CadRenderSceneSettings
             DefaultLineWeightMm = DefaultLineWeightMm,
             MinLineWeightMm = MinLineWeightMm,
             DisplayLineWeight = DisplayLineWeight,
+            EnableDashPatternRendering = EnableDashPatternRendering,
+            EnableColorRendering = EnableColorRendering,
             LineTypeDotLengthMm = LineTypeDotLengthMm,
             PolylineArcPrecision = PolylineArcPrecision,
             SplinePrecision = SplinePrecision,
@@ -360,6 +376,8 @@ public sealed class CadRenderSceneSettings
             ViewportScale = ViewportScale,
             ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
             AnnotationScaleFactor = AnnotationScaleFactor,
+            StackedTextAlignment = StackedTextAlignment,
+            StackedTextSizePercentage = StackedTextSizePercentage,
             IncludeInvisible = IncludeInvisible,
             IncludeOffLayers = IncludeOffLayers,
             IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
@@ -390,6 +408,8 @@ public sealed class CadRenderSceneSettings
             DefaultLineWeightMm = DefaultLineWeightMm,
             MinLineWeightMm = MinLineWeightMm,
             DisplayLineWeight = DisplayLineWeight,
+            EnableDashPatternRendering = EnableDashPatternRendering,
+            EnableColorRendering = EnableColorRendering,
             LineTypeDotLengthMm = LineTypeDotLengthMm,
             PolylineArcPrecision = PolylineArcPrecision,
             SplinePrecision = SplinePrecision,
@@ -415,6 +435,67 @@ public sealed class CadRenderSceneSettings
             ViewportScale = ViewportScale,
             ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
             AnnotationScaleFactor = AnnotationScaleFactor,
+            StackedTextAlignment = StackedTextAlignment,
+            StackedTextSizePercentage = StackedTextSizePercentage,
+            IncludeInvisible = IncludeInvisible,
+            IncludeOffLayers = IncludeOffLayers,
+            IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,
+            PerformanceBudget = PerformanceBudget,
+            PlotStyleTable = PlotStyleTable
+        };
+    }
+
+    public CadRenderSceneSettings WithRenderStyleOptions(bool enableDashPatternRendering, bool enableColorRendering)
+    {
+        return new CadRenderSceneSettings
+        {
+            SupportPaths = SupportPaths,
+            Quality = Quality,
+            VisualStyle = VisualStyle,
+            Lighting = Lighting,
+            ViewportBrightness = ViewportBrightness,
+            ViewportContrast = ViewportContrast,
+            EnableHatchFills = EnableHatchFills,
+            EnableHatchPatterns = EnableHatchPatterns,
+            EnableHatchGradients = EnableHatchGradients,
+            HiddenLineSettings = HiddenLineSettings,
+            ShadeEdge = ShadeEdge,
+            ShadeDiffuseToAmbientPercentage = ShadeDiffuseToAmbientPercentage,
+            Background = Background,
+            FallbackColor = FallbackColor,
+            MillimetersPerUnit = MillimetersPerUnit,
+            DefaultLineWeightMm = DefaultLineWeightMm,
+            MinLineWeightMm = MinLineWeightMm,
+            DisplayLineWeight = DisplayLineWeight,
+            EnableDashPatternRendering = enableDashPatternRendering,
+            EnableColorRendering = enableColorRendering,
+            LineTypeDotLengthMm = LineTypeDotLengthMm,
+            PolylineArcPrecision = PolylineArcPrecision,
+            SplinePrecision = SplinePrecision,
+            CirclePrecision = CirclePrecision,
+            TextWidthFactor = TextWidthFactor,
+            PointDisplayMode = PointDisplayMode,
+            PointDisplaySize = PointDisplaySize,
+            QuickTextMode = QuickTextMode,
+            FillMode = FillMode,
+            PolylineLineTypeGeneration = PolylineLineTypeGeneration,
+            MirrorText = MirrorText,
+            RenderAttributes = RenderAttributes,
+            RenderAttributeDefinitions = RenderAttributeDefinitions,
+            EntityTypeVisibilityOverrides = EntityTypeVisibilityOverrides,
+            DynamicBlockVisibilityStateName = DynamicBlockVisibilityStateName,
+            DynamicBlockOverrideProvider = DynamicBlockOverrideProvider,
+            XClipFrameVisibility = XClipFrameVisibility,
+            WipeoutFrameVisibility = WipeoutFrameVisibility,
+            UnderlayFrameVisibility = UnderlayFrameVisibility,
+            IsPaperSpace = IsPaperSpace,
+            LayoutName = LayoutName,
+            PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
+            ViewportScale = ViewportScale,
+            ModelSpaceLineTypeScaling = ModelSpaceLineTypeScaling,
+            AnnotationScaleFactor = AnnotationScaleFactor,
+            StackedTextAlignment = StackedTextAlignment,
+            StackedTextSizePercentage = StackedTextSizePercentage,
             IncludeInvisible = IncludeInvisible,
             IncludeOffLayers = IncludeOffLayers,
             IncludeUnsupportedAsPoints = IncludeUnsupportedAsPoints,

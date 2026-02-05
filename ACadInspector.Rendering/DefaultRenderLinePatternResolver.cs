@@ -28,6 +28,11 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
 
     public RenderLinePattern ResolveLinePattern(Entity entity, CadDocument document, CadRenderSceneSettings settings)
     {
+        if (!settings.EnableDashPatternRendering)
+        {
+            return RenderLinePattern.Continuous;
+        }
+
         var lineType = entity.GetActiveLineType();
         if (lineType is null || !lineType.IsComplex)
         {
@@ -104,6 +109,11 @@ public sealed class DefaultRenderLinePatternResolver : IRenderLinePatternResolve
         CadDocument document,
         CadRenderSceneSettings settings)
     {
+        if (!settings.EnableDashPatternRendering)
+        {
+            return RenderLinePattern.Continuous;
+        }
+
         if (lineType is null || !lineType.IsComplex)
         {
             return RenderLinePattern.Continuous;
