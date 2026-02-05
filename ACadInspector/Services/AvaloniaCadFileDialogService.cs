@@ -20,37 +20,54 @@ public sealed class AvaloniaCadFileDialogService : ICadFileDialogService
 
     public async Task<CadOpenFileResult?> OpenCadFileAsync(CadFileFormat? preferredFormat, CancellationToken cancellationToken)
     {
+        var results = await OpenCadFilesAsync(preferredFormat, allowMultiple: false, cancellationToken).ConfigureAwait(true);
+        if (results.Count == 0)
+        {
+            return null;
+        }
+
+        return results[0];
+    }
+
+    public Task<IReadOnlyList<CadOpenFileResult>> OpenCadFilesAsync(CadFileFormat? preferredFormat, CancellationToken cancellationToken)
+    {
+        return OpenCadFilesAsync(preferredFormat, allowMultiple: true, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<CadOpenFileResult>> OpenCadFilesAsync(
+        CadFileFormat? preferredFormat,
+        bool allowMultiple,
+        CancellationToken cancellationToken)
+    {
         var storageProvider = _storageProviderAccessor.StorageProvider;
         if (storageProvider is null)
         {
-            return null;
+            return Array.Empty<CadOpenFileResult>();
         }
 
         var options = new FilePickerOpenOptions
         {
-            AllowMultiple = false,
+            AllowMultiple = allowMultiple,
             FileTypeFilter = CadFileTypes,
             SuggestedFileType = FindSuggestedFileType(preferredFormat)
         };
 
+        cancellationToken.ThrowIfCancellationRequested();
         var files = await storageProvider.OpenFilePickerAsync(options).ConfigureAwait(true);
+        cancellationToken.ThrowIfCancellationRequested();
         if (files.Count == 0)
         {
-            return null;
+            return Array.Empty<CadOpenFileResult>();
         }
 
-        var file = files[0];
-        var format = ResolveFormat(file.Name, preferredFormat, options.SuggestedFileType);
+        var results = new List<CadOpenFileResult>(files.Count);
+        foreach (var file in files)
+        {
+            var format = ResolveFormat(file.Name, preferredFormat, options.SuggestedFileType);
+            results.Add(CreateOpenResult(file, format));
+        }
 
-        return new CadOpenFileResult(
-            file.TryGetLocalPath(),
-            file.Name,
-            format,
-            async ct =>
-            {
-                ct.ThrowIfCancellationRequested();
-                return await file.OpenReadAsync().ConfigureAwait(false);
-            });
+        return results;
     }
 
     public async Task<CadSaveFileResult?> SaveCadFileAsync(CadFileFormat format, string? suggestedFileName, CancellationToken cancellationToken)
@@ -172,5 +189,18 @@ public sealed class AvaloniaCadFileDialogService : ICadFileDialogService
         }
 
         return fallback ?? CadFileFormat.Dxf;
+    }
+
+    private static CadOpenFileResult CreateOpenResult(IStorageFile file, CadFileFormat format)
+    {
+        return new CadOpenFileResult(
+            file.TryGetLocalPath(),
+            file.Name,
+            format,
+            async ct =>
+            {
+                ct.ThrowIfCancellationRequested();
+                return await file.OpenReadAsync().ConfigureAwait(false);
+            });
     }
 }

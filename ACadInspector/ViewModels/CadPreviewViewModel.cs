@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using ACadInspector.Core;
+using ACadInspector.Diagnostics;
 using ACadInspector.Services;
 using ACadSharp;
 using ACadSharp.IO;
@@ -15,6 +17,8 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 {
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
+    private readonly IAppNotificationService _notificationService;
+    private readonly HashSet<string> _reportedPreviewFailures = new(StringComparer.OrdinalIgnoreCase);
     private CadDocument? _previewDocument;
     private string? _previewPath;
 
@@ -26,10 +30,12 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 
     public CadPreviewViewModel(
         CadSelectionService selectionService,
-        CadDocumentContextService documentContext)
+        CadDocumentContextService documentContext,
+        IAppNotificationService notificationService)
     {
         _selectionService = selectionService;
         _documentContext = documentContext;
+        _notificationService = notificationService;
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .Subscribe(UpdatePreviewFromSelection);
@@ -40,19 +46,28 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 
     private void UpdatePreviewFromSelection(object? selected)
     {
-        var viewModel = _documentContext.ResolveViewModel(selected);
-        var document = _documentContext.ResolveDocument(selected) ?? viewModel?.Document;
-
-        if (document is null)
+        try
         {
-            _previewDocument = null;
-            _previewPath = null;
-            ClearPreview("Preview not available");
-            return;
-        }
+            var viewModel = _documentContext.ResolveViewModel(selected);
+            var document = _documentContext.ResolveDocument(selected) ?? viewModel?.Document;
 
-        _documentContext.TrySetActiveFromSelection(selected);
-        UpdatePreview(document, viewModel);
+            if (document is null)
+            {
+                _previewDocument = null;
+                _previewPath = null;
+                ClearPreview("Preview not available");
+                return;
+            }
+
+            _documentContext.TrySetActiveFromSelection(selected);
+            UpdatePreview(document, viewModel);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write($"Preview update failed: {ex}");
+            ClearPreview("Preview not available");
+            _notificationService.ShowWarning("Preview Unavailable", ex.Message, TimeSpan.FromSeconds(8));
+        }
     }
 
     private void UpdatePreview(CadDocument document, CadDocumentViewModel? viewModel)
@@ -73,6 +88,12 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 
         _previewDocument = document;
         _previewPath = viewModel.Path;
+
+        if (!CanReadDwgPreviewInCurrentBuild())
+        {
+            ClearPreview("Preview not available in Debug builds.");
+            return;
+        }
 
         try
         {
@@ -101,6 +122,7 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
         catch (Exception ex)
         {
             ClearPreview($"Preview error: {ex.Message}");
+            NotifyPreviewFailure(viewModel.Path, ex);
         }
     }
 
@@ -125,5 +147,35 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
 
         PreviewImage?.Dispose();
         PreviewImage = image;
+    }
+
+    private static bool CanReadDwgPreviewInCurrentBuild()
+    {
+#if DEBUG
+        // ACadSharp preview parser uses Debug.Assert on sentinel checks and can terminate the process in Debug builds.
+        return false;
+#else
+        return true;
+#endif
+    }
+
+    private void NotifyPreviewFailure(string path, Exception ex)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _notificationService.ShowWarning("Preview Unavailable", ex.Message, TimeSpan.FromSeconds(8));
+            return;
+        }
+
+        if (!_reportedPreviewFailures.Add(path))
+        {
+            return;
+        }
+
+        var fileName = Path.GetFileName(path);
+        _notificationService.ShowWarning(
+            "Preview Unavailable",
+            $"{fileName}: {ex.Message}",
+            TimeSpan.FromSeconds(8));
     }
 }

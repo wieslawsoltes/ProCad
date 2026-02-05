@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reactive;
 using System.Threading;
@@ -47,6 +48,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     private readonly ICadRenderSceneBuilder _renderSceneBuilder;
     private readonly CadRenderSceneSettings _renderSceneSettings;
     private readonly IRenderStatsExportService _statsExportService;
+    private readonly IAppNotificationService _notificationService;
 
     public WorkspaceViewModel(
         IScreen hostScreen,
@@ -65,7 +67,8 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         FastPathDiagnosticsService fastPathDiagnostics,
         ICadRenderSceneBuilder renderSceneBuilder,
         CadRenderSceneSettings renderSceneSettings,
-        IRenderStatsExportService statsExportService)
+        IRenderStatsExportService statsExportService,
+        IAppNotificationService notificationService)
     {
         AppLog.Write("WorkspaceViewModel ctor start.");
         HostScreen = hostScreen;
@@ -85,6 +88,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _renderSceneBuilder = renderSceneBuilder;
         _renderSceneSettings = renderSceneSettings;
         _statsExportService = statsExportService;
+        _notificationService = notificationService;
         Factory = dockFactory;
 
         AppLog.Write("WorkspaceViewModel creating layout.");
@@ -104,45 +108,103 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
 
     private async Task OpenAsync(CancellationToken cancellationToken)
     {
-        var result = await _fileDialogService.OpenCadFileAsync(null, cancellationToken).ConfigureAwait(true);
-        if (result is null)
+        IReadOnlyList<CadOpenFileResult> results;
+        try
+        {
+            results = await _fileDialogService.OpenCadFilesAsync(null, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write($"Open file picker failed: {ex}");
+            _notificationService.ShowError("Open Failed", $"Could not open file picker: {ex.Message}");
+            return;
+        }
+
+        if (results.Count == 0)
         {
             return;
         }
 
-        var options = _ioOptions.BuildReadOptions(result.Format);
-        var document = await LoadDocumentAsync(result, options, cancellationToken).ConfigureAwait(true);
-        if (document is null)
+        CadDocumentViewModel? lastOpened = null;
+        var openedCount = 0;
+        var failedCount = 0;
+        string? firstFailureMessage = null;
+        foreach (var result in results)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                var options = _ioOptions.BuildReadOptions(result.Format);
+                var document = await LoadDocumentAsync(result, options, cancellationToken).ConfigureAwait(true);
+                if (document is null)
+                {
+                    continue;
+                }
+
+                var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
+                var settings = CadRenderSettingsBuilder.Build(
+                    document,
+                    result.Path,
+                    _renderSceneSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides),
+                    selection);
+                var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
+                var statsFileName = BuildStatsFileName(result.FileName);
+                var renderViewModel = new CadRenderViewModel(
+                    document,
+                    scene,
+                    _renderSceneBuilder,
+                    _renderSceneSettings,
+                    selection,
+                    result.Path,
+                    _dynamicBlockOverrides,
+                    _dynamicBlockOverrides.WhenAnyValue(x => x.ChangeStamp),
+                    _selectionService,
+                    _focusService,
+                    _statsExportService,
+                    statsFileName);
+                var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);
+                _documentContext.Register(viewModel);
+                AddDocument(viewModel);
+                lastOpened = viewModel;
+                openedCount++;
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                firstFailureMessage ??= $"{result.FileName}: {ex.Message}";
+                AppLog.Write($"Open failed for '{result.FileName}': {ex}");
+            }
+        }
+
+        if (lastOpened is not null)
+        {
+            _documentTree.LoadDocument(lastOpened);
+            _selectionService.SelectedObject = lastOpened.Document;
+        }
+
+        if (failedCount <= 0)
         {
             return;
         }
 
-        var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
-        var settings = CadRenderSettingsBuilder.Build(
-            document,
-            result.Path,
-            _renderSceneSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides),
-            selection);
-        var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
-        var statsFileName = BuildStatsFileName(result.FileName);
-        var renderViewModel = new CadRenderViewModel(
-            document,
-            scene,
-            _renderSceneBuilder,
-            _renderSceneSettings,
-            selection,
-            result.Path,
-            _dynamicBlockOverrides,
-            _dynamicBlockOverrides.WhenAnyValue(x => x.ChangeStamp),
-            _selectionService,
-            _focusService,
-            _statsExportService,
-            statsFileName);
-        var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);
-        _documentContext.Register(viewModel);
-        AddDocument(viewModel);
-        _documentTree.LoadDocument(viewModel);
-        _selectionService.SelectedObject = document;
+        if (openedCount == 0)
+        {
+            _notificationService.ShowError(
+                "Open Failed",
+                $"Failed to open {failedCount} file(s). {firstFailureMessage}",
+                TimeSpan.FromSeconds(10));
+            return;
+        }
+
+        _notificationService.ShowWarning(
+            "Open Partially Completed",
+            $"Opened {openedCount} file(s), failed {failedCount}. {firstFailureMessage}",
+            TimeSpan.FromSeconds(10));
     }
 
     private async Task SaveAsync(CancellationToken cancellationToken)
