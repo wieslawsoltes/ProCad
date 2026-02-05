@@ -15,6 +15,7 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadLayerToolViewModel _layerTool;
     private readonly CadEntityTypeToolViewModel _entityTypeTool;
     private readonly CadBlocksToolViewModel _blocksTool;
+    private readonly CadViewportsToolViewModel _viewportsTool;
     private readonly CadTextStyleToolViewModel _textStyleTool;
     private readonly CadLineTypeToolViewModel _lineTypeTool;
     private readonly CadDimensionStyleToolViewModel _dimensionStyleTool;
@@ -34,6 +35,7 @@ public sealed class WorkspaceDockFactory : Factory
         CadLayerToolViewModel layerTool,
         CadEntityTypeToolViewModel entityTypeTool,
         CadBlocksToolViewModel blocksTool,
+        CadViewportsToolViewModel viewportsTool,
         CadTextStyleToolViewModel textStyleTool,
         CadLineTypeToolViewModel lineTypeTool,
         CadDimensionStyleToolViewModel dimensionStyleTool,
@@ -52,6 +54,7 @@ public sealed class WorkspaceDockFactory : Factory
         _layerTool = layerTool;
         _entityTypeTool = entityTypeTool;
         _blocksTool = blocksTool;
+        _viewportsTool = viewportsTool;
         _textStyleTool = textStyleTool;
         _lineTypeTool = lineTypeTool;
         _dimensionStyleTool = dimensionStyleTool;
@@ -88,6 +91,9 @@ public sealed class WorkspaceDockFactory : Factory
 
         _blocksTool.Id = "Blocks";
         _blocksTool.Title = "Blocks";
+
+        _viewportsTool.Id = "Viewports";
+        _viewportsTool.Title = "Viewports";
 
         _textStyleTool.Id = "TextStyles";
         _textStyleTool.Title = "Text Styles";
@@ -138,6 +144,7 @@ public sealed class WorkspaceDockFactory : Factory
             _layerTool,
             _entityTypeTool,
             _blocksTool,
+            _viewportsTool,
             _textStyleTool,
             _lineTypeTool,
             _dimensionStyleTool,

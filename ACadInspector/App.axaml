@@ -52,6 +52,9 @@
         <DataTemplate DataType="{x:Type vm:CadBlocksToolViewModel}" x:DataType="vm:CadBlocksToolViewModel">
             <views:CadBlocksToolView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadViewportsToolViewModel}" x:DataType="vm:CadViewportsToolViewModel">
+            <views:CadViewportsToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadTextStyleToolViewModel}" x:DataType="vm:CadTextStyleToolViewModel">
             <views:CadTextStyleToolView />
         </DataTemplate>

@@ -197,6 +197,7 @@ public partial class App : Application
         services.AddSingleton<CadLayerToolViewModel>();
         services.AddSingleton<CadEntityTypeToolViewModel>();
         services.AddSingleton<CadBlocksToolViewModel>();
+        services.AddSingleton<CadViewportsToolViewModel>();
         services.AddSingleton<CadTextStyleToolViewModel>();
         services.AddSingleton<CadLineTypeToolViewModel>();
         services.AddSingleton<CadDimensionStyleToolViewModel>();
