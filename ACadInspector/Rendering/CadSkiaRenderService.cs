@@ -10,6 +10,7 @@ namespace ACadInspector.Rendering;
 
 public sealed class CadSkiaRenderService
 {
+    private readonly object _cacheLock = new();
     private readonly Dictionary<PenKey, SKPaint> _strokePaintCache = new();
     private readonly Dictionary<DashPenKey, SKPaint> _dashStrokePaintCache = new();
     private readonly Dictionary<ObscuredPenKey, SKPaint> _obscuredPaintCache = new();
@@ -45,19 +46,22 @@ public sealed class CadSkiaRenderService
 
     public void ClearStrokePaintCache()
     {
-        _strokePaintCache.Clear();
-        _dashStrokePaintCache.Clear();
-        _obscuredPaintCache.Clear();
-        foreach (var effect in _obscuredEffectCache.Values)
+        lock (_cacheLock)
         {
-            effect.Dispose();
+            _strokePaintCache.Clear();
+            _dashStrokePaintCache.Clear();
+            _obscuredPaintCache.Clear();
+            foreach (var effect in _obscuredEffectCache.Values)
+            {
+                effect.Dispose();
+            }
+            _obscuredEffectCache.Clear();
+            foreach (var effect in _dashEffectCache.Values)
+            {
+                effect.Dispose();
+            }
+            _dashEffectCache.Clear();
         }
-        _obscuredEffectCache.Clear();
-        foreach (var effect in _dashEffectCache.Values)
-        {
-            effect.Dispose();
-        }
-        _dashEffectCache.Clear();
     }
 
     public void InvalidateHiddenLineCache()
@@ -437,43 +441,49 @@ public sealed class CadSkiaRenderService
 
         var worldThickness = ResolveWorldThickness(thickness, state);
         var key = new ObscuredPenKey(color, worldThickness, lineCap, lineJoin, lineType);
-        if (_obscuredPaintCache.TryGetValue(key, out var cached))
+        lock (_cacheLock)
         {
-            return cached;
+            if (_obscuredPaintCache.TryGetValue(key, out var cached) && cached is not null)
+            {
+                return cached;
+            }
+
+            var effect = ResolveObscuredPathEffect(lineType);
+            var paint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                StrokeCap = ToSkiaLineCap(lineCap),
+                StrokeJoin = ToSkiaLineJoin(lineJoin),
+                Color = ToSkiaColor(color),
+                PathEffect = effect
+            };
+
+            _obscuredPaintCache[key] = paint;
+            return paint;
         }
-
-        var effect = ResolveObscuredPathEffect(lineType);
-        var paint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = worldThickness,
-            StrokeCap = ToSkiaLineCap(lineCap),
-            StrokeJoin = ToSkiaLineJoin(lineJoin),
-            Color = ToSkiaColor(color),
-            PathEffect = effect
-        };
-
-        _obscuredPaintCache[key] = paint;
-        return paint;
     }
 
     private SKPathEffect? ResolveObscuredPathEffect(RenderObscuredLineType lineType)
     {
-        if (_obscuredEffectCache.TryGetValue(lineType, out var cached))
+        lock (_cacheLock)
         {
-            return cached;
-        }
+            if (_obscuredEffectCache.TryGetValue(lineType, out var cached))
+            {
+                return cached;
+            }
 
-        var intervals = ResolveObscuredIntervals(lineType);
-        if (intervals is null)
-        {
-            return null;
-        }
+            var intervals = ResolveObscuredIntervals(lineType);
+            if (intervals is null)
+            {
+                return null;
+            }
 
-        var effect = SKPathEffect.CreateDash(intervals, 0);
-        _obscuredEffectCache[lineType] = effect;
-        return effect;
+            var effect = SKPathEffect.CreateDash(intervals, 0);
+            _obscuredEffectCache[lineType] = effect;
+            return effect;
+        }
     }
 
     private static float[]? ResolveObscuredIntervals(RenderObscuredLineType lineType)
@@ -1776,22 +1786,25 @@ public sealed class CadSkiaRenderService
     {
         var worldThickness = ResolveWorldThickness(thickness, state);
         var key = new PenKey(color, worldThickness, lineCap, lineJoin);
-        if (_strokePaintCache.TryGetValue(key, out var paint))
+        lock (_cacheLock)
         {
+            if (_strokePaintCache.TryGetValue(key, out var paint) && paint is not null)
+            {
+                return paint;
+            }
+
+            paint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                StrokeCap = ToSkiaLineCap(lineCap),
+                StrokeJoin = ToSkiaLineJoin(lineJoin),
+                Color = ToSkiaColor(color)
+            };
+            _strokePaintCache[key] = paint;
             return paint;
         }
-
-        paint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = worldThickness,
-            StrokeCap = ToSkiaLineCap(lineCap),
-            StrokeJoin = ToSkiaLineJoin(lineJoin),
-            Color = ToSkiaColor(color)
-        };
-        _strokePaintCache[key] = paint;
-        return paint;
     }
 
     private SKPaint GetStrokePaint(
@@ -1811,35 +1824,41 @@ public sealed class CadSkiaRenderService
         var worldThickness = ResolveWorldThickness(thickness, state);
         var dashKey = new DashPatternKey(dashPattern, dashPhase);
         var key = new DashPenKey(color, worldThickness, lineCap, lineJoin, dashKey);
-        if (_dashStrokePaintCache.TryGetValue(key, out var paint))
+        lock (_cacheLock)
         {
+            if (_dashStrokePaintCache.TryGetValue(key, out var paint) && paint is not null)
+            {
+                return paint;
+            }
+
+            paint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = worldThickness,
+                StrokeCap = ToSkiaLineCap(lineCap),
+                StrokeJoin = ToSkiaLineJoin(lineJoin),
+                Color = ToSkiaColor(color),
+                PathEffect = ResolveDashEffect(dashKey)
+            };
+            _dashStrokePaintCache[key] = paint;
             return paint;
         }
-
-        paint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = worldThickness,
-            StrokeCap = ToSkiaLineCap(lineCap),
-            StrokeJoin = ToSkiaLineJoin(lineJoin),
-            Color = ToSkiaColor(color),
-            PathEffect = ResolveDashEffect(dashKey)
-        };
-        _dashStrokePaintCache[key] = paint;
-        return paint;
     }
 
     private SKPathEffect ResolveDashEffect(DashPatternKey key)
     {
-        if (_dashEffectCache.TryGetValue(key, out var effect))
+        lock (_cacheLock)
         {
+            if (_dashEffectCache.TryGetValue(key, out var effect))
+            {
+                return effect;
+            }
+
+            effect = SKPathEffect.CreateDash(key.Pattern, key.Phase);
+            _dashEffectCache[key] = effect;
             return effect;
         }
-
-        effect = SKPathEffect.CreateDash(key.Pattern, key.Phase);
-        _dashEffectCache[key] = effect;
-        return effect;
     }
 
     private static float ResolveWorldThickness(float thickness, CadRenderStateSnapshot state)
@@ -1856,38 +1875,44 @@ public sealed class CadSkiaRenderService
             return null;
         }
 
-        if (_imageCache.TryGetValue(path, out var cached))
+        lock (_cacheLock)
         {
-            return cached;
-        }
+            if (_imageCache.TryGetValue(path, out var cached))
+            {
+                return cached;
+            }
 
-        if (!File.Exists(path))
-        {
-            _imageCache[path] = null;
-            return null;
-        }
+            if (!File.Exists(path))
+            {
+                _imageCache[path] = null;
+                return null;
+            }
 
-        try
-        {
-            var bitmap = SKBitmap.Decode(path);
-            _imageCache[path] = bitmap;
-            return bitmap;
-        }
-        catch
-        {
-            _imageCache[path] = null;
-            return null;
+            try
+            {
+                var bitmap = SKBitmap.Decode(path);
+                _imageCache[path] = bitmap;
+                return bitmap;
+            }
+            catch
+            {
+                _imageCache[path] = null;
+                return null;
+            }
         }
     }
 
     public void ClearImageCache()
     {
-        foreach (var entry in _imageCache.Values)
+        lock (_cacheLock)
         {
-            entry?.Dispose();
-        }
+            foreach (var entry in _imageCache.Values)
+            {
+                entry?.Dispose();
+            }
 
-        _imageCache.Clear();
+            _imageCache.Clear();
+        }
     }
 
     private static float CalculateGridStep(float targetWorld)
@@ -1975,19 +2000,22 @@ public sealed class CadSkiaRenderService
 
     private SKPaint GetFillPaint(RenderColor color)
     {
-        if (_fillPaintCache.TryGetValue(color, out var paint))
+        lock (_cacheLock)
         {
+            if (_fillPaintCache.TryGetValue(color, out var paint) && paint is not null)
+            {
+                return paint;
+            }
+
+            paint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = ToSkiaColor(color)
+            };
+            _fillPaintCache[color] = paint;
             return paint;
         }
-
-        paint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Fill,
-            Color = ToSkiaColor(color)
-        };
-        _fillPaintCache[color] = paint;
-        return paint;
     }
 
     private SKPaint GetTextPaint(RenderText text)
@@ -2574,15 +2602,18 @@ public sealed class CadSkiaRenderService
         var weight = isBold ? (int)SKFontStyleWeight.Bold : (int)SKFontStyleWeight.Normal;
         var slant = isItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
         var key = new TypefaceKey(family, weight, (int)slant);
-        if (_typefaceCache.TryGetValue(key, out var cached))
+        lock (_cacheLock)
         {
-            return cached;
-        }
+            if (_typefaceCache.TryGetValue(key, out var cached) && cached is not null)
+            {
+                return cached;
+            }
 
-        var style = new SKFontStyle(weight, (int)SKFontStyleWidth.Normal, slant);
-        var resolved = SKTypeface.FromFamilyName(family, style) ?? SKTypeface.Default;
-        _typefaceCache[key] = resolved;
-        return resolved;
+            var style = new SKFontStyle(weight, (int)SKFontStyleWidth.Normal, slant);
+            var resolved = SKTypeface.FromFamilyName(family, style) ?? SKTypeface.Default;
+            _typefaceCache[key] = resolved;
+            return resolved;
+        }
     }
 
     private readonly record struct HiddenLineContext(
