@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using ACadSharp.Entities;
 
 namespace ACadInspector.Rendering;
 
@@ -49,6 +50,7 @@ public sealed class RenderHitTestEngine
         for (var i = 0; i < _candidates.Count; i++)
         {
             var candidate = _candidates[i];
+            var metadata = ResolveMetadata(scene, candidate.Primitive);
             if (candidate.Primitive is RenderClipGroup clipGroup)
             {
                 if (!TryHitClipGroupDetailed(clipGroup, point, tolerance, out var distance, out var inner))
@@ -57,7 +59,6 @@ public sealed class RenderHitTestEngine
                 }
 
                 var target = inner ?? candidate.Primitive;
-                var metadata = ResolveMetadata(scene, target);
                 results.Add(new RenderHitTestResult(
                     candidate.Layer,
                     target,
@@ -68,12 +69,28 @@ public sealed class RenderHitTestEngine
             }
             else
             {
+                if (candidate.Primitive is RenderPolyline polyline && IsViewportEntity(metadata))
+                {
+                    if (!TryHitViewportBounds(polyline, point, tolerance, out var viewportDistance))
+                    {
+                        continue;
+                    }
+
+                    results.Add(new RenderHitTestResult(
+                        candidate.Layer,
+                        candidate.Primitive,
+                        viewportDistance,
+                        candidate.Bounds,
+                        metadata.OwnerEntity,
+                        metadata.SourceEntity));
+                    continue;
+                }
+
                 if (!TryHitTestPrimitive(candidate.Primitive, point, tolerance, out var distance))
                 {
                     continue;
                 }
 
-                var metadata = ResolveMetadata(scene, candidate.Primitive);
                 results.Add(new RenderHitTestResult(
                     candidate.Layer,
                     candidate.Primitive,
@@ -251,6 +268,77 @@ public sealed class RenderHitTestEngine
 
         distance = MathF.Sqrt(minSq);
         return true;
+    }
+
+    private static bool TryHitViewportBounds(RenderPolyline polyline, Vector2 point, float tolerance, out float distance)
+    {
+        if (TryHitPolyline(polyline, point, tolerance, out distance))
+        {
+            return true;
+        }
+
+        if (!polyline.IsClosed)
+        {
+            distance = float.PositiveInfinity;
+            return false;
+        }
+
+        if (!polyline.Bounds.Contains(point))
+        {
+            distance = float.PositiveInfinity;
+            return false;
+        }
+
+        var points = polyline.Points;
+        if (points is null || points.Count < 3)
+        {
+            distance = float.PositiveInfinity;
+            return false;
+        }
+
+        if (!IsPointInsidePolygon(points, point))
+        {
+            distance = float.PositiveInfinity;
+            return false;
+        }
+
+        distance = 0f;
+        return true;
+    }
+
+    private static bool IsViewportEntity(RenderPrimitiveMetadata metadata)
+    {
+        return metadata.OwnerEntity is Viewport || metadata.SourceEntity is Viewport;
+    }
+
+    private static bool IsPointInsidePolygon(IReadOnlyList<Vector2> points, Vector2 point)
+    {
+        var inside = false;
+        var count = points.Count;
+        for (var i = 0; i < count; i++)
+        {
+            var j = i == 0 ? count - 1 : i - 1;
+            var pi = points[i];
+            var pj = points[j];
+
+            var intersects = (pi.Y > point.Y) != (pj.Y > point.Y);
+            if (intersects)
+            {
+                var divisor = pj.Y - pi.Y;
+                if (Math.Abs(divisor) < 1e-6f)
+                {
+                    continue;
+                }
+
+                var x = (pj.X - pi.X) * (point.Y - pi.Y) / divisor + pi.X;
+                if (point.X < x)
+                {
+                    inside = !inside;
+                }
+            }
+        }
+
+        return inside;
     }
 
     private static bool TryHitCircle(RenderCircle circle, Vector2 point, float tolerance, out float distance)

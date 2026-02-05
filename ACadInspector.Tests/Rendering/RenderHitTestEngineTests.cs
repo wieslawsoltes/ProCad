@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
+using ACadSharp.Entities;
 using ACadInspector.Rendering;
 using Xunit;
 
@@ -131,6 +132,52 @@ public class RenderHitTestEngineTests
 
         engine.HitTestPoint(nonZeroScene, point, 0.1f, results);
         Assert.NotEmpty(results);
+    }
+
+    [Fact]
+    public void HitTestPoint_SelectsViewportBounds()
+    {
+        var viewport = new Viewport();
+        var points = new List<Vector2>
+        {
+            new(0f, 0f),
+            new(10f, 0f),
+            new(10f, 10f),
+            new(0f, 10f)
+        };
+
+        var polyline = new RenderPolyline(
+            points,
+            isClosed: true,
+            RenderColor.DefaultForeground,
+            0.1f,
+            RenderLineCap.Round,
+            RenderLineJoin.Round);
+
+        var bounds = RenderBounds.Empty.Expand(polyline.Bounds);
+        var layer = new RenderLayer("Viewports", RenderColor.DefaultForeground, isVisible: true, new[] { polyline }, bounds);
+        var spatialIndex = RenderSpatialIndex.Build(new[] { layer });
+        var metadata = new Dictionary<IRenderPrimitive, RenderPrimitiveMetadata>
+        {
+            [polyline] = new RenderPrimitiveMetadata(viewport, null)
+        };
+
+        var scene = new RenderScene(
+            new[] { layer },
+            bounds,
+            RenderColor.DefaultBackground,
+            RenderVisualStyle.Wireframe,
+            RenderHiddenLineSettings.Default,
+            spatialIndex,
+            metadata,
+            new RenderDiagnostics(),
+            RenderStats.Empty);
+
+        var engine = new RenderHitTestEngine();
+        var results = new List<RenderHitTestResult>();
+        engine.HitTestPoint(scene, new Vector2(5f, 5f), 0.1f, results);
+
+        Assert.Contains(results, result => result.SourceEntity is Viewport);
     }
 
     private static RenderScene BuildSceneWithPrimitive(IRenderPrimitive primitive)
