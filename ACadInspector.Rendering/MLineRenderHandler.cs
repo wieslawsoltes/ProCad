@@ -159,7 +159,7 @@ public sealed class MLineRenderHandler : IRenderEntityHandler
             return context.ResolveEntityColor(entity);
         }
 
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColor(color, context.Settings, 255);
     }
 
     private static RenderColor ResolveFillColor(MLineStyle style, RenderBuildContext context)
@@ -170,7 +170,7 @@ public sealed class MLineRenderHandler : IRenderEntityHandler
             return context.Settings.FallbackColor;
         }
 
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColor(color, context.Settings, 255);
     }
 
     private static void TryAddFill(

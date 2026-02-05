@@ -333,7 +333,7 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
                     drawFrame |= (s16.Value & 2) != 0;
                     break;
                 case ExtendedDataInteger32 s32:
-                    fillColor = ParseColor(s32.Value, textColor.A);
+                    fillColor = ParseColor(s32.Value, textColor.A, settings);
                     break;
                 case ExtendedDataReal real:
                     scale = (float)real.Value;
@@ -364,7 +364,7 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
         return true;
     }
 
-    private static RenderColor ParseColor(int value, byte alpha)
+    private static RenderColor ParseColor(int value, byte alpha, CadRenderSceneSettings settings)
     {
         ACadSharp.Color color;
         if (value <= 255 && value > 0)
@@ -377,7 +377,7 @@ public sealed class TextEntityRenderHandler : IRenderEntityHandler
             color = ACadSharp.Color.FromTrueColor(trueColor);
         }
 
-        return new RenderColor(color.R, color.G, color.B, alpha);
+        return RenderStyleUtils.ResolveColor(color, settings, alpha);
     }
 
     private static bool IsAnnotative(TextEntity text)

@@ -475,7 +475,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         var fillColor = textColor;
         if (flags.HasFlag(BackgroundFillFlags.UseBackgroundFillColor))
         {
-            fillColor = ToRenderColor(text.BackgroundColor);
+            fillColor = ToRenderColor(text.BackgroundColor, settings);
         }
         else if (flags.HasFlag(BackgroundFillFlags.UseDrawingWindowColor))
         {
@@ -506,9 +506,9 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return true;
     }
 
-    private static RenderColor ToRenderColor(ACadSharp.Color color)
+    private static RenderColor ToRenderColor(ACadSharp.Color color, CadRenderSceneSettings settings)
     {
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColor(color, settings, 255);
     }
 
     private static byte ResolveTransparencyAlpha(Transparency transparency)
@@ -663,7 +663,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                     case 'c':
                         Flush();
                         var colorValue = ReadDelimitedValue(value, i + 2, out var colorEnd);
-                        state = state.WithColor(ParseColor(code, colorValue));
+                        state = state.WithColor(ParseColor(code, colorValue, settings));
                         i = colorEnd - 1;
                         continue;
                     case 'F':
@@ -764,7 +764,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
         return text.Substring(start, index - start);
     }
 
-    private static RenderColor? ParseColor(char code, string value)
+    private static RenderColor? ParseColor(char code, string value, CadRenderSceneSettings settings)
     {
         if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var raw))
         {
@@ -787,7 +787,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             color = ACadSharp.Color.FromTrueColor(trueColor);
         }
 
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColor(color, settings, 255);
     }
 
     private static MTextFont ParseFont(string value)
@@ -1393,7 +1393,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             }
             else
             {
-                fillColor = ToRenderColor(color);
+                fillColor = ToRenderColor(color, settings);
             }
         }
         else if (text.BackgroundFillFlags.HasFlag(BackgroundFillFlags.UseDrawingWindowColor))

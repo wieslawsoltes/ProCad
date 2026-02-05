@@ -5,14 +5,9 @@ namespace ACadInspector.Rendering;
 
 internal static class RenderLeaderUtils
 {
-    public static RenderColor ResolveColor(Color color, RenderColor fallback)
+    public static RenderColor ResolveColor(Color color, RenderColor fallback, CadRenderSceneSettings settings)
     {
-        if (color.IsByLayer || color.IsByBlock)
-        {
-            return fallback;
-        }
-
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColorOrFallback(color, settings, fallback);
     }
 
     public static float ResolveLineWeight(LineWeightType weight, CadRenderSceneSettings settings, float fallback)

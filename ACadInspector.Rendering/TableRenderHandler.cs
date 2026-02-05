@@ -284,7 +284,7 @@ public sealed class TableRenderHandler : IRenderEntityHandler
                 var bottom = rowPositions[Math.Min(rowIndex + span.RowSpan, rowPositions.Count - 1)];
 
                 var cellStyle = styles[rowIndex, columnIndex];
-                var fillColor = ResolveCellFillColor(cellStyle, context.Settings.Background);
+                var fillColor = ResolveCellFillColor(cellStyle, context.Settings.Background, context.Settings);
                 if (cellStyle.IsFillColorOn)
                 {
                     var quad = BuildCellQuad(origin, xAxis, yAxis, left, right, top, bottom, transform);
@@ -347,15 +347,11 @@ public sealed class TableRenderHandler : IRenderEntityHandler
 
     private static RenderColor ResolveCellFillColor(
         EffectiveCellStyle cellStyle,
-        RenderColor fallback)
+        RenderColor fallback,
+        CadRenderSceneSettings settings)
     {
         var color = cellStyle.BackgroundColor;
-        if (color.IsByLayer || color.IsByBlock)
-        {
-            return fallback;
-        }
-
-        return new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColorOrFallback(color, settings, fallback);
     }
 
     private static string ResolveCellText(TableEntity.Cell cell)
@@ -886,7 +882,7 @@ public sealed class TableRenderHandler : IRenderEntityHandler
         CadRenderSceneSettings settings,
         XYZ offsetAxis)
     {
-        var color = ResolveBorderColor(border, baseColor);
+        var color = ResolveBorderColor(border, baseColor, settings);
         var thickness = ResolveBorderThickness(border, baseThickness, settings);
         if (border.Type == TableEntity.BorderType.Double && border.DoubleLineSpacing > 0)
         {
@@ -905,15 +901,17 @@ public sealed class TableRenderHandler : IRenderEntityHandler
         builder.Add(new RenderLine(start, end, color, thickness, lineCap, lineJoin));
     }
 
-    private static RenderColor ResolveBorderColor(TableEntity.CellBorder border, RenderColor baseColor)
+    private static RenderColor ResolveBorderColor(
+        TableEntity.CellBorder border,
+        RenderColor baseColor,
+        CadRenderSceneSettings settings)
     {
         var borderColor = border.Color;
         if (borderColor.IsByLayer || borderColor.IsByBlock)
         {
             return baseColor;
         }
-
-        return new RenderColor(borderColor.R, borderColor.G, borderColor.B, baseColor.A);
+        return RenderStyleUtils.ResolveColor(borderColor, settings, baseColor.A);
     }
 
     private static float ResolveBorderThickness(

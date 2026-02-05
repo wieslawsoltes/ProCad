@@ -39,7 +39,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         }
 
         var worldLoops = TransformLoops(localLoops, hatchTransform);
-        var gradient = BuildGradient(hatch.GradientColor, color.A);
+        var gradient = BuildGradient(hatch.GradientColor, color.A, context.Settings);
         var fillMode = ResolveFillMode(hatch.Style);
         var enableFills = settings.EnableHatchFills && settings.FillMode;
         var enablePatterns = settings.EnableHatchPatterns && settings.Quality != RenderQuality.Draft && settings.FillMode;
@@ -318,7 +318,10 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         yield return bounds.Max;
     }
 
-    private static RenderHatchGradient? BuildGradient(HatchGradientPattern gradient, byte alpha)
+    private static RenderHatchGradient? BuildGradient(
+        HatchGradientPattern gradient,
+        byte alpha,
+        CadRenderSceneSettings settings)
     {
         if (gradient is null || !gradient.Enabled || gradient.Colors.Count == 0)
         {
@@ -327,7 +330,7 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
 
         var stops = gradient.Colors
             .OrderBy(stop => stop.Value)
-            .Select(stop => new RenderHatchGradientStop((float)stop.Value, ToRenderColor(stop.Color, alpha)))
+            .Select(stop => new RenderHatchGradientStop((float)stop.Value, ToRenderColor(stop.Color, alpha, settings)))
             .ToList();
 
         if (gradient.IsSingleColorGradient && stops.Count == 1)
@@ -360,9 +363,9 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         return new RenderColor(r, g, b, color.A);
     }
 
-    private static RenderColor ToRenderColor(ACadSharp.Color color, byte alpha)
+    private static RenderColor ToRenderColor(ACadSharp.Color color, byte alpha, CadRenderSceneSettings settings)
     {
-        return new RenderColor(color.R, color.G, color.B, alpha);
+        return RenderStyleUtils.ResolveColor(color, settings, alpha);
     }
 
     private static void AddBoundaryOutlines(

@@ -12,9 +12,7 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
     public RenderColor ResolveEntityColor(Entity entity, CadRenderSceneSettings settings)
     {
         var color = entity.GetActiveColor();
-        var baseColor = color.IsByLayer || color.IsByBlock
-            ? settings.FallbackColor
-            : new RenderColor(color.R, color.G, color.B, 255);
+        var baseColor = RenderStyleUtils.ResolveColorOrFallback(color, settings, settings.FallbackColor);
 
         var alpha = ResolveEntityAlpha(entity);
         var combinedAlpha = CombineAlpha(baseColor.A, alpha);
@@ -23,10 +21,7 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
 
     public RenderColor ResolveLayerColor(Layer layer, CadRenderSceneSettings settings)
     {
-        var color = layer.Color;
-        return color.IsByLayer || color.IsByBlock
-            ? settings.FallbackColor
-            : new RenderColor(color.R, color.G, color.B, 255);
+        return RenderStyleUtils.ResolveColorOrFallback(layer.Color, settings, settings.FallbackColor);
     }
 
     public float ResolveLineWeight(Entity entity, CadRenderSceneSettings settings)
@@ -202,4 +197,5 @@ public sealed class DefaultRenderStyleResolver : IRenderStyleResolver
         var combined = baseAlpha * overlayAlpha / 255f;
         return (byte)Math.Clamp((int)Math.Round(combined), 0, 255);
     }
+
 }

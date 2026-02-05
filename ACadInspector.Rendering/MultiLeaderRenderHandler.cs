@@ -67,7 +67,7 @@ public sealed class MultiLeaderRenderHandler : IRenderEntityHandler
 
         var lineType = ResolveLineType(multiLeader, line);
         var pattern = ResolveLinePattern(multiLeader, lineType, context);
-        var color = ResolveLineColor(multiLeader, line, baseColor);
+        var color = ResolveLineColor(multiLeader, line, baseColor, context.Settings);
         var thickness = ResolveLineWeight(multiLeader, line, baseThickness, context.Settings);
 
         var builder = context.GetLayerBuilder(multiLeader);
@@ -105,7 +105,7 @@ public sealed class MultiLeaderRenderHandler : IRenderEntityHandler
 
         var lineType = ResolveLineType(multiLeader, line);
         var pattern = ResolveLinePattern(multiLeader, lineType, context);
-        var color = ResolveLineColor(multiLeader, line, baseColor);
+        var color = ResolveLineColor(multiLeader, line, baseColor, context.Settings);
         var thickness = ResolveLineWeight(multiLeader, line, baseThickness, context.Settings);
         var builder = context.GetLayerBuilder(multiLeader);
 
@@ -259,10 +259,11 @@ public sealed class MultiLeaderRenderHandler : IRenderEntityHandler
     private static RenderColor ResolveLineColor(
         MultiLeader multiLeader,
         MultiLeaderObjectContextData.LeaderLine line,
-        RenderColor fallback)
+        RenderColor fallback,
+        CadRenderSceneSettings settings)
     {
         var color = ResolveLineColorValue(multiLeader, line);
-        return RenderLeaderUtils.ResolveColor(color, fallback);
+        return RenderLeaderUtils.ResolveColor(color, fallback, settings);
     }
 
     private static Color ResolveLineColorValue(

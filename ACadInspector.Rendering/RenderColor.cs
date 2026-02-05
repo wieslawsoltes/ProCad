@@ -19,4 +19,7 @@ public readonly struct RenderColor
 
     public static RenderColor DefaultForeground => new(230, 230, 230, 255);
     public static RenderColor DefaultBackground => new(24, 26, 31, 255);
+    public static RenderColor DefaultPaper => new(250, 250, 250, 255);
+    public static RenderColor DefaultPaperOutside => new(176, 176, 176, 255);
+    public static RenderColor DefaultPaperOutline => new(120, 120, 120, 255);
 }
