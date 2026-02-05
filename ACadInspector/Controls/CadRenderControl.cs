@@ -9,12 +9,11 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Rendering;
 using Avalonia.Rendering.SceneGraph;
-using Avalonia.Skia;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ACadInspector.Rendering;
 using ACadInspector.Services;
-using SkiaSharp;
+using ACadInspector.Rendering.Backends;
 using AvaloniaVector = Avalonia.Vector;
 
 namespace ACadInspector.Controls;
@@ -41,6 +40,9 @@ public sealed class CadRenderControl : Control
 
     public static readonly StyledProperty<IReadOnlyDictionary<string, bool>?> EntityTypeVisibilityOverridesProperty =
         AvaloniaProperty.Register<CadRenderControl, IReadOnlyDictionary<string, bool>?>(nameof(EntityTypeVisibilityOverrides));
+
+    public static readonly StyledProperty<IRenderBackend?> RenderBackendProperty =
+        AvaloniaProperty.Register<CadRenderControl, IRenderBackend?>(nameof(RenderBackend));
 
     public static readonly StyledProperty<int> FitToViewTriggerProperty =
         AvaloniaProperty.Register<CadRenderControl, int>(nameof(FitToViewTrigger));
@@ -99,7 +101,8 @@ public sealed class CadRenderControl : Control
     private DateTime _interactionUntilUtc;
     private DispatcherTimer? _interactionTimer;
     private static readonly TimeSpan InteractionHold = TimeSpan.FromMilliseconds(150);
-    private readonly CadSkiaRenderService _renderer = new();
+    private IRenderBackend _backend;
+    private bool _ownsBackend;
     private CadRenderStateSnapshot _renderState = CadRenderStateSnapshot.Empty;
 
     public RenderScene? Scene
@@ -142,6 +145,12 @@ public sealed class CadRenderControl : Control
     {
         get => GetValue(EntityTypeVisibilityOverridesProperty);
         set => SetValue(EntityTypeVisibilityOverridesProperty, value);
+    }
+
+    public IRenderBackend? RenderBackend
+    {
+        get => GetValue(RenderBackendProperty);
+        set => SetValue(RenderBackendProperty, value);
     }
 
     public int FitToViewTrigger
@@ -237,6 +246,7 @@ public sealed class CadRenderControl : Control
     public CadRenderControl()
     {
         ClipToBounds = true;
+        _backend = CreateBackend(RenderBackend);
         UpdateRenderState();
     }
 
@@ -248,14 +258,9 @@ public sealed class CadRenderControl : Control
             return;
         }
 
-        context.Custom(new SkiaRenderOp(this, size));
-    }
-
-    private void RenderSkia(SKCanvas canvas, Size size)
-    {
         var state = Volatile.Read(ref _renderState);
         var isInteractive = _isInteracting && state.EnableInteractionOptimization;
-        _renderer.Render(canvas, size, state, isInteractive);
+        context.Custom(new BackendRenderOp(_backend, size, state, isInteractive));
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -278,9 +283,9 @@ public sealed class CadRenderControl : Control
 
         if (change.Property == SceneProperty)
         {
-            _renderer.ClearImageCache();
-            _renderer.InvalidateHiddenLineCache();
-            _renderer.InvalidateInteractionCache();
+            _backend.ClearImageCache();
+            _backend.InvalidateHiddenLineCache();
+            _backend.InvalidateInteractionCache();
             if (FitOnSceneChange)
             {
                 _pendingFit = !TryFitToScene();
@@ -296,7 +301,15 @@ public sealed class CadRenderControl : Control
 
         if (change.Property == EnableInteractionOptimizationProperty)
         {
-            _renderer.InvalidateInteractionCache();
+            _backend.InvalidateInteractionCache();
+        }
+
+        if (change.Property == RenderBackendProperty)
+        {
+            SetBackend(RenderBackend);
+            UpdateRenderState();
+            InvalidateVisual();
+            return;
         }
 
         if (change.Property == FitToViewTriggerProperty)
@@ -333,7 +346,7 @@ public sealed class CadRenderControl : Control
             }
             if (change.Property == MinPixelThicknessProperty)
             {
-                _renderer.ClearStrokePaintCache();
+                _backend.ClearStrokePaintCache();
             }
             if (change.Property == FocusRequestProperty && FocusRequest is not null)
             {
@@ -388,8 +401,8 @@ public sealed class CadRenderControl : Control
     {
         base.OnDetachedFromVisualTree(e);
         _interactionTimer?.Stop();
-        _renderer.ClearImageCache();
-        _renderer.InvalidateInteractionCache();
+        _backend.ClearImageCache();
+        _backend.InvalidateInteractionCache();
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -581,7 +594,7 @@ public sealed class CadRenderControl : Control
         if (Math.Abs(_cachedZoom - Zoom) > 0.0001)
         {
             _cachedZoom = Zoom;
-            _renderer.ClearStrokePaintCache();
+            _backend.ClearStrokePaintCache();
         }
 
         UpdateRenderState();
@@ -607,6 +620,34 @@ public sealed class CadRenderControl : Control
             SelectionAnnotation,
             DebugBvhBounds);
         Volatile.Write(ref _renderState, snapshot);
+    }
+
+    private IRenderBackend CreateBackend(IRenderBackend? backend)
+    {
+        if (backend is not null)
+        {
+            _ownsBackend = false;
+            return backend;
+        }
+
+        _ownsBackend = true;
+        var factory = RenderBackendRegistry.Factory ?? SkiaRenderBackendFactory.Instance;
+        return factory.Create();
+    }
+
+    private void SetBackend(IRenderBackend? backend)
+    {
+        if (ReferenceEquals(backend, _backend))
+        {
+            return;
+        }
+
+        if (_ownsBackend)
+        {
+            _backend.Dispose();
+        }
+
+        _backend = CreateBackend(backend);
     }
 
     private AvaloniaVector ComputePanForZoom(Vector2 worldPoint, Point pointer, double zoom)
@@ -645,37 +686,28 @@ public sealed class CadRenderControl : Control
         return pixels / scale;
     }
 
-    private sealed class SkiaRenderOp : ICustomDrawOperation
+    private sealed class BackendRenderOp : ICustomDrawOperation
     {
-        private readonly CadRenderControl _owner;
+        private readonly IRenderBackend _backend;
         private readonly Rect _bounds;
         private readonly Size _size;
+        private readonly CadRenderStateSnapshot _state;
+        private readonly bool _isInteractive;
 
-        public SkiaRenderOp(CadRenderControl owner, Size size)
+        public BackendRenderOp(IRenderBackend backend, Size size, CadRenderStateSnapshot state, bool isInteractive)
         {
-            _owner = owner;
+            _backend = backend;
             _size = size;
             _bounds = new Rect(size);
+            _state = state;
+            _isInteractive = isInteractive;
         }
 
         public Rect Bounds => _bounds;
 
         public void Render(ImmediateDrawingContext context)
         {
-            var leaseFeature = context.TryGetFeature(typeof(ISkiaSharpApiLeaseFeature)) as ISkiaSharpApiLeaseFeature;
-            if (leaseFeature == null)
-            {
-                return;
-            }
-
-            using var lease = leaseFeature.Lease();
-            var canvas = lease.SkCanvas;
-            if (canvas is null)
-            {
-                return;
-            }
-
-            _owner.RenderSkia(canvas, _size);
+            _backend.Render(context, _size, _state, _isInteractive);
         }
 
         public bool HitTest(Point p) => _bounds.Contains(p);

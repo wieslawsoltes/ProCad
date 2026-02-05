@@ -11,6 +11,7 @@ using ACadInspector.IO;
 using ACadInspector.Services;
 using ACadInspector.Scripting;
 using ACadInspector.Rendering;
+using ACadInspector.Rendering.Backends;
 using ACadInspector.ViewModels;
 using ACadInspector.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +52,7 @@ public partial class App : Application
             AppLog.Write("ConfigureReactiveUi start.");
             ConfigureReactiveUi();
             AppLog.Write("ConfigureReactiveUi done.");
+            RenderBackendRegistry.Factory = _services.GetRequiredService<IRenderBackendFactory>();
         }
         catch (Exception ex)
         {
@@ -110,6 +112,7 @@ public partial class App : Application
         services.AddSingleton<DxfTextDiffEngine>();
         services.AddSingleton<CadBatchQueryEngine>();
         services.AddSingleton<ICadScriptHost, CadScriptHost>();
+        services.AddSingleton<IRenderBackendFactory, SkiaRenderBackendFactory>();
         services.AddSingleton<CadRenderSceneSettings>();
         services.AddSingleton<IRenderCache, RenderCache>();
         services.AddSingleton<IRenderCacheStampProvider, RenderCacheStampProvider>();
