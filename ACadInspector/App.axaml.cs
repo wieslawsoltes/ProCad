@@ -185,7 +185,9 @@ public partial class App : Application
         services.AddSingleton<CadScriptWorkspaceService>();
         services.AddSingleton<CadBlockEditorViewModelFactory>();
         services.AddSingleton<CadBlockEditorService>();
+        services.AddSingleton<IBlockPreviewRenderer, SkiaBlockPreviewRenderer>();
         services.AddSingleton<CadBlockPreviewService>();
+        services.AddSingleton<IStylePreviewRenderer, SkiaStylePreviewRenderer>();
         services.AddSingleton<CadStylePreviewService>();
 
         services.AddSingleton<PropertyGridViewModel>();

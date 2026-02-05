@@ -8,10 +8,8 @@ using System.Threading.Tasks;
 using ACadInspector.Rendering;
 using ACadInspector.ViewModels;
 using ACadSharp.Tables;
-using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using SkiaSharp;
 
 namespace ACadInspector.Services;
 
@@ -19,12 +17,17 @@ public sealed class CadBlockPreviewService
 {
     private readonly ICadRenderSceneBuilder _sceneBuilder;
     private readonly CadRenderSceneSettings _baseSettings;
+    private readonly IBlockPreviewRenderer _previewRenderer;
     private readonly ConcurrentDictionary<BlockPreviewKey, Bitmap?> _cache;
 
-    public CadBlockPreviewService(ICadRenderSceneBuilder sceneBuilder, CadRenderSceneSettings baseSettings)
+    public CadBlockPreviewService(
+        ICadRenderSceneBuilder sceneBuilder,
+        CadRenderSceneSettings baseSettings,
+        IBlockPreviewRenderer previewRenderer)
     {
         _sceneBuilder = sceneBuilder;
         _baseSettings = baseSettings;
+        _previewRenderer = previewRenderer;
         _cache = new ConcurrentDictionary<BlockPreviewKey, Bitmap?>(new BlockPreviewKeyComparer());
     }
 
@@ -103,13 +106,6 @@ public sealed class CadBlockPreviewService
         }
 
         var pixelSize = Math.Max(1, size);
-        var info = new SKImageInfo(pixelSize, pixelSize, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var surface = SKSurface.Create(info);
-        if (surface is null)
-        {
-            return null;
-        }
-
         var viewTransform = BuildViewTransform(scene.Bounds, pixelSize, padding: 6f, out var baseScale);
         var snapshot = new CadRenderStateSnapshot(
             scene,
@@ -129,17 +125,7 @@ public sealed class CadBlockPreviewService
             selectionAnnotation: null,
             debugBvhBounds: null);
 
-        var renderer = new CadSkiaRenderService();
-        renderer.Render(surface.Canvas, new Size(pixelSize, pixelSize), snapshot, isInteractive: false);
-
-        using var image = surface.Snapshot();
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        if (data is null)
-        {
-            return null;
-        }
-
-        return data.ToArray();
+        return _previewRenderer.Render(snapshot, pixelSize);
     }
 
     private static Matrix3x2 BuildViewTransform(RenderBounds bounds, int size, float padding, out double baseScale)
