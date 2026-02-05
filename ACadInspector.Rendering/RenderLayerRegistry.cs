@@ -37,7 +37,7 @@ public sealed class RenderLayerRegistry
             return builder;
         }
 
-        var color = _overrides is not null && _overrides.TryGetColor(layer, out var overrideColor)
+        var color = _overrides is not null && _overrides.TryResolveColor(layer, _settings, out var overrideColor)
             ? overrideColor
             : _styleResolver.ResolveLayerColor(layer, _settings);
         builder = new RenderLayerBuilder(layer.Name, color, layer.IsOn, _metadataProvider);

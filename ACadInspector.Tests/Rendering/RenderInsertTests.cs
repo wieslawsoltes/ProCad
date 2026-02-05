@@ -207,6 +207,72 @@ public sealed class RenderInsertTests
         Assert.True(Math.Abs(text.Anchor.Y - (float)worldPoint.Y) < 0.001f);
     }
 
+    [Fact]
+    public void BuildScene_ResolvesByBlockColorsFromInsert()
+    {
+        var document = new CadDocument();
+        var block = new BlockRecord("BYBLOCK");
+        block.Entities.Add(new Line
+        {
+            StartPoint = XYZ.Zero,
+            EndPoint = new XYZ(1, 0, 0),
+            Color = Color.ByBlock
+        });
+        document.BlockRecords.Add(block);
+
+        var insert = new Insert(block)
+        {
+            InsertPoint = XYZ.Zero,
+            Color = new Color(1)
+        };
+        document.Entities.Add(insert);
+
+        var scene = CreateSceneBuilder(NullRenderXRefResolver.Instance)
+            .Build(document, new CadRenderSceneSettings());
+        var line = Assert.Single(scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderLine>());
+
+        Assert.Equal(255, line.Color.R);
+        Assert.Equal(0, line.Color.G);
+        Assert.Equal(0, line.Color.B);
+    }
+
+    [Fact]
+    public void BuildScene_ResolvesNestedByBlockColorsFromOuterInsert()
+    {
+        var document = new CadDocument();
+        var inner = new BlockRecord("INNER");
+        inner.Entities.Add(new Line
+        {
+            StartPoint = XYZ.Zero,
+            EndPoint = new XYZ(1, 0, 0),
+            Color = Color.ByBlock
+        });
+        document.BlockRecords.Add(inner);
+
+        var outer = new BlockRecord("OUTER");
+        outer.Entities.Add(new Insert(inner)
+        {
+            InsertPoint = XYZ.Zero,
+            Color = Color.ByBlock
+        });
+        document.BlockRecords.Add(outer);
+
+        var insert = new Insert(outer)
+        {
+            InsertPoint = XYZ.Zero,
+            Color = new Color(3)
+        };
+        document.Entities.Add(insert);
+
+        var scene = CreateSceneBuilder(NullRenderXRefResolver.Instance)
+            .Build(document, new CadRenderSceneSettings());
+        var line = Assert.Single(scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderLine>());
+
+        Assert.Equal(0, line.Color.R);
+        Assert.Equal(255, line.Color.G);
+        Assert.Equal(0, line.Color.B);
+    }
+
     private static CadRenderSceneBuilder CreateSceneBuilder(IRenderXRefResolver xrefResolver)
     {
         var handlers = new IRenderEntityHandler[]

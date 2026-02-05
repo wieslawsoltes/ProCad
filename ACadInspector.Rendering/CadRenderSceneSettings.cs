@@ -17,6 +17,16 @@ public sealed class CadRenderSceneSettings
 
     public RenderLightingSettings Lighting { get; init; } = RenderLightingSettings.Default;
 
+    /// <summary>
+    /// Gets the viewport brightness setting (0-100, 50 = neutral).
+    /// </summary>
+    public float ViewportBrightness { get; init; } = 50f;
+
+    /// <summary>
+    /// Gets the viewport contrast setting (0-100, 50 = neutral).
+    /// </summary>
+    public float ViewportContrast { get; init; } = 50f;
+
     public bool EnableHatchFills { get; init; } = true;
     public bool EnableHatchPatterns { get; init; } = true;
     public bool EnableHatchGradients { get; init; } = true;
@@ -192,6 +202,8 @@ public sealed class CadRenderSceneSettings
             Quality = Quality,
             VisualStyle = VisualStyle,
             Lighting = Lighting,
+            ViewportBrightness = ViewportBrightness,
+            ViewportContrast = ViewportContrast,
             EnableHatchFills = EnableHatchFills,
             EnableHatchPatterns = EnableHatchPatterns,
             EnableHatchGradients = EnableHatchGradients,
@@ -247,6 +259,8 @@ public sealed class CadRenderSceneSettings
             Quality = Quality,
             VisualStyle = VisualStyle,
             Lighting = Lighting,
+            ViewportBrightness = ViewportBrightness,
+            ViewportContrast = ViewportContrast,
             EnableHatchFills = EnableHatchFills,
             EnableHatchPatterns = EnableHatchPatterns,
             EnableHatchGradients = EnableHatchGradients,
@@ -307,6 +321,8 @@ public sealed class CadRenderSceneSettings
             Quality = Quality,
             VisualStyle = VisualStyle,
             Lighting = Lighting,
+            ViewportBrightness = ViewportBrightness,
+            ViewportContrast = ViewportContrast,
             EnableHatchFills = EnableHatchFills,
             EnableHatchPatterns = EnableHatchPatterns,
             EnableHatchGradients = EnableHatchGradients,
@@ -360,6 +376,8 @@ public sealed class CadRenderSceneSettings
             Quality = Quality,
             VisualStyle = VisualStyle,
             Lighting = Lighting,
+            ViewportBrightness = ViewportBrightness,
+            ViewportContrast = ViewportContrast,
             EnableHatchFills = EnableHatchFills,
             EnableHatchPatterns = EnableHatchPatterns,
             EnableHatchGradients = EnableHatchGradients,

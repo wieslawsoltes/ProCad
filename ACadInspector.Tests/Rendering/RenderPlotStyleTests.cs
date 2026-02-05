@@ -90,6 +90,117 @@ public sealed class RenderPlotStyleTests
         }
     }
 
+    [Fact]
+    public void ResolveEntityColor_UsesStbWhenPlotStyleModeBitSet()
+    {
+        var document = new CadDocument();
+        document.Header.PlotStyleMode = 0x2000;
+
+        var plotStyleDict = new CadDictionaryWithDefault(CadDictionary.AcadPlotStyleName, new PlotSettings("Normal"));
+        document.RootDictionary.Add(CadDictionary.AcadPlotStyleName, plotStyleDict);
+
+        var line = new Line
+        {
+            Color = new ACadSharp.Color(3)
+        };
+
+        string? path = null;
+        try
+        {
+            path = WritePlotStyleFile(".stb", "plot_style {\nname=\"Normal\"\ncolor=0,0,0\nlineweight=0.25\n}\n");
+            var table = RenderPlotStyleTable.TryLoad(path);
+            Assert.NotNull(table);
+
+            var settings = new CadRenderSceneSettings { PlotStyleTable = table };
+            var context = CreateContext(document, settings);
+
+            var color = context.ResolveEntityColor(line);
+
+            Assert.Equal(0, color.R);
+            Assert.Equal(0, color.G);
+            Assert.Equal(0, color.B);
+        }
+        finally
+        {
+            if (path is not null && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveEntityColor_AppliesPlotStyleScreening()
+    {
+        var document = new CadDocument();
+        document.Header.PlotStyleMode = 0;
+
+        var line = new Line
+        {
+            Color = new ACadSharp.Color(1)
+        };
+
+        string? path = null;
+        try
+        {
+            path = WritePlotStyleFile(".ctb",
+                "plot_style {\nindex=1\ncolor=0,0,0\nscreening=50\n}\n");
+            var table = RenderPlotStyleTable.TryLoad(path);
+            Assert.NotNull(table);
+
+            var settings = new CadRenderSceneSettings { PlotStyleTable = table };
+            var context = CreateContext(document, settings);
+
+            var color = context.ResolveEntityColor(line);
+
+            Assert.Equal(128, color.R);
+            Assert.Equal(128, color.G);
+            Assert.Equal(128, color.B);
+        }
+        finally
+        {
+            if (path is not null && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveEntityColor_AppliesPlotStyleTransparency()
+    {
+        var document = new CadDocument();
+        document.Header.PlotStyleMode = 0;
+
+        var line = new Line
+        {
+            Color = new ACadSharp.Color(1)
+        };
+
+        string? path = null;
+        try
+        {
+            path = WritePlotStyleFile(".ctb",
+                "plot_style {\nindex=1\ncolor=0,0,0\ntransparency=50\n}\n");
+            var table = RenderPlotStyleTable.TryLoad(path);
+            Assert.NotNull(table);
+
+            var settings = new CadRenderSceneSettings { PlotStyleTable = table };
+            var context = CreateContext(document, settings);
+
+            var color = context.ResolveEntityColor(line);
+
+            Assert.Equal(127, color.A);
+        }
+        finally
+        {
+            if (path is not null && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
     private static RenderBuildContext CreateContext(CadDocument document, CadRenderSceneSettings settings)
     {
         return new RenderBuildContext(

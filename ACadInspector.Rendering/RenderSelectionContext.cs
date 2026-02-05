@@ -16,6 +16,27 @@ public sealed class RenderSelectionContext
 
     public Entity? CurrentOwner => _ownerOverrides.Count > 0 ? _ownerOverrides.Peek() : CurrentEntity;
 
+    public int OwnerOverrideDepth => _ownerOverrides.Count;
+
+    public Entity? GetOwnerOverride(int depthFromTop)
+    {
+        if (depthFromTop < 0 || depthFromTop >= _ownerOverrides.Count)
+        {
+            return null;
+        }
+
+        var index = 0;
+        foreach (var owner in _ownerOverrides)
+        {
+            if (index++ == depthFromTop)
+            {
+                return owner;
+            }
+        }
+
+        return null;
+    }
+
     public IDisposable EnterEntity(Entity entity)
     {
         var previous = CurrentEntity;

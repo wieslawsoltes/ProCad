@@ -68,13 +68,37 @@ public sealed class RenderBuildContext
 
     public RenderColor ResolveEntityColor(Entity entity)
     {
+        return ResolveEntityColor(entity, ownerDepth: 0);
+    }
+
+    private RenderColor ResolveEntityColor(Entity entity, int ownerDepth)
+    {
+        if (entity.Color.IsByBlock)
+        {
+            var owner = SelectionContext.GetOwnerOverride(ownerDepth);
+            if (owner is Entity ownerEntity)
+            {
+                return ResolveEntityColor(ownerEntity, ownerDepth + 1);
+            }
+        }
+
         var color = StyleResolver.ResolveEntityColor(entity, Settings);
         if (ViewportOverrides is not null && entity.Layer is not null &&
             (entity.Color.IsByLayer || (entity.Color.IsByBlock && IsBlockByLayer(entity))))
         {
-            if (ViewportOverrides.TryGetColor(entity.Layer, out var overrideColor))
+            if (ViewportOverrides.TryResolveColor(entity.Layer, Settings, out var overrideColor))
             {
                 color = new RenderColor(overrideColor.R, overrideColor.G, overrideColor.B, color.A);
+            }
+        }
+
+        if (ViewportOverrides is not null && entity.Layer is not null &&
+            (entity.Transparency.IsByLayer || (entity.Transparency.IsByBlock && IsBlockTransparencyByLayer(entity))))
+        {
+            if (ViewportOverrides.TryGetTransparency(entity.Layer, out var overrideTransparency))
+            {
+                var alpha = RenderStyleUtils.ResolveTransparencyAlpha(overrideTransparency);
+                color = new RenderColor(color.R, color.G, color.B, CombineAlpha(color.A, alpha));
             }
         }
 
@@ -82,6 +106,8 @@ public sealed class RenderBuildContext
         {
             color = ApplyPlotStyleColor(entity, color, Settings.PlotStyleTable);
         }
+
+        color = RenderStyleUtils.ApplyBrightnessContrast(color, Settings);
 
         return color;
     }
@@ -140,15 +166,33 @@ public sealed class RenderBuildContext
     /// </summary>
     public RenderMaterial ResolveEntityMaterial(Entity entity)
     {
-        return StyleResolver.ResolveEntityMaterial(entity, Settings);
+        var material = StyleResolver.ResolveEntityMaterial(entity, Settings);
+        return RenderStyleUtils.ApplyBrightnessContrast(material, Settings);
     }
 
     private RenderColor ApplyPlotStyleColor(Entity entity, RenderColor color, RenderPlotStyleTable table)
     {
-        if (TryResolvePlotStyle(entity, table, out var style) && style.Color.HasValue)
+        if (TryResolvePlotStyle(entity, table, out var style))
         {
-            var overrideColor = style.Color.Value;
-            return new RenderColor(overrideColor.R, overrideColor.G, overrideColor.B, color.A);
+            var resolved = color;
+            if (style.Color.HasValue)
+            {
+                var overrideColor = style.Color.Value;
+                resolved = new RenderColor(overrideColor.R, overrideColor.G, overrideColor.B, resolved.A);
+            }
+
+            if (style.Screening.HasValue)
+            {
+                resolved = RenderStyleUtils.ApplyScreening(resolved, style.Screening.Value);
+            }
+
+            if (style.Transparency.HasValue)
+            {
+                var alpha = RenderStyleUtils.ApplyTransparency(resolved.A, style.Transparency.Value);
+                resolved = new RenderColor(resolved.R, resolved.G, resolved.B, alpha);
+            }
+
+            return resolved;
         }
 
         return color;
@@ -173,12 +217,12 @@ public sealed class RenderBuildContext
     private bool TryResolvePlotStyle(Entity entity, RenderPlotStyleTable table, out RenderPlotStyle style)
     {
         style = default;
-        if (table.IsNamed || Document?.Header?.PlotStyleMode == 1)
+        if (table.IsNamed || IsNamedPlotStyleMode())
         {
             return TryResolveNamedPlotStyle(entity, table, out style);
         }
 
-        var index = entity.GetActiveColor().Index;
+        var index = ResolvePlotStyleColorIndex(entity);
         if (index <= 0)
         {
             return false;
@@ -190,7 +234,7 @@ public sealed class RenderBuildContext
     private bool TryResolveNamedPlotStyle(Entity entity, RenderPlotStyleTable table, out RenderPlotStyle style)
     {
         style = default;
-        if (Document?.Header?.PlotStyleMode != 1 || !table.IsNamed)
+        if (!IsNamedPlotStyleMode() || !table.IsNamed)
         {
             return false;
         }
@@ -212,6 +256,20 @@ public sealed class RenderBuildContext
             return null;
         }
 
+        if (ViewportOverrides is not null)
+        {
+            if (ViewportOverrides.TryGetPlotStyleName(layer, out var overrideName))
+            {
+                return overrideName;
+            }
+
+            if (ViewportOverrides.TryGetPlotStyleHandle(layer, out var overrideHandle) &&
+                TryResolvePlotStyleNameFromDictionary(overrideHandle, out var overrideResolved))
+            {
+                return overrideResolved;
+            }
+        }
+
         var handle = layer.PlotStyleName;
         if (handle != 0 && TryResolvePlotStyleNameFromDictionary(handle, out var resolved))
         {
@@ -219,6 +277,23 @@ public sealed class RenderBuildContext
         }
 
         return TryResolveDefaultPlotStyleName(out var defaultName) ? defaultName : null;
+    }
+
+    private bool IsNamedPlotStyleMode()
+    {
+        return Document?.Header?.PlotStyleMode != 0;
+    }
+
+    private int ResolvePlotStyleColorIndex(Entity entity)
+    {
+        if (ViewportOverrides is not null && entity.Layer is not null &&
+            (entity.Color.IsByLayer || (entity.Color.IsByBlock && IsBlockByLayer(entity))) &&
+            ViewportOverrides.TryGetColorIndex(entity.Layer, out var overrideIndex))
+        {
+            return overrideIndex;
+        }
+
+        return entity.GetActiveColor().Index;
     }
 
     private bool TryResolvePlotStyleNameFromDictionary(ulong handle, out string name)
@@ -290,5 +365,22 @@ public sealed class RenderBuildContext
     {
         return entity.Owner is BlockRecord record && record.BlockEntity is not null &&
                record.BlockEntity.LineWeight == LineWeightType.ByLayer;
+    }
+
+    private static bool IsBlockTransparencyByLayer(Entity entity)
+    {
+        return entity.Owner is BlockRecord record && record.BlockEntity is not null &&
+               record.BlockEntity.Transparency.IsByLayer;
+    }
+
+    private static byte CombineAlpha(byte baseAlpha, byte overlayAlpha)
+    {
+        if (overlayAlpha >= 255)
+        {
+            return baseAlpha;
+        }
+
+        var combined = baseAlpha * overlayAlpha / 255f;
+        return (byte)Math.Clamp((int)Math.Round(combined), 0, 255);
     }
 }

@@ -9,11 +9,15 @@ public readonly struct RenderPlotStyle
 {
     public RenderColor? Color { get; }
     public float? LineWeightMm { get; }
+    public float? Screening { get; }
+    public float? Transparency { get; }
 
-    public RenderPlotStyle(RenderColor? color, float? lineWeightMm)
+    public RenderPlotStyle(RenderColor? color, float? lineWeightMm, float? screening, float? transparency)
     {
         Color = color;
         LineWeightMm = lineWeightMm;
+        Screening = screening;
+        Transparency = transparency;
     }
 }
 
@@ -140,6 +144,27 @@ public sealed class RenderPlotStyleTable
                         current.LineWeightMm = weight;
                     }
                     break;
+                case "screen":
+                case "screening":
+                    if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var screening))
+                    {
+                        current.Screening = NormalizePercent(screening);
+                    }
+                    break;
+                case "transparency":
+                case "transparency_percent":
+                    if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var transparency))
+                    {
+                        current.Transparency = NormalizePercent(transparency);
+                    }
+                    break;
+                case "opacity":
+                    if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity))
+                    {
+                        var percent = NormalizePercent(opacity);
+                        current.Transparency = 100f - percent;
+                    }
+                    break;
             }
         }
 
@@ -188,6 +213,21 @@ public sealed class RenderPlotStyleTable
         return value;
     }
 
+    private static float NormalizePercent(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return 100f;
+        }
+
+        if (value <= 1f)
+        {
+            return Math.Clamp(value * 100f, 0f, 100f);
+        }
+
+        return Math.Clamp(value, 0f, 100f);
+    }
+
     private static bool TryParseColor(string value, out RenderColor color)
     {
         color = default;
@@ -222,13 +262,15 @@ public sealed class RenderPlotStyleTable
         public string? Name { get; set; }
         public RenderColor? Color { get; set; }
         public float? LineWeightMm { get; set; }
+        public float? Screening { get; set; }
+        public float? Transparency { get; set; }
 
         public void Commit(
             bool isNamed,
             Dictionary<int, RenderPlotStyle> colorStyles,
             Dictionary<string, RenderPlotStyle> namedStyles)
         {
-            var style = new RenderPlotStyle(Color, LineWeightMm);
+            var style = new RenderPlotStyle(Color, LineWeightMm, Screening, Transparency);
             if (isNamed)
             {
                 if (!string.IsNullOrWhiteSpace(Name))
