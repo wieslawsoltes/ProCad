@@ -33,11 +33,11 @@
                 Command="{CompiledBinding EntityTypeList.ClearFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"
-                ItemsSource="{CompiledBinding EntityTypeList.RowsView}"
-                ColumnDefinitionsSource="{CompiledBinding EntityTypeList.ColumnDefinitions}"
-                SortingModel="{CompiledBinding EntityTypeList.SortingModel}"
-                FilteringModel="{CompiledBinding EntityTypeList.FilteringModel}"
-                SearchModel="{CompiledBinding EntityTypeList.SearchModel}"
+                ItemsSource="{CompiledBinding RowsView}"
+                ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
+                SortingModel="{CompiledBinding SortingModel}"
+                FilteringModel="{CompiledBinding FilteringModel}"
+                SearchModel="{CompiledBinding SearchModel}"
                 AutoGenerateColumns="False"
                 CanUserSortColumns="True"
                 CanUserReorderColumns="True"
