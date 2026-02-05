@@ -46,6 +46,9 @@
         <DataTemplate DataType="{x:Type vm:CadLayerToolViewModel}" x:DataType="vm:CadLayerToolViewModel">
             <views:CadLayerToolView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadRenderOptionsToolViewModel}" x:DataType="vm:CadRenderOptionsToolViewModel">
+            <views:CadRenderOptionsToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadEntityTypeToolViewModel}" x:DataType="vm:CadEntityTypeToolViewModel">
             <views:CadEntityTypeToolView />
         </DataTemplate>

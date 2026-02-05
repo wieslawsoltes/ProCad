@@ -155,6 +155,7 @@ public sealed class UiSmokeTests
         services.AddSingleton<ICadRenderSceneBuilder, CadRenderSceneBuilder>();
 
         services.AddSingleton<IStorageProviderAccessor, StorageProviderAccessor>();
+        services.AddSingleton<IAppNotificationService, AvaloniaAppNotificationService>();
         services.AddSingleton<ICadFileDialogService, AvaloniaCadFileDialogService>();
         services.AddSingleton<ICadBatchFileDialogService, AvaloniaCadBatchFileDialogService>();
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
@@ -167,13 +168,18 @@ public sealed class UiSmokeTests
         services.AddSingleton<CadScriptWorkspaceService>();
         services.AddSingleton<CadBlockEditorViewModelFactory>();
         services.AddSingleton<CadBlockEditorService>();
+        services.AddSingleton<IBlockPreviewRenderer, SkiaBlockPreviewRenderer>();
         services.AddSingleton<CadBlockPreviewService>();
+        services.AddSingleton<IStylePreviewRenderer, SkiaStylePreviewRenderer>();
         services.AddSingleton<CadStylePreviewService>();
 
         services.AddSingleton<PropertyGridViewModel>();
         services.AddSingleton<CadDocumentTreeViewModel>();
         services.AddSingleton<CadLayerToolViewModel>();
+        services.AddSingleton<CadRenderOptionsToolViewModel>();
+        services.AddSingleton<CadEntityTypeToolViewModel>();
         services.AddSingleton<CadBlocksToolViewModel>();
+        services.AddSingleton<CadViewportsToolViewModel>();
         services.AddSingleton<CadTextStyleToolViewModel>();
         services.AddSingleton<CadLineTypeToolViewModel>();
         services.AddSingleton<CadDimensionStyleToolViewModel>();

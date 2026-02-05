@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Notifications;
 using Avalonia.Markup.Xaml;
 using ACadInspector.Core;
 using ACadInspector.Diagnostics;
@@ -65,14 +66,17 @@ public partial class App : Application
         var shell = _services.GetRequiredService<ShellViewModel>();
         AppLog.Write("ShellViewModel resolved.");
         var storageAccessor = _services.GetRequiredService<IStorageProviderAccessor>();
+        var notificationService = _services.GetRequiredService<IAppNotificationService>();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             AppLog.Write("Creating MainWindow.");
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = shell
             };
+            notificationService.SetManager(new WindowNotificationManager(mainWindow));
+            desktop.MainWindow = mainWindow;
             desktop.MainWindow.Opened += (_, _) => AppLog.Write("MainWindow opened.");
             desktop.MainWindow.Activated += (_, _) => AppLog.Write("MainWindow activated.");
             desktop.MainWindow.Closed += (_, _) => AppLog.Write("MainWindow closed.");
@@ -175,6 +179,7 @@ public partial class App : Application
         services.AddSingleton<ICadRenderSceneBuilder, CadRenderSceneBuilder>();
 
         services.AddSingleton<IStorageProviderAccessor, StorageProviderAccessor>();
+        services.AddSingleton<IAppNotificationService, AvaloniaAppNotificationService>();
         services.AddSingleton<ICadFileDialogService, AvaloniaCadFileDialogService>();
         services.AddSingleton<ICadBatchFileDialogService, AvaloniaCadBatchFileDialogService>();
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
@@ -195,6 +200,7 @@ public partial class App : Application
         services.AddSingleton<PropertyGridViewModel>();
         services.AddSingleton<CadDocumentTreeViewModel>();
         services.AddSingleton<CadLayerToolViewModel>();
+        services.AddSingleton<CadRenderOptionsToolViewModel>();
         services.AddSingleton<CadEntityTypeToolViewModel>();
         services.AddSingleton<CadBlocksToolViewModel>();
         services.AddSingleton<CadViewportsToolViewModel>();

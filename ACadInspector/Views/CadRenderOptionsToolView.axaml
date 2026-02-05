@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadRenderOptionsToolView"
+             x:DataType="vm:CadRenderOptionsToolViewModel">
+  <Border Background="{DynamicResource ThemeControlLowBrush}"
+          BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+          BorderThickness="1"
+          Padding="10">
+    <Grid RowDefinitions="Auto,Auto,*"
+          RowSpacing="8">
+      <TextBlock Text="Render Options"
+                 FontWeight="SemiBold" />
+      <TextBlock Grid.Row="1"
+                 Text="{CompiledBinding ActiveDocumentTitle}"
+                 Opacity="0.7" />
+      <StackPanel Grid.Row="2"
+                  Spacing="6">
+        <TextBlock Text="No active document."
+                   IsVisible="{CompiledBinding ShowEmptyState}"
+                   Opacity="0.7" />
+        <CheckBox Content="Dash Style Rendering"
+                  IsChecked="{CompiledBinding EnableDashPatternRendering}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+        <CheckBox Content="Color Rendering"
+                  IsChecked="{CompiledBinding EnableColorRendering}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+        <Separator />
+        <CheckBox Content="Show Grid"
+                  IsChecked="{CompiledBinding ShowGrid}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+        <CheckBox Content="Show Axes"
+                  IsChecked="{CompiledBinding ShowAxes}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+        <CheckBox Content="Fit On Load"
+                  IsChecked="{CompiledBinding FitOnLoad}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+        <CheckBox Content="Interaction Optimization"
+                  IsChecked="{CompiledBinding EnableInteractionOptimization}"
+                  IsEnabled="{CompiledBinding HasActiveRender}" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>
