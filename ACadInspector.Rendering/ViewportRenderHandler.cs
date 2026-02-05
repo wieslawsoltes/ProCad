@@ -14,6 +14,11 @@ public sealed class ViewportRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var viewport = (Viewport)entity;
+        if (ViewportRenderUtils.IsPaperViewport(viewport))
+        {
+            return;
+        }
+
         if (viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
         {
             return;

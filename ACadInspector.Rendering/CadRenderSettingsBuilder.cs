@@ -539,6 +539,11 @@ public static class CadRenderSettingsBuilder
                     continue;
                 }
 
+                if (ViewportRenderUtils.IsPaperViewport(viewport))
+                {
+                    continue;
+                }
+
                 if (viewport.Width <= 0 || viewport.Height <= 0 || viewport.ViewHeight <= 0)
                 {
                     continue;
@@ -558,7 +563,9 @@ public static class CadRenderSettingsBuilder
             return best;
         }
 
-        if (layout.Viewport is not null && !layout.Viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
+        if (layout.Viewport is not null &&
+            !layout.Viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff) &&
+            !ViewportRenderUtils.IsPaperViewport(layout.Viewport))
         {
             return layout.Viewport;
         }

@@ -431,6 +431,19 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         RenderBounds? bounds = null;
         if (layout is not null)
         {
+            if (layout.PaperWidth > 0.0 && layout.PaperHeight > 0.0)
+            {
+                var min = new Vector2(0f, 0f);
+                var width = (float)(layout.PaperWidth / settings.MillimetersPerUnit);
+                var height = (float)(layout.PaperHeight / settings.MillimetersPerUnit);
+                var max = new Vector2(width, height);
+                bounds = Normalize(new RenderBounds(min, max));
+                if (IsValid(bounds.Value))
+                {
+                    return TransformBounds(bounds.Value, paperTransform);
+                }
+            }
+
             bounds = ToBounds(layout.MinExtents, layout.MaxExtents);
             if (IsValid(bounds.Value))
             {
@@ -441,19 +454,6 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         if (document.Header is not null)
         {
             bounds = ToBounds(document.Header.PaperSpaceExtMin, document.Header.PaperSpaceExtMax);
-            if (IsValid(bounds.Value))
-            {
-                return TransformBounds(bounds.Value, paperTransform);
-            }
-        }
-
-        if (layout is not null && layout.PaperWidth > 0.0 && layout.PaperHeight > 0.0)
-        {
-            var min = new Vector2(0f, 0f);
-            var width = (float)(layout.PaperWidth / settings.MillimetersPerUnit);
-            var height = (float)(layout.PaperHeight / settings.MillimetersPerUnit);
-            var max = new Vector2(width, height);
-            bounds = Normalize(new RenderBounds(min, max));
             if (IsValid(bounds.Value))
             {
                 return TransformBounds(bounds.Value, paperTransform);
@@ -779,6 +779,11 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
     private static bool ShouldRenderViewport(Viewport viewport)
     {
         if (viewport.Status.HasFlag(ViewportStatusFlags.ViewportOff))
+        {
+            return false;
+        }
+
+        if (ViewportRenderUtils.IsPaperViewport(viewport))
         {
             return false;
         }

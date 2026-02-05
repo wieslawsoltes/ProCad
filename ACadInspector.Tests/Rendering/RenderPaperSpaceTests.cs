@@ -86,6 +86,37 @@ public sealed class RenderPaperSpaceTests
     }
 
     [Fact]
+    public void BuildScene_PrefersLayoutPaperSizeOverHeaderExtents()
+    {
+        var document = new ACadSharp.CadDocument();
+        document.PaperSpace.Entities.Clear();
+
+        var layout = document.PaperSpace.Layout;
+        layout.MinExtents = new XYZ(0, 0, 0);
+        layout.MaxExtents = new XYZ(0, 0, 0);
+        layout.PaperWidth = 420.0;
+        layout.PaperHeight = 297.0;
+
+        document.Header.PaperSpaceExtMin = new XYZ(0, 0, 0);
+        document.Header.PaperSpaceExtMax = new XYZ(210, 297, 0);
+
+        var settings = new CadRenderSceneSettings
+        {
+            IsPaperSpace = true,
+            LayoutName = layout.Name
+        };
+
+        var scene = CreateSceneBuilder().Build(document, settings);
+
+        Assert.NotNull(scene.PaperBounds);
+        var bounds = scene.PaperBounds!.Value;
+        Assert.Equal(0f, bounds.Min.X);
+        Assert.Equal(0f, bounds.Min.Y);
+        Assert.Equal(420f, bounds.Max.X);
+        Assert.Equal(297f, bounds.Max.Y);
+    }
+
+    [Fact]
     public void BuildScene_UsesAnnotationScaleForViewportContent()
     {
         var document = new ACadSharp.CadDocument();
