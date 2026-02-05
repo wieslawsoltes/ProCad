@@ -71,7 +71,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
 
     private static Transform BuildInsertTransform(Insert insert)
     {
-        var normal = insert.Normal.IsZero() ? XYZ.AxisZ : insert.Normal;
+        var normal = RenderTransformUtils.NormalizeNormal(insert.Normal);
         var world = Matrix4.GetArbitraryAxis(normal);
         var translation = Matrix4.CreateTranslation(insert.InsertPoint);
         var rotation = Matrix4.CreateFromAxisAngle(XYZ.AxisZ, insert.Rotation);

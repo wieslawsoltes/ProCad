@@ -509,7 +509,7 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
         var scaleY = viewHeight > 0.0 ? viewport.Height / viewHeight : 1.0;
         var twist = -viewport.TwistAngle;
 
-        var viewDirection = viewport.ViewDirection.IsZero() ? XYZ.AxisZ : viewport.ViewDirection;
+        var viewDirection = RenderTransformUtils.NormalizeNormal(viewport.ViewDirection);
         var worldToView = Matrix4.GetArbitraryAxis(viewDirection);
         if (!Matrix4.Inverse(worldToView, out var viewToDcs))
         {
