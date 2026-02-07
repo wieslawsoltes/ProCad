@@ -275,6 +275,8 @@ internal sealed class RenderTraceRunner
             selectionBounds: null,
             hoverAnnotation: null,
             selectionAnnotation: null,
+            overlayScene: RenderOverlayScene.Empty,
+            dynamicInput: null,
             debugBvhBounds: null);
     }
 

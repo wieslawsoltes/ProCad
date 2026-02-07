@@ -979,6 +979,15 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             return false;
         }
 
+        // Invalid UTF-32 scalar values can appear in malformed drawings;
+        // ignore them instead of throwing while rendering.
+        if (codePoint < 0 ||
+            codePoint > 0x10FFFF ||
+            (codePoint >= 0xD800 && codePoint <= 0xDFFF))
+        {
+            return false;
+        }
+
         value = char.ConvertFromUtf32(codePoint);
         if (i < text.Length && text[i] == ';')
         {

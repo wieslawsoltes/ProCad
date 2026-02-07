@@ -22,7 +22,13 @@ public sealed class RenderCache : IRenderCache
         }
 
         var cache = _documents.GetOrCreateValue(document);
-        return cache.Geometry.TryGetValue(key, out points);
+        if (!cache.Geometry.TryGetValue(key, out var cachedPoints) || cachedPoints is null)
+        {
+            return false;
+        }
+
+        points = cachedPoints;
+        return true;
     }
 
     public void StoreGeometry(

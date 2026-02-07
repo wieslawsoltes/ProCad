@@ -64,27 +64,10 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
 
     private static List<XY> ResolveBoundaryVertices(Wipeout wipeout)
     {
-        var useClipBoundary = wipeout.ClippingState;
-        if (!useClipBoundary || wipeout.ClipBoundaryVertices.Count == 0)
-        {
-            var size = wipeout.Size;
-            if (size.X <= 0 || size.Y <= 0)
-            {
-                return new List<XY>();
-            }
-
-            return new List<XY>
-            {
-                new XY(-0.5, -0.5),
-                new XY(size.X - 0.5, -0.5),
-                new XY(size.X - 0.5, size.Y - 0.5),
-                new XY(-0.5, size.Y - 0.5)
-            };
-        }
-
         if (wipeout.ClipBoundaryVertices.Count > 0)
         {
-            if (wipeout.ClipType == ClipType.Rectangular && wipeout.ClipBoundaryVertices.Count >= 2)
+            if (wipeout.ClipBoundaryVertices.Count >= 2 &&
+                (wipeout.ClipType == ClipType.Rectangular || wipeout.ClipBoundaryVertices.Count == 2))
             {
                 var a = wipeout.ClipBoundaryVertices[0];
                 var b = wipeout.ClipBoundaryVertices[1];
@@ -104,7 +87,19 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
             return new List<XY>(wipeout.ClipBoundaryVertices);
         }
 
-        return new List<XY>();
+        // Some files encode wipeout by size only; synthesize an axis-aligned boundary.
+        if (wipeout.Size.X <= 0 || wipeout.Size.Y <= 0)
+        {
+            return new List<XY>();
+        }
+
+        return new List<XY>
+        {
+            new XY(-0.5, -0.5),
+            new XY(wipeout.Size.X - 0.5, -0.5),
+            new XY(wipeout.Size.X - 0.5, wipeout.Size.Y - 0.5),
+            new XY(-0.5, wipeout.Size.Y - 0.5)
+        };
     }
 
     private static XYZ ResolveWorldPoint(Wipeout wipeout, XY vertex)
