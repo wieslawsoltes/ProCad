@@ -123,6 +123,8 @@ public sealed class CadBlockPreviewService
             selectionBounds: null,
             hoverAnnotation: null,
             selectionAnnotation: null,
+            overlayScene: RenderOverlayScene.Empty,
+            dynamicInput: null,
             debugBvhBounds: null);
 
         return _previewRenderer.Render(snapshot, pixelSize);

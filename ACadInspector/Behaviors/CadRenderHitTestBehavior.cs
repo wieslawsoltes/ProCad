@@ -1,24 +1,18 @@
 using System;
 using System.Numerics;
 using System.Windows.Input;
+using ACadInspector.Controls;
+using ACadInspector.Editing.Interaction;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Xaml.Interactivity;
-using ACadInspector.Controls;
-using ACadInspector.ViewModels;
 
 namespace ACadInspector.Behaviors;
 
 public sealed class CadRenderHitTestBehavior : Behavior<CadRenderControl>
 {
-    public static readonly StyledProperty<ICommand?> HoverCommandProperty =
-        AvaloniaProperty.Register<CadRenderHitTestBehavior, ICommand?>(nameof(HoverCommand));
-
-    public static readonly StyledProperty<ICommand?> SelectCommandProperty =
-        AvaloniaProperty.Register<CadRenderHitTestBehavior, ICommand?>(nameof(SelectCommand));
-
-    public static readonly StyledProperty<ICommand?> ClearHoverCommandProperty =
-        AvaloniaProperty.Register<CadRenderHitTestBehavior, ICommand?>(nameof(ClearHoverCommand));
+    public static readonly StyledProperty<ICommand?> InteractionCommandProperty =
+        AvaloniaProperty.Register<CadRenderHitTestBehavior, ICommand?>(nameof(InteractionCommand));
 
     public static readonly StyledProperty<double> HoverTolerancePixelsProperty =
         AvaloniaProperty.Register<CadRenderHitTestBehavior, double>(nameof(HoverTolerancePixels), 4.0);
@@ -30,23 +24,13 @@ public sealed class CadRenderHitTestBehavior : Behavior<CadRenderControl>
         AvaloniaProperty.Register<CadRenderHitTestBehavior, int>(nameof(HoverThrottleMs), 40);
 
     private DateTime _lastHoverUtc;
+    private Point _lastScreenPoint;
+    private Vector2 _lastWorldPoint;
 
-    public ICommand? HoverCommand
+    public ICommand? InteractionCommand
     {
-        get => GetValue(HoverCommandProperty);
-        set => SetValue(HoverCommandProperty, value);
-    }
-
-    public ICommand? SelectCommand
-    {
-        get => GetValue(SelectCommandProperty);
-        set => SetValue(SelectCommandProperty, value);
-    }
-
-    public ICommand? ClearHoverCommand
-    {
-        get => GetValue(ClearHoverCommandProperty);
-        set => SetValue(ClearHoverCommandProperty, value);
+        get => GetValue(InteractionCommandProperty);
+        set => SetValue(InteractionCommandProperty, value);
     }
 
     public double HoverTolerancePixels
@@ -76,9 +60,15 @@ public sealed class CadRenderHitTestBehavior : Behavior<CadRenderControl>
             return;
         }
 
+        AssociatedObject.Focusable = true;
         AssociatedObject.PointerMoved += OnPointerMoved;
         AssociatedObject.PointerPressed += OnPointerPressed;
-        AssociatedObject.PointerExited += OnPointerLeave;
+        AssociatedObject.PointerReleased += OnPointerReleased;
+        AssociatedObject.PointerWheelChanged += OnPointerWheelChanged;
+        AssociatedObject.KeyDown += OnKeyDown;
+        AssociatedObject.KeyUp += OnKeyUp;
+        AssociatedObject.TextInput += OnTextInput;
+        AssociatedObject.PointerExited += OnPointerExited;
     }
 
     protected override void OnDetaching()
@@ -87,126 +77,252 @@ public sealed class CadRenderHitTestBehavior : Behavior<CadRenderControl>
         {
             AssociatedObject.PointerMoved -= OnPointerMoved;
             AssociatedObject.PointerPressed -= OnPointerPressed;
-            AssociatedObject.PointerExited -= OnPointerLeave;
+            AssociatedObject.PointerReleased -= OnPointerReleased;
+            AssociatedObject.PointerWheelChanged -= OnPointerWheelChanged;
+            AssociatedObject.KeyDown -= OnKeyDown;
+            AssociatedObject.KeyUp -= OnKeyUp;
+            AssociatedObject.TextInput -= OnTextInput;
+            AssociatedObject.PointerExited -= OnPointerExited;
         }
 
         base.OnDetaching();
     }
 
-    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    private void OnPointerMoved(object? sender, PointerEventArgs args)
     {
-        var target = AssociatedObject;
-        if (target is null || HoverCommand is null)
+        if (!TryBuildPointerEvent(args, CadInteractionEventKind.PointerMove, out var interactionEvent))
         {
             return;
         }
 
-        var current = e.GetCurrentPoint(target);
-        if (current.Properties.IsLeftButtonPressed ||
-            current.Properties.IsMiddleButtonPressed ||
-            current.Properties.IsRightButtonPressed)
+        if (interactionEvent.PointerButtons == CadInteractionPointerButtons.None)
         {
-            return;
+            var now = DateTime.UtcNow;
+            if (HoverThrottleMs > 0 && (now - _lastHoverUtc).TotalMilliseconds < HoverThrottleMs)
+            {
+                return;
+            }
+
+            _lastHoverUtc = now;
         }
 
-        var now = DateTime.UtcNow;
-        if (HoverThrottleMs > 0 && (now - _lastHoverUtc).TotalMilliseconds < HoverThrottleMs)
+        Execute(interactionEvent);
+    }
+
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs args)
+    {
+        if (AssociatedObject is not null)
         {
-            return;
+            AssociatedObject.Focus();
         }
 
-        _lastHoverUtc = now;
-        if (!TryBuildRequest(target, current.Position, HoverTolerancePixels, CadHitTestKind.Hover, e.KeyModifiers, out var request))
+        if (TryBuildPointerEvent(args, CadInteractionEventKind.PointerDown, out var interactionEvent))
         {
-            return;
-        }
-
-        if (HoverCommand.CanExecute(request))
-        {
-            HoverCommand.Execute(request);
+            Execute(interactionEvent);
         }
     }
 
-    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs args)
     {
-        var target = AssociatedObject;
-        if (target is null || SelectCommand is null)
+        if (TryBuildPointerEvent(args, CadInteractionEventKind.PointerUp, out var interactionEvent))
         {
-            return;
-        }
-
-        var current = e.GetCurrentPoint(target);
-        if (!current.Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        if (!TryBuildRequest(target, current.Position, SelectionTolerancePixels, CadHitTestKind.Select, e.KeyModifiers, out var request))
-        {
-            return;
-        }
-
-        if (SelectCommand.CanExecute(request))
-        {
-            SelectCommand.Execute(request);
+            Execute(interactionEvent);
         }
     }
 
-    private void OnPointerLeave(object? sender, PointerEventArgs e)
+    private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs args)
     {
-        var command = ClearHoverCommand;
+        if (!TryBuildPointerEvent(args, CadInteractionEventKind.PointerWheel, out var interactionEvent))
+        {
+            return;
+        }
+
+        interactionEvent = interactionEvent with
+        {
+            WheelDelta = (float)args.Delta.Y
+        };
+        Execute(interactionEvent);
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs args)
+    {
+        Execute(new CadInteractionEvent(
+            Kind: CadInteractionEventKind.KeyDown,
+            WorldPoint: _lastWorldPoint,
+            ScreenPoint: new Vector2((float)_lastScreenPoint.X, (float)_lastScreenPoint.Y),
+            Modifiers: MapModifiers(args.KeyModifiers),
+            PointerButtons: CadInteractionPointerButtons.None,
+            Tolerance: 0f,
+            WheelDelta: 0f,
+            Key: args.Key.ToString(),
+            Text: null,
+            Viewport: TryGetViewportSummary()));
+    }
+
+    private void OnKeyUp(object? sender, KeyEventArgs args)
+    {
+        Execute(new CadInteractionEvent(
+            Kind: CadInteractionEventKind.KeyUp,
+            WorldPoint: _lastWorldPoint,
+            ScreenPoint: new Vector2((float)_lastScreenPoint.X, (float)_lastScreenPoint.Y),
+            Modifiers: MapModifiers(args.KeyModifiers),
+            PointerButtons: CadInteractionPointerButtons.None,
+            Tolerance: 0f,
+            WheelDelta: 0f,
+            Key: args.Key.ToString(),
+            Text: null,
+            Viewport: TryGetViewportSummary()));
+    }
+
+    private void OnTextInput(object? sender, TextInputEventArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Text))
+        {
+            return;
+        }
+
+        Execute(new CadInteractionEvent(
+            Kind: CadInteractionEventKind.TextInput,
+            WorldPoint: _lastWorldPoint,
+            ScreenPoint: new Vector2((float)_lastScreenPoint.X, (float)_lastScreenPoint.Y),
+            Modifiers: CadInteractionModifiers.None,
+            PointerButtons: CadInteractionPointerButtons.None,
+            Tolerance: 0f,
+            WheelDelta: 0f,
+            Key: null,
+            Text: args.Text,
+            Viewport: TryGetViewportSummary()));
+    }
+
+    private void OnPointerExited(object? sender, PointerEventArgs args)
+    {
+        Execute(new CadInteractionEvent(
+            Kind: CadInteractionEventKind.PointerMove,
+            WorldPoint: _lastWorldPoint,
+            ScreenPoint: new Vector2((float)_lastScreenPoint.X, (float)_lastScreenPoint.Y),
+            Modifiers: MapModifiers(args.KeyModifiers),
+            PointerButtons: CadInteractionPointerButtons.None,
+            Tolerance: 0f,
+            WheelDelta: 0f,
+            Key: null,
+            Text: null,
+            Viewport: TryGetViewportSummary()));
+    }
+
+    private bool TryBuildPointerEvent(
+        PointerEventArgs args,
+        CadInteractionEventKind kind,
+        out CadInteractionEvent interactionEvent)
+    {
+        interactionEvent = default;
+        var target = AssociatedObject;
+        if (target is null || target.Scene is null)
+        {
+            return false;
+        }
+
+        var point = args.GetCurrentPoint(target);
+        _lastScreenPoint = point.Position;
+        if (!target.TryScreenToWorld(point.Position, out var worldPoint))
+        {
+            return false;
+        }
+
+        _lastWorldPoint = worldPoint;
+        var tolerancePixels = kind == CadInteractionEventKind.PointerDown
+            ? SelectionTolerancePixels
+            : HoverTolerancePixels;
+
+        interactionEvent = new CadInteractionEvent(
+            Kind: kind,
+            WorldPoint: worldPoint,
+            ScreenPoint: new Vector2((float)point.Position.X, (float)point.Position.Y),
+            Modifiers: MapModifiers(args.KeyModifiers),
+            PointerButtons: GetPointerButtons(point.Properties),
+            Tolerance: target.PixelsToWorld((float)tolerancePixels),
+            WheelDelta: 0f,
+            Key: null,
+            Text: null,
+            Viewport: TryGetViewportSummary(target));
+        return true;
+    }
+
+    private void Execute(CadInteractionEvent interactionEvent)
+    {
+        var command = InteractionCommand;
         if (command is null)
         {
             return;
         }
 
-        if (command.CanExecute(null))
+        if (command.CanExecute(interactionEvent))
         {
-            command.Execute(null);
+            command.Execute(interactionEvent);
         }
     }
 
-    private static bool TryBuildRequest(
-        CadRenderControl target,
-        Point position,
-        double tolerancePixels,
-        CadHitTestKind kind,
-        KeyModifiers modifiers,
-        out CadRenderHitTestRequest request)
+    private static CadInteractionPointerButtons GetPointerButtons(PointerPointProperties properties)
     {
-        request = default;
-        if (target.Scene is null)
+        var result = CadInteractionPointerButtons.None;
+        if (properties.IsLeftButtonPressed)
         {
-            return false;
+            result |= CadInteractionPointerButtons.Left;
         }
-
-        if (!target.TryScreenToWorld(position, out var world))
+        if (properties.IsRightButtonPressed)
         {
-            return false;
+            result |= CadInteractionPointerButtons.Right;
         }
-
-        var toleranceWorld = (float)target.PixelsToWorld((float)tolerancePixels);
-        var mapped = MapModifiers(modifiers);
-        request = new CadRenderHitTestRequest(world, toleranceWorld, kind, mapped);
-        return true;
-    }
-
-    private static CadInputModifiers MapModifiers(KeyModifiers modifiers)
-    {
-        var result = CadInputModifiers.None;
-        if (modifiers.HasFlag(KeyModifiers.Shift))
+        if (properties.IsMiddleButtonPressed)
         {
-            result |= CadInputModifiers.Shift;
-        }
-        if (modifiers.HasFlag(KeyModifiers.Control))
-        {
-            result |= CadInputModifiers.Control;
-        }
-        if (modifiers.HasFlag(KeyModifiers.Alt))
-        {
-            result |= CadInputModifiers.Alt;
+            result |= CadInteractionPointerButtons.Middle;
         }
 
         return result;
+    }
+
+    private static CadInteractionModifiers MapModifiers(KeyModifiers modifiers)
+    {
+        var result = CadInteractionModifiers.None;
+        if (modifiers.HasFlag(KeyModifiers.Shift))
+        {
+            result |= CadInteractionModifiers.Shift;
+        }
+        if (modifiers.HasFlag(KeyModifiers.Control))
+        {
+            result |= CadInteractionModifiers.Control;
+        }
+        if (modifiers.HasFlag(KeyModifiers.Alt))
+        {
+            result |= CadInteractionModifiers.Alt;
+        }
+
+        return result;
+    }
+
+    private CadInteractionViewport? TryGetViewportSummary(CadRenderControl? target = null)
+    {
+        target ??= AssociatedObject;
+        if (target is null)
+        {
+            return null;
+        }
+
+        var bounds = target.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return null;
+        }
+
+        var centerScreen = new Point(bounds.Width * 0.5, bounds.Height * 0.5);
+        if (!target.TryScreenToWorld(centerScreen, out var centerWorld))
+        {
+            return null;
+        }
+
+        return new CadInteractionViewport(
+            Center: centerWorld,
+            Width: target.PixelsToWorld((float)bounds.Width),
+            Height: target.PixelsToWorld((float)bounds.Height),
+            Zoom: (float)target.Zoom);
     }
 }

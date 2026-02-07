@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ACadInspector.ViewModels;
 using ACadSharp;
 using ACadSharp.Classes;
@@ -9,6 +10,16 @@ using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.Services;
 
+public sealed class CadDocumentContextChangedEventArgs : EventArgs
+{
+    public CadDocumentContextChangedEventArgs(CadDocument document)
+    {
+        Document = document;
+    }
+
+    public CadDocument Document { get; }
+}
+
 public sealed partial class CadDocumentContextService : ReactiveObject
 {
     private readonly Dictionary<CadDocument, CadDocumentViewModel> _documents =
@@ -17,10 +28,36 @@ public sealed partial class CadDocumentContextService : ReactiveObject
     [Reactive]
     public partial CadDocumentViewModel? ActiveDocument { get; set; }
 
+    public event EventHandler<CadDocumentContextChangedEventArgs>? DocumentRegistered;
+    public event EventHandler<CadDocumentContextChangedEventArgs>? DocumentUnregistered;
+
     public void Register(CadDocumentViewModel viewModel)
     {
+        ArgumentNullException.ThrowIfNull(viewModel);
         _documents[viewModel.Document] = viewModel;
         ActiveDocument = viewModel;
+        DocumentRegistered?.Invoke(this, new CadDocumentContextChangedEventArgs(viewModel.Document));
+    }
+
+    public bool Unregister(CadDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var removed = _documents.Remove(document);
+        if (!removed)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(ActiveDocument?.Document, document))
+        {
+            ActiveDocument = _documents.Count == 0
+                ? null
+                : _documents.Values.FirstOrDefault();
+        }
+
+        DocumentUnregistered?.Invoke(this, new CadDocumentContextChangedEventArgs(document));
+
+        return true;
     }
 
     public bool TryGetViewModel(CadDocument document, out CadDocumentViewModel viewModel)
@@ -45,7 +82,7 @@ public sealed partial class CadDocumentContextService : ReactiveObject
         {
             case CadDocument document:
                 return document;
-            case CadObject cadObject when cadObject.Document is not null:
+            case CadObject cadObject when cadObject.Document is not null && IsRegisteredDocument(cadObject.Document):
                 return cadObject.Document;
             case CadHeader header when header.Document is not null:
                 return header.Document;
@@ -67,7 +104,17 @@ public sealed partial class CadDocumentContextService : ReactiveObject
             return active;
         }
 
+        if (selection is CadObject || selection is CadHeader)
+        {
+            return active;
+        }
+
         return null;
+    }
+
+    private bool IsRegisteredDocument(CadDocument document)
+    {
+        return _documents.ContainsKey(document);
     }
 
     public bool TrySetActiveFromSelection(object? selection)

@@ -37,6 +37,15 @@
         <DataTemplate DataType="{x:Type vm:CadScriptingViewModel}" x:DataType="vm:CadScriptingViewModel">
             <views:CadScriptingView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadCommandLineViewModel}" x:DataType="vm:CadCommandLineViewModel">
+            <views:CadCommandLineView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadEditorToolPanelViewModel}" x:DataType="vm:CadEditorToolPanelViewModel">
+            <views:CadEditorToolPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadCollaborationToolViewModel}" x:DataType="vm:CadCollaborationToolViewModel">
+            <views:CadCollaborationToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadCompareViewModel}" x:DataType="vm:CadCompareViewModel">
             <views:CadCompareView />
         </DataTemplate>
@@ -61,8 +70,14 @@
         <DataTemplate DataType="{x:Type vm:CadTextStyleToolViewModel}" x:DataType="vm:CadTextStyleToolViewModel">
             <views:CadTextStyleToolView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadTextStyleEditorToolViewModel}" x:DataType="vm:CadTextStyleEditorToolViewModel">
+            <views:CadTextStyleEditorToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadLineTypeToolViewModel}" x:DataType="vm:CadLineTypeToolViewModel">
             <views:CadLineTypeToolView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadLineTypeEditorToolViewModel}" x:DataType="vm:CadLineTypeEditorToolViewModel">
+            <views:CadLineTypeEditorToolView />
         </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadDimensionStyleToolViewModel}" x:DataType="vm:CadDimensionStyleToolViewModel">
             <views:CadDimensionStyleToolView />

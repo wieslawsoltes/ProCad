@@ -6,6 +6,7 @@ using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ACadInspector.Editing.Prompt;
 using ACadInspector.Services;
 using ACadSharp.Entities;
 using ACadSharp.Tables;
@@ -26,6 +27,8 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     private readonly CadDocumentContextService _documentContext;
     private readonly CadBlockPreviewService _previewService;
     private readonly CadBlockEditorService _blockEditorService;
+    private readonly CadEditorControllerHostService _controllerHost;
+    private readonly CadEditorSessionHostService _sessionHost;
     private readonly CadSelectionService _selectionService;
     private CancellationTokenSource? _previewCts;
     private const int PreviewSize = 72;
@@ -49,16 +52,24 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
     public ReactiveCommand<Unit, Unit> ClearSearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearFilterCommand { get; }
     public ReactiveCommand<CadBlockRowViewModel?, Unit> OpenBlockCommand { get; }
+    public ReactiveCommand<CadBlockRowViewModel?, Unit> InsertBlockCommand { get; }
+    public ReactiveCommand<CadBlockRowViewModel?, Unit> ReloadXRefCommand { get; }
+    public ReactiveCommand<CadBlockRowViewModel?, Unit> BindXRefCommand { get; }
+    public ReactiveCommand<CadBlockRowViewModel?, Unit> DetachXRefCommand { get; }
 
     public CadBlocksToolViewModel(
         CadDocumentContextService documentContext,
         CadBlockPreviewService previewService,
         CadBlockEditorService blockEditorService,
+        CadEditorControllerHostService controllerHost,
+        CadEditorSessionHostService sessionHost,
         CadSelectionService selectionService)
     {
         _documentContext = documentContext;
         _previewService = previewService;
         _blockEditorService = blockEditorService;
+        _controllerHost = controllerHost;
+        _sessionHost = sessionHost;
         _selectionService = selectionService;
 
         BlocksView = new DataGridCollectionView(_blockRows);
@@ -82,6 +93,20 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
                 _documentContext.WhenAnyValue(x => x.ActiveDocument),
                 static (selected, active) => selected is not null && active is not null);
         OpenBlockCommand = ReactiveCommand.Create<CadBlockRowViewModel?>(OpenSelectedBlock, canOpen);
+        InsertBlockCommand = ReactiveCommand.CreateFromTask<CadBlockRowViewModel?>(StartInsertForBlockAsync, canOpen);
+        var canApplyXRefWorkflow = canOpen.Select(static canOpenCurrent => canOpenCurrent)
+            .CombineLatest(
+                this.WhenAnyValue(x => x.SelectedBlock),
+                static (canOpenCurrent, selected) => canOpenCurrent && selected?.IsXRef == true);
+        ReloadXRefCommand = ReactiveCommand.CreateFromTask<CadBlockRowViewModel?>(
+            row => StartXRefWorkflowAsync(row, "XREFRELOAD"),
+            canApplyXRefWorkflow);
+        BindXRefCommand = ReactiveCommand.CreateFromTask<CadBlockRowViewModel?>(
+            row => StartXRefWorkflowAsync(row, "XREFBIND"),
+            canApplyXRefWorkflow);
+        DetachXRefCommand = ReactiveCommand.CreateFromTask<CadBlockRowViewModel?>(
+            row => StartXRefWorkflowAsync(row, "XREFDETACH"),
+            canApplyXRefWorkflow);
 
         this.WhenAnyValue(x => x.SelectedBlock)
             .Subscribe(OnSelectedBlockChanged);
@@ -145,6 +170,56 @@ public sealed partial class CadBlocksToolViewModel : CadToolViewModelBase
         }
 
         _blockEditorService.TryOpenBlockEditor(selected.Block, activeDocument);
+    }
+
+    private async Task StartInsertForBlockAsync(CadBlockRowViewModel? row)
+    {
+        var activeDocument = _documentContext.ActiveDocument;
+        var selected = row ?? SelectedBlock;
+        if (activeDocument is null || selected is null)
+        {
+            return;
+        }
+
+        var controller = _controllerHost.GetOrCreate(activeDocument.Document);
+        controller.BeginCommand("INSERT");
+        await controller.SubmitTokenAsync(
+                new CadPromptToken(CadPromptTokenType.Text, selected.Block.Name),
+                commit: false)
+            .ConfigureAwait(false);
+    }
+
+    private async Task StartXRefWorkflowAsync(CadBlockRowViewModel? row, string commandName)
+    {
+        var activeDocument = _documentContext.ActiveDocument;
+        var selected = row ?? SelectedBlock;
+        if (activeDocument is null || selected is null || !selected.IsXRef)
+        {
+            return;
+        }
+
+        var controller = _controllerHost.GetOrCreate(activeDocument.Document);
+        controller.BeginCommand(commandName);
+        var resolution = await controller.SubmitTokenAsync(
+                new CadPromptToken(CadPromptTokenType.Text, selected.Block.Name),
+                commit: true)
+            .ConfigureAwait(false);
+        if (resolution.Result?.Success != true)
+        {
+            return;
+        }
+
+        if (controller.Session is not null)
+        {
+            _sessionHost.NotifySessionChanged(controller.Session);
+        }
+
+        if (string.Equals(commandName, "XREFDETACH", StringComparison.OrdinalIgnoreCase))
+        {
+            _selectionService.SelectedObject = null;
+        }
+
+        LoadBlocks(activeDocument);
     }
 
     private void OnSelectedBlockChanged(CadBlockRowViewModel? row)

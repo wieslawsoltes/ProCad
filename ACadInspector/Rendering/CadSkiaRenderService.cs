@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Avalonia;
@@ -137,8 +138,9 @@ public sealed class CadSkiaRenderService
             return;
         }
 
-        var renderStyle = isInteractive ? RenderVisualStyle.Wireframe : scene.VisualStyle;
-        var hiddenLineSettings = scene.HiddenLineSettings;
+        var activeScene = scene;
+        var renderStyle = isInteractive ? RenderVisualStyle.Wireframe : activeScene.VisualStyle;
+        var hiddenLineSettings = activeScene.HiddenLineSettings;
         var hasViewport = TryGetWorldViewport(size, state.ViewTransform, out var viewport);
         if (hasViewport)
         {
@@ -150,9 +152,9 @@ public sealed class CadSkiaRenderService
         canvas.Save();
         canvas.Concat(ref matrix);
 
-        if (scene is not null && scene.IsPaperSpace && scene.PaperBounds.HasValue)
+        if (activeScene.IsPaperSpace && activeScene.PaperBounds.HasValue)
         {
-            DrawPaper(canvas, scene.PaperBounds.Value, scene.PaperColor ?? RenderColor.DefaultPaper, state);
+            DrawPaper(canvas, activeScene.PaperBounds.Value, activeScene.PaperColor ?? RenderColor.DefaultPaper, state);
         }
 
         if (state.ShowGrid && !isInteractive)
@@ -168,10 +170,10 @@ public sealed class CadSkiaRenderService
         HiddenLineContext? hiddenLine = null;
         if (!isInteractive && renderStyle == RenderVisualStyle.HiddenLine)
         {
-            hiddenLine = ResolveHiddenLineContext(scene, size, state.ViewTransform);
+            hiddenLine = ResolveHiddenLineContext(activeScene, size, state.ViewTransform);
         }
 
-        foreach (var layer in scene.Layers)
+        foreach (var layer in activeScene.Layers)
         {
             if (!IsLayerVisible(layer, state.LayerVisibilityOverrides))
             {
@@ -196,7 +198,13 @@ public sealed class CadSkiaRenderService
 
     private void DrawOverlays(SKCanvas canvas, CadRenderStateSnapshot state)
     {
-        if (!state.SelectionAnnotation.HasValue && !state.HoverAnnotation.HasValue && !state.ShowDebugOverlay)
+        var hasOverlayPrimitives = state.OverlayScene.Primitives.Count > 0;
+        var hasDynamicInput = state.DynamicInput is not null;
+        if (!state.SelectionAnnotation.HasValue &&
+            !state.HoverAnnotation.HasValue &&
+            !state.ShowDebugOverlay &&
+            !hasOverlayPrimitives &&
+            !hasDynamicInput)
         {
             return;
         }
@@ -206,6 +214,8 @@ public sealed class CadSkiaRenderService
         canvas.Concat(ref matrix);
 
         DrawAnnotations(canvas, state);
+        DrawOverlayScene(canvas, state.OverlayScene);
+        DrawDynamicInputWorld(canvas, state.DynamicInput);
 
         if (state.ShowDebugOverlay)
         {
@@ -213,6 +223,276 @@ public sealed class CadSkiaRenderService
         }
 
         canvas.Restore();
+
+        if (state.DynamicInput is { Anchor: null } dynamicInput)
+        {
+            DrawDynamicInputScreen(canvas, dynamicInput);
+        }
+    }
+
+    private static void DrawOverlayScene(SKCanvas canvas, RenderOverlayScene overlayScene)
+    {
+        if (overlayScene.Primitives.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var primitive in overlayScene.Primitives.OrderBy(static primitive => primitive.Priority))
+        {
+            switch (primitive.Kind)
+            {
+                case RenderOverlayPrimitiveKind.PointMarker:
+                    using (var paint = new SKPaint
+                           {
+                               IsAntialias = true,
+                               Color = ToSkiaColor(primitive.Color),
+                               Style = SKPaintStyle.Stroke,
+                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                           })
+                    {
+                        canvas.DrawCircle(primitive.Start.X, primitive.Start.Y, Math.Max(2f, primitive.MarkerRadius), paint);
+                        canvas.DrawLine(
+                            primitive.Start.X - primitive.MarkerRadius,
+                            primitive.Start.Y,
+                            primitive.Start.X + primitive.MarkerRadius,
+                            primitive.Start.Y,
+                            paint);
+                        canvas.DrawLine(
+                            primitive.Start.X,
+                            primitive.Start.Y - primitive.MarkerRadius,
+                            primitive.Start.X,
+                            primitive.Start.Y + primitive.MarkerRadius,
+                            paint);
+                    }
+                    break;
+                case RenderOverlayPrimitiveKind.Line:
+                    using (var paint = new SKPaint
+                           {
+                               IsAntialias = true,
+                               Color = ToSkiaColor(primitive.Color),
+                               Style = SKPaintStyle.Stroke,
+                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                           })
+                    {
+                        canvas.DrawLine(primitive.Start.X, primitive.Start.Y, primitive.End.X, primitive.End.Y, paint);
+                    }
+                    break;
+                case RenderOverlayPrimitiveKind.Rectangle:
+                case RenderOverlayPrimitiveKind.FilledRectangle:
+                    using (var paint = new SKPaint
+                           {
+                               IsAntialias = true,
+                               Color = ToSkiaColor(primitive.Color),
+                               Style = SKPaintStyle.Stroke,
+                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                           })
+                    {
+                        var rect = SKRect.Create(
+                            Math.Min(primitive.Start.X, primitive.End.X),
+                            Math.Min(primitive.Start.Y, primitive.End.Y),
+                            Math.Abs(primitive.End.X - primitive.Start.X),
+                            Math.Abs(primitive.End.Y - primitive.Start.Y));
+                        if (primitive.Kind == RenderOverlayPrimitiveKind.FilledRectangle ||
+                            primitive.FillColor is not null)
+                        {
+                            using var fillPaint = new SKPaint
+                            {
+                                IsAntialias = true,
+                                Color = ToSkiaColor(primitive.FillColor ?? primitive.Color),
+                                Style = SKPaintStyle.Fill
+                            };
+                            canvas.DrawRect(rect, fillPaint);
+                        }
+
+                        canvas.DrawRect(rect, paint);
+                    }
+                    break;
+                case RenderOverlayPrimitiveKind.SquareMarker:
+                    DrawSquareMarker(canvas, primitive);
+                    break;
+                case RenderOverlayPrimitiveKind.DiamondMarker:
+                    DrawDiamondMarker(canvas, primitive);
+                    break;
+                case RenderOverlayPrimitiveKind.Text:
+                    if (string.IsNullOrWhiteSpace(primitive.Text))
+                    {
+                        break;
+                    }
+
+                    using (var paint = new SKPaint
+                           {
+                               IsAntialias = true,
+                               Color = ToSkiaColor(primitive.Color),
+                               Style = SKPaintStyle.Fill,
+                               TextSize = 12f
+                           })
+                    {
+                        if (primitive.FillColor is { } backgroundColor)
+                        {
+                            var bounds = new SKRect();
+                            paint.MeasureText(primitive.Text, ref bounds);
+                            var rect = new SKRect(
+                                primitive.Start.X - 3f,
+                                primitive.Start.Y - bounds.Height - 3f,
+                                primitive.Start.X + bounds.Width + 4f,
+                                primitive.Start.Y + 2f);
+                            using var background = new SKPaint
+                            {
+                                IsAntialias = true,
+                                Color = ToSkiaColor(backgroundColor),
+                                Style = SKPaintStyle.Fill
+                            };
+                            canvas.DrawRoundRect(rect, 3f, 3f, background);
+                        }
+
+                        canvas.DrawText(primitive.Text, primitive.Start.X, primitive.Start.Y, paint);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private static SKPathEffect? CreateOverlayPathEffect(RenderOverlayStrokeStyle strokeStyle)
+    {
+        return strokeStyle switch
+        {
+            RenderOverlayStrokeStyle.Dashed => SKPathEffect.CreateDash([8f, 6f], 0f),
+            RenderOverlayStrokeStyle.Dotted => SKPathEffect.CreateDash([2f, 5f], 0f),
+            _ => null
+        };
+    }
+
+    private static void DrawSquareMarker(SKCanvas canvas, RenderOverlayPrimitive primitive)
+    {
+        var radius = Math.Max(2f, primitive.MarkerRadius);
+        var rect = SKRect.Create(
+            primitive.Start.X - radius,
+            primitive.Start.Y - radius,
+            radius * 2f,
+            radius * 2f);
+
+        if (primitive.FillColor is { } fillColor)
+        {
+            using var fillPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Color = ToSkiaColor(fillColor),
+                Style = SKPaintStyle.Fill
+            };
+            canvas.DrawRect(rect, fillPaint);
+        }
+
+        using var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = ToSkiaColor(primitive.Color),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
+            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+        };
+        canvas.DrawRect(rect, strokePaint);
+    }
+
+    private static void DrawDiamondMarker(SKCanvas canvas, RenderOverlayPrimitive primitive)
+    {
+        var radius = Math.Max(2f, primitive.MarkerRadius);
+        using var path = new SKPath();
+        path.MoveTo(primitive.Start.X, primitive.Start.Y - radius);
+        path.LineTo(primitive.Start.X + radius, primitive.Start.Y);
+        path.LineTo(primitive.Start.X, primitive.Start.Y + radius);
+        path.LineTo(primitive.Start.X - radius, primitive.Start.Y);
+        path.Close();
+
+        if (primitive.FillColor is { } fillColor)
+        {
+            using var fillPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Color = ToSkiaColor(fillColor),
+                Style = SKPaintStyle.Fill
+            };
+            canvas.DrawPath(path, fillPaint);
+        }
+
+        using var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = ToSkiaColor(primitive.Color),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
+            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+        };
+        canvas.DrawPath(path, strokePaint);
+    }
+
+    private static void DrawDynamicInputWorld(SKCanvas canvas, CadDynamicInputPayload? dynamicInput)
+    {
+        if (dynamicInput?.Anchor is not { } anchor)
+        {
+            return;
+        }
+
+        var content = dynamicInput.Value;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return;
+        }
+
+        using var background = new SKPaint
+        {
+            IsAntialias = true,
+            Color = new SKColor(16, 18, 24, 230),
+            Style = SKPaintStyle.Fill
+        };
+        using var textPaint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = SKColors.White,
+            Style = SKPaintStyle.Fill,
+            TextSize = 11f
+        };
+
+        var bounds = new SKRect();
+        textPaint.MeasureText(content, ref bounds);
+        var rect = new SKRect(
+            anchor.X + 4f,
+            anchor.Y - bounds.Height - 8f,
+            anchor.X + 4f + bounds.Width + 10f,
+            anchor.Y + 2f);
+        canvas.DrawRoundRect(rect, 3f, 3f, background);
+        canvas.DrawText(content, rect.Left + 5f, rect.Bottom - 4f, textPaint);
+    }
+
+    private static void DrawDynamicInputScreen(SKCanvas canvas, CadDynamicInputPayload dynamicInput)
+    {
+        var content = dynamicInput.Value;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return;
+        }
+
+        using var background = new SKPaint
+        {
+            IsAntialias = true,
+            Color = new SKColor(16, 18, 24, 220),
+            Style = SKPaintStyle.Fill
+        };
+        using var textPaint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = SKColors.White,
+            Style = SKPaintStyle.Fill,
+            TextSize = 12f
+        };
+
+        var bounds = new SKRect();
+        textPaint.MeasureText(content, ref bounds);
+        var rect = new SKRect(12f, 12f, 12f + bounds.Width + 12f, 30f);
+        canvas.DrawRoundRect(rect, 4f, 4f, background);
+        canvas.DrawText(content, rect.Left + 6f, rect.Bottom - 8f, textPaint);
     }
 
     private bool TryDrawInteractionSnapshot(

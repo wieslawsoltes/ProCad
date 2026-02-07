@@ -61,6 +61,29 @@ public sealed class CadStylePreviewService
             cancellationToken);
     }
 
+    public void InvalidateTextStyle(TextStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        Invalidate(style, PreviewKind.TextStyle);
+    }
+
+    public void InvalidateLineType(LineType lineType)
+    {
+        ArgumentNullException.ThrowIfNull(lineType);
+        Invalidate(lineType, PreviewKind.LineType);
+    }
+
+    public void InvalidateDimensionStyle(DimensionStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        Invalidate(style, PreviewKind.DimensionStyle);
+    }
+
+    public void InvalidateAll()
+    {
+        _cache.Clear();
+    }
+
     private async Task<Bitmap?> GetPreviewAsync(
         StylePreviewKey key,
         Func<byte[]?> previewFactory,
@@ -109,6 +132,22 @@ public sealed class CadStylePreviewService
         }
 
         return preview;
+    }
+
+    private void Invalidate(object style, PreviewKind kind)
+    {
+        foreach (var key in _cache.Keys)
+        {
+            if (!ReferenceEquals(key.Style, style) || key.Kind != kind)
+            {
+                continue;
+            }
+
+            if (_cache.TryRemove(key, out var removed))
+            {
+                removed?.Dispose();
+            }
+        }
     }
 
     private enum PreviewKind

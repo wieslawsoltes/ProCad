@@ -42,7 +42,7 @@
               SearchModel="{CompiledBinding SearchModel}"
               AutoGenerateColumns="False"
               CanUserSortColumns="True"
-              CanUserReorderColumns="True"
+              CanUserReorderColumns="False"
               CanUserResizeColumns="True"
               GridLinesVisibility="All"
               IsReadOnly="True" />

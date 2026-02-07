@@ -21,6 +21,8 @@ public sealed class CadRenderStateSnapshot
         selectionBounds: null,
         hoverAnnotation: null,
         selectionAnnotation: null,
+        overlayScene: RenderOverlayScene.Empty,
+        dynamicInput: null,
         debugBvhBounds: null);
 
     public RenderScene? Scene { get; }
@@ -38,6 +40,8 @@ public sealed class CadRenderStateSnapshot
     public RenderBounds? SelectionBounds { get; }
     public RenderAnnotation? HoverAnnotation { get; }
     public RenderAnnotation? SelectionAnnotation { get; }
+    public RenderOverlayScene OverlayScene { get; }
+    public CadDynamicInputPayload? DynamicInput { get; }
     public IReadOnlyList<RenderBounds>? DebugBvhBounds { get; }
 
     public CadRenderStateSnapshot(
@@ -56,6 +60,8 @@ public sealed class CadRenderStateSnapshot
         RenderBounds? selectionBounds,
         RenderAnnotation? hoverAnnotation,
         RenderAnnotation? selectionAnnotation,
+        RenderOverlayScene? overlayScene,
+        CadDynamicInputPayload? dynamicInput,
         IReadOnlyList<RenderBounds>? debugBvhBounds)
     {
         Scene = scene;
@@ -73,6 +79,8 @@ public sealed class CadRenderStateSnapshot
         SelectionBounds = selectionBounds;
         HoverAnnotation = hoverAnnotation;
         SelectionAnnotation = selectionAnnotation;
+        OverlayScene = overlayScene ?? RenderOverlayScene.Empty;
+        DynamicInput = dynamicInput;
         DebugBvhBounds = debugBvhBounds;
     }
 }

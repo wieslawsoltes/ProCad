@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ACadInspector.Rendering;
+using ACadInspector.Editing.Selection;
 using ACadInspector.ViewModels;
 using ACadSharp.Entities;
 
@@ -81,9 +82,48 @@ public sealed class CadSelectionTool : ICadTool
 
         var hit = ResolveHit(scene, context.SpatialIndex, request.Value);
         var target = hit?.OwnerEntity ?? hit?.SourceEntity;
+        var mode = ResolveSelectionMode(request.Value.Modifiers);
+        if (target is null)
+        {
+            if (mode == CadSelectionMode.Replace)
+            {
+                context.SelectionService.ClearSelection();
+                context.AnnotationService.UpdateSelection(null, null);
+            }
 
-        context.SelectionService.SelectedObject = target;
-        context.AnnotationService.UpdateSelection(target, hit?.Bounds, hit?.Primitive);
+            return;
+        }
+
+        context.SelectionService.ApplySelection([target], mode);
+        var primary = context.SelectionService.SelectedObject;
+        if (primary is Entity selectedEntity && ReferenceEquals(selectedEntity, target))
+        {
+            context.AnnotationService.UpdateSelection(selectedEntity, hit?.Bounds, hit?.Primitive);
+            return;
+        }
+
+        context.AnnotationService.UpdateSelection(primary, null);
+    }
+
+    private static CadSelectionMode ResolveSelectionMode(CadInputModifiers modifiers)
+    {
+        if (modifiers.HasFlag(CadInputModifiers.Control) &&
+            modifiers.HasFlag(CadInputModifiers.Shift))
+        {
+            return CadSelectionMode.Remove;
+        }
+
+        if (modifiers.HasFlag(CadInputModifiers.Control))
+        {
+            return CadSelectionMode.Toggle;
+        }
+
+        if (modifiers.HasFlag(CadInputModifiers.Shift))
+        {
+            return CadSelectionMode.Add;
+        }
+
+        return CadSelectionMode.Replace;
     }
 
     private RenderHitTestResult? ResolveHit(RenderScene scene, RenderSpatialIndex? index, CadRenderHitTestRequest request)

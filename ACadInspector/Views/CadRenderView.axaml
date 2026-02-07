@@ -21,24 +21,78 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
     <Border Padding="8,4"
             CornerRadius="10"
             Background="{DynamicResource ThemeControlLowBrush}"
             BorderBrush="{DynamicResource ThemeBorderLowBrush}"
             BorderThickness="1"
             Margin="12,8,12,6">
-      <StackPanel Orientation="Horizontal"
-                  Spacing="8">
-        <Button Content="Fit"
-                Command="{CompiledBinding FitCommand}" />
-        <Button Content="Reset"
-                Command="{CompiledBinding ResetCommand}" />
-        <ToggleButton Content="Grid"
-                      IsChecked="{CompiledBinding ShowGrid}" />
-        <ToggleButton Content="Axes"
-                      IsChecked="{CompiledBinding ShowAxes}" />
-      </StackPanel>
+      <DockPanel LastChildFill="True">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="8"
+                    DockPanel.Dock="Left">
+          <Button Content="Fit"
+                  Command="{CompiledBinding FitCommand}" />
+          <Button Content="Reset"
+                  Command="{CompiledBinding ResetCommand}" />
+          <ToggleButton Content="Grid"
+                        IsChecked="{CompiledBinding ShowGrid}" />
+          <ToggleButton Content="Axes"
+                        IsChecked="{CompiledBinding ShowAxes}" />
+        </StackPanel>
+        <StackPanel Orientation="Vertical"
+                    HorizontalAlignment="Right">
+          <TextBlock Text="{CompiledBinding ActiveCommandPrompt}"
+                     FontWeight="SemiBold"
+                     HorizontalAlignment="Right" />
+          <TextBlock Text="{CompiledBinding ActiveCommandHelp}"
+                     FontSize="11"
+                     Opacity="0.8"
+                     HorizontalAlignment="Right" />
+          <ItemsControl ItemsSource="{CompiledBinding CanvasCompletions}"
+                        IsVisible="{CompiledBinding HasCanvasCompletions}"
+                        Margin="0,4,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CadCommandCompletionItemViewModel">
+                <Button Content="{CompiledBinding DisplayText}"
+                        Command="{CompiledBinding $parent[vm:CadRenderViewModel].ApplyCanvasCompletionCommand}"
+                        CommandParameter="{CompiledBinding .}"
+                        Margin="0,0,4,4"
+                        Padding="6,1"
+                        MinHeight="24" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{CompiledBinding ActiveVisualHelpers}"
+                        IsVisible="{CompiledBinding HasActiveVisualHelpers}"
+                        Margin="0,4,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CadVisualHelperBadgeViewModel">
+                <Border Background="{DynamicResource ThemeControlMidBrush}"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Margin="0,0,4,4"
+                        Padding="6,2">
+                  <TextBlock Text="{CompiledBinding Label}"
+                             FontSize="10" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </DockPanel>
     </Border>
 
     <controls:CadRenderControl Grid.Row="1"
@@ -56,12 +110,13 @@
                                SelectionBounds="{CompiledBinding SelectionBounds}"
                                HoverAnnotation="{CompiledBinding HoverAnnotation}"
                                SelectionAnnotation="{CompiledBinding SelectionAnnotation}"
+                               OverlayScene="{CompiledBinding OverlayScene}"
+                               DynamicInput="{CompiledBinding DynamicInput}"
                                FocusRequest="{CompiledBinding FocusRequest}"
                                DebugBvhBounds="{CompiledBinding DebugBvhBounds}">
       <i:Interaction.Behaviors>
-        <behaviors:CadRenderHitTestBehavior HoverCommand="{CompiledBinding HoverHitTestCommand}"
-                                            SelectCommand="{CompiledBinding SelectHitTestCommand}"
-                                            ClearHoverCommand="{CompiledBinding ClearHoverCommand}"
+        <behaviors:CadInsertDropBehavior DropCommand="{CompiledBinding InsertDroppedBlockCommand}" />
+        <behaviors:CadRenderHitTestBehavior InteractionCommand="{CompiledBinding InteractionCommand}"
                                             HoverTolerancePixels="4"
                                             SelectionTolerancePixels="6"
                                             HoverThrottleMs="40" />
@@ -69,6 +124,34 @@
     </controls:CadRenderControl>
 
     <Border Grid.Row="2"
+            Margin="12,6,12,2"
+            Padding="6,2"
+            CornerRadius="10"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1">
+      <DockPanel LastChildFill="True">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="6"
+                    DockPanel.Dock="Right">
+          <ToggleButton Content="OSNAP"
+                        IsChecked="{CompiledBinding OsnapEnabled}" />
+          <ToggleButton Content="OTRACK"
+                        IsChecked="{CompiledBinding OtrackEnabled}" />
+          <ToggleButton Content="ORTHO"
+                        IsChecked="{CompiledBinding OrthoEnabled}" />
+          <ToggleButton Content="POLAR"
+                        IsChecked="{CompiledBinding PolarEnabled}" />
+          <ToggleButton Content="DYNINPUT"
+                        IsChecked="{CompiledBinding DynamicInputEnabled}" />
+        </StackPanel>
+        <TextBlock Text="{CompiledBinding InteractionStatus}"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <Border Grid.Row="3"
             Margin="12,6,12,10"
             Padding="6,2"
             CornerRadius="10"

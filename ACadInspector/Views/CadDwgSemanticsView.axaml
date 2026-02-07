@@ -41,7 +41,7 @@
                     SearchModel="{CompiledBinding HeaderSearchModel}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />
@@ -76,7 +76,7 @@
                     SearchModel="{CompiledBinding ClassSearchModel}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />
@@ -111,7 +111,7 @@
                     SearchModel="{CompiledBinding SummarySearchModel}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />

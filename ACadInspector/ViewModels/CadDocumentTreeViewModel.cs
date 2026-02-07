@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reactive;
+using System.Reactive.Concurrency;
 using System.Linq;
 using System.Reactive.Linq;
 using ACadInspector.Diagnostics;
@@ -23,11 +24,13 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
     private readonly CadDocumentContextService _documentContext;
     private readonly CadSelectionFocusService _focusService;
     private readonly CadBlockEditorService _blockEditorService;
+    private readonly CadEditorSessionHostService _sessionHost;
     private readonly Dictionary<object, CadDocumentTreeNode> _nodeMap = new();
     private readonly Dictionary<string, CadDocumentTreeNode> _handleMap = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<CadDocumentTreeNode> _roots = Array.Empty<CadDocumentTreeNode>();
     private bool _suppressSelection;
     private bool _isSwitchingDocument;
+    private bool _isRefreshingForSession;
     private CadDocumentViewModel? _currentDocument;
 
     public HierarchicalModel<CadDocumentTreeNode> TreeModel { get; }
@@ -64,12 +67,14 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
         CadDocumentContextService documentContext,
         CadSelectionFocusService focusService,
         CadBlockEditorService blockEditorService,
+        CadEditorSessionHostService sessionHost,
         FastPathDiagnosticsService fastPathDiagnostics)
     {
         _selectionService = selectionService;
         _documentContext = documentContext;
         _focusService = focusService;
         _blockEditorService = blockEditorService;
+        _sessionHost = sessionHost;
         FastPathDiagnostics = fastPathDiagnostics;
         var options = new HierarchicalOptions<CadDocumentTreeNode>
         {
@@ -98,6 +103,7 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(OnSelectedObjectChanged);
+        _sessionHost.SessionChanged += OnSessionChanged;
 
         SearchModel.ResultsChanged += (_, _) => UpdateSearchSummary();
         SearchModel.CurrentChanged += (_, _) => UpdateSearchSummary();
@@ -135,13 +141,8 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
         }
 
         _documentContext.Register(document);
-        IReadOnlyList<CadDocumentTreeNode> roots = CadDocumentTreeBuilder.Build(document.Document, document.Title);
-        TreeModel.SetRoots(roots);
-        RebuildNodeMap(roots);
-        _roots = roots;
         _currentDocument = document;
-        ApplyFilter();
-        SelectFromService();
+        RefreshCurrentDocumentTree();
     }
 
     private void OnSelectedItemChanged(object? item)
@@ -202,6 +203,49 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
     private void SelectFromService()
     {
         OnSelectedObjectChanged(_selectionService.SelectedObject);
+    }
+
+    private void OnSessionChanged(object? sender, CadEditorSessionChangedEventArgs args)
+    {
+        var current = _currentDocument;
+        if (current?.Document is null || !ReferenceEquals(current.Document, args.Document))
+        {
+            return;
+        }
+
+        RxApp.MainThreadScheduler.Schedule(() =>
+        {
+            if (_isSwitchingDocument || _isRefreshingForSession)
+            {
+                return;
+            }
+
+            _isRefreshingForSession = true;
+            try
+            {
+                RefreshCurrentDocumentTree();
+            }
+            finally
+            {
+                _isRefreshingForSession = false;
+            }
+        });
+    }
+
+    private void RefreshCurrentDocumentTree()
+    {
+        var document = _currentDocument;
+        if (document?.Document is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<CadDocumentTreeNode> roots = CadDocumentTreeBuilder.Build(document.Document, document.Title);
+        TreeModel.SetRoots(roots);
+        RebuildNodeMap(roots);
+        _roots = roots;
+        ApplyFilter();
+        SelectFromService();
     }
 
     private void RebuildNodeMap(IReadOnlyList<CadDocumentTreeNode> roots)

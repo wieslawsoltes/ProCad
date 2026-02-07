@@ -6,6 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using ACadInspector.Diagnostics;
 using ACadInspector.Core;
+using ACadInspector.Editing.Controllers;
+using ACadInspector.Editing.Interaction;
+using ACadInspector.Editing.Prompt;
 using ACadInspector.Services;
 using ACadInspector.Rendering;
 using ACadSharp;
@@ -28,6 +31,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     public PropertyGridViewModel PropertyGrid { get; }
     public FastPathDiagnosticsService FastPathDiagnostics { get; }
 
+    public ReactiveCommand<Unit, Unit> NewCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveAsCommand { get; }
@@ -47,6 +51,10 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
     private readonly CadCompareViewModelFactory _compareFactory;
     private readonly ICadRenderSceneBuilder _renderSceneBuilder;
     private readonly CadRenderSceneSettings _renderSceneSettings;
+    private readonly CadEditorSessionHostService _sessionHost;
+    private readonly CadEditorControllerHostService _controllerHost;
+    private readonly ICadInteractiveCommandAdapterRegistry _interactiveAdapterRegistry;
+    private readonly CadCollaborationWorkspaceService _collaborationWorkspace;
     private readonly IRenderStatsExportService _statsExportService;
     private readonly IAppNotificationService _notificationService;
 
@@ -67,6 +75,10 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         FastPathDiagnosticsService fastPathDiagnostics,
         ICadRenderSceneBuilder renderSceneBuilder,
         CadRenderSceneSettings renderSceneSettings,
+        CadEditorSessionHostService sessionHost,
+        CadEditorControllerHostService controllerHost,
+        ICadInteractiveCommandAdapterRegistry interactiveAdapterRegistry,
+        CadCollaborationWorkspaceService collaborationWorkspace,
         IRenderStatsExportService statsExportService,
         IAppNotificationService notificationService)
     {
@@ -87,6 +99,10 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _compareFactory = compareFactory;
         _renderSceneBuilder = renderSceneBuilder;
         _renderSceneSettings = renderSceneSettings;
+        _sessionHost = sessionHost;
+        _controllerHost = controllerHost;
+        _interactiveAdapterRegistry = interactiveAdapterRegistry;
+        _collaborationWorkspace = collaborationWorkspace;
         _statsExportService = statsExportService;
         _notificationService = notificationService;
         Factory = dockFactory;
@@ -98,12 +114,43 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         _documentDockService.RegisterLayout(Layout);
         AppLog.Write("WorkspaceViewModel layout initialized.");
 
+        NewCommand = ReactiveCommand.CreateFromTask(NewAsync);
         OpenCommand = ReactiveCommand.CreateFromTask(OpenAsync);
         SaveCommand = ReactiveCommand.CreateFromTask(SaveAsync);
         SaveAsCommand = ReactiveCommand.CreateFromTask(SaveAsAsync);
         CompareCommand = ReactiveCommand.Create(OpenCompare);
         ClearDiagnosticsCommand = ReactiveCommand.Create(FastPathDiagnostics.Clear);
         AppLog.Write("WorkspaceViewModel ctor done.");
+    }
+
+    private async Task NewAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var document = new CadDocument();
+            var title = BuildNewDocumentTitle();
+            var viewModel = await CreateDocumentViewModelAsync(
+                    document,
+                    CadFileFormat.Dxf,
+                    path: null,
+                    displayName: title,
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            _documentContext.Register(viewModel);
+            AddDocument(viewModel);
+            _documentTree.LoadDocument(viewModel);
+            _selectionService.SelectedObject = viewModel.Document;
+        }
+        catch (OperationCanceledException)
+        {
+            // Ignore cancellation from background scene creation.
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write($"Create new document failed: {ex}");
+            _notificationService.ShowError("New Drawing Failed", $"Could not create a new drawing: {ex.Message}");
+        }
     }
 
     private async Task OpenAsync(CancellationToken cancellationToken)
@@ -146,28 +193,13 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
                     continue;
                 }
 
-                var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
-                var settings = CadRenderSettingsBuilder.Build(
-                    document,
-                    result.Path,
-                    _renderSceneSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides),
-                    selection);
-                var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
-                var statsFileName = BuildStatsFileName(result.FileName);
-                var renderViewModel = new CadRenderViewModel(
-                    document,
-                    scene,
-                    _renderSceneBuilder,
-                    _renderSceneSettings,
-                    selection,
-                    result.Path,
-                    _dynamicBlockOverrides,
-                    _dynamicBlockOverrides.WhenAnyValue(x => x.ChangeStamp),
-                    _selectionService,
-                    _focusService,
-                    _statsExportService,
-                    statsFileName);
-                var viewModel = new CadDocumentViewModel(document, result.Format, result.Path, result.FileName, renderViewModel);
+                var viewModel = await CreateDocumentViewModelAsync(
+                        document,
+                        result.Format,
+                        result.Path,
+                        result.FileName,
+                        cancellationToken)
+                    .ConfigureAwait(true);
                 _documentContext.Register(viewModel);
                 AddDocument(viewModel);
                 lastOpened = viewModel;
@@ -263,6 +295,43 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             .ConfigureAwait(true);
     }
 
+    private async Task<CadDocumentViewModel> CreateDocumentViewModelAsync(
+        CadDocument document,
+        CadFileFormat format,
+        string? path,
+        string displayName,
+        CancellationToken cancellationToken)
+    {
+        var selection = CadRenderSettingsBuilder.ResolveDefaultLayout(document);
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            path,
+            _renderSceneSettings.WithDynamicBlockOverrides(_dynamicBlockOverrides),
+            selection);
+        var scene = await BuildSceneAsync(document, settings, cancellationToken).ConfigureAwait(true);
+        var controller = _controllerHost.GetOrCreate(document);
+        var statsFileName = BuildStatsFileName(displayName);
+        var renderViewModel = new CadRenderViewModel(
+            document,
+            scene,
+            _renderSceneBuilder,
+            _renderSceneSettings,
+            selection,
+            path,
+            _dynamicBlockOverrides,
+            _dynamicBlockOverrides.WhenAnyValue(x => x.ChangeStamp),
+            _selectionService,
+            _focusService,
+            _sessionHost,
+            controller.CommandRuntime,
+            interactiveAdapterRegistry: _interactiveAdapterRegistry,
+            collaborationWorkspace: _collaborationWorkspace,
+            statsExportService: _statsExportService,
+            statsFileName: statsFileName);
+
+        return new CadDocumentViewModel(document, format, path, displayName, renderViewModel);
+    }
+
     private Task<RenderScene> BuildSceneAsync(
         CadDocument document,
         CadRenderSceneSettings settings,
@@ -345,6 +414,41 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         }
 
         return null;
+    }
+
+    private string BuildNewDocumentTitle()
+    {
+        var documentDock = FindDocumentDock(Layout);
+        var index = 1;
+        while (true)
+        {
+            var candidate = $"Drawing{index}.dxf";
+            if (!ContainsDocumentTitle(documentDock, candidate))
+            {
+                return candidate;
+            }
+
+            index++;
+        }
+    }
+
+    private static bool ContainsDocumentTitle(IDocumentDock? documentDock, string title)
+    {
+        if (documentDock?.VisibleDockables is null)
+        {
+            return false;
+        }
+
+        foreach (var dockable in documentDock.VisibleDockables)
+        {
+            if (dockable is CadDocumentViewModel document &&
+                string.Equals(document.Title, title, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string EnsureExtension(string displayName, CadFileFormat format)

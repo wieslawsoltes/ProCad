@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             xmlns:i="using:Avalonia.Xaml.Interactivity"
+             xmlns:behaviors="using:ACadInspector.Behaviors"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadCommandLineView"
+             x:DataType="vm:CadCommandLineViewModel">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
+        RowSpacing="8">
+    <Border Padding="8,4"
+            CornerRadius="8"
+            Background="{DynamicResource ThemeControlLowBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1">
+      <DockPanel LastChildFill="False">
+        <TextBlock Text="{CompiledBinding Prompt}"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <Button DockPanel.Dock="Right"
+                Content="Clear"
+                Command="{CompiledBinding ClearHistoryCommand}" />
+      </DockPanel>
+    </Border>
+
+    <Border Grid.Row="1"
+            Padding="8,4"
+            CornerRadius="6"
+            Background="{DynamicResource ThemeControlMidBrush}"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1">
+      <TextBlock Text="{CompiledBinding ParameterHelp}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <Border Grid.Row="2"
+            CornerRadius="8"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1"
+            IsVisible="{CompiledBinding IsCompletionOpen}">
+      <ListBox ItemsSource="{CompiledBinding Completions}"
+               SelectedIndex="{CompiledBinding SelectedCompletionIndex, Mode=TwoWay}"
+               MaxHeight="180">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:CadCommandCompletionItemViewModel">
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  ColumnSpacing="8"
+                  Margin="0,2">
+              <TextBlock Text="{CompiledBinding DisplayText}"
+                         FontWeight="SemiBold"
+                         VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1"
+                         Text="{CompiledBinding Description}"
+                         TextTrimming="CharacterEllipsis"
+                         Opacity="0.8"
+                         VerticalAlignment="Center" />
+              <Border Grid.Column="2"
+                      CornerRadius="4"
+                      Background="{DynamicResource ThemeControlLowBrush}"
+                      Padding="6,0">
+                <TextBlock Text="{CompiledBinding Kind}"
+                           FontSize="11" />
+              </Border>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <Border Grid.Row="3"
+            CornerRadius="8"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1"
+            Padding="4">
+      <ListBox ItemsSource="{CompiledBinding History}" />
+    </Border>
+
+    <Grid Grid.Row="4"
+          ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="8">
+      <TextBox Text="{CompiledBinding Input, UpdateSourceTrigger=PropertyChanged}"
+               Watermark="Type command (e.g. LINE, MOVE, HELP)">
+        <i:Interaction.Behaviors>
+          <behaviors:CadCommandLineInputBehavior SubmitCommand="{CompiledBinding SubmitCommand}"
+                                                 NextCompletionCommand="{CompiledBinding CompleteNextCommand}"
+                                                 PreviousCompletionCommand="{CompiledBinding CompletePreviousCommand}"
+                                                 HistoryPreviousCommand="{CompiledBinding HistoryPreviousCommand}"
+                                                 HistoryNextCommand="{CompiledBinding HistoryNextCommand}"
+                                                 AcceptCompletionCommand="{CompiledBinding AcceptCompletionCommand}"
+                                                 CancelCommand="{CompiledBinding CancelCommand}" />
+        </i:Interaction.Behaviors>
+      </TextBox>
+      <Button Grid.Column="1"
+              Content="Run"
+              Command="{CompiledBinding SubmitCommand}" />
+      <Button Grid.Column="2"
+              Content="Esc"
+              Command="{CompiledBinding CancelCommand}" />
+    </Grid>
+  </Grid>
+</UserControl>

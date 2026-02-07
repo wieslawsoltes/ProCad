@@ -37,23 +37,20 @@ public sealed partial class CadEntityTypeToolViewModel : CadToolViewModelBase
         _emptyList = new CadRenderEntityTypeListViewModel(null);
         EntityTypeList = _emptyList;
         RowsView = _emptyList.RowsView;
-        ColumnDefinitions = _emptyList.ColumnDefinitions;
+        ColumnDefinitions = CadRenderEntityTypeColumnDefinitions.Create();
         SortingModel = _emptyList.SortingModel;
         FilteringModel = _emptyList.FilteringModel;
         SearchModel = _emptyList.SearchModel;
 
         documentContext.WhenAnyValue(x => x.ActiveDocument)
             .Select(document => document?.Render.EntityTypeList ?? _emptyList)
+            .ObserveOn(RxApp.MainThreadScheduler)
             .DistinctUntilChanged()
             .BindTo(this, x => x.EntityTypeList);
 
         this.WhenAnyValue(x => x.EntityTypeList)
             .Select(list => list?.RowsView ?? _emptyList.RowsView)
             .BindTo(this, x => x.RowsView);
-
-        this.WhenAnyValue(x => x.EntityTypeList)
-            .Select(list => list?.ColumnDefinitions ?? _emptyList.ColumnDefinitions)
-            .BindTo(this, x => x.ColumnDefinitions);
 
         this.WhenAnyValue(x => x.EntityTypeList)
             .Select(list => list?.SortingModel ?? _emptyList.SortingModel)

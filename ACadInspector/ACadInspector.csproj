@@ -31,6 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ACadInspector.Collaboration\ACadInspector.Collaboration.csproj" />
+    <ProjectReference Include="..\ACadInspector.Editing\ACadInspector.Editing.csproj" />
     <ProjectReference Include="..\ACadInspector.Core\ACadInspector.Core.csproj" />
     <ProjectReference Include="..\ACadInspector.IO\ACadInspector.IO.csproj" />
     <ProjectReference Include="..\ACadInspector.Rendering\ACadInspector.Rendering.csproj" />

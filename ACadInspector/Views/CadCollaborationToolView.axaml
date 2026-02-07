@@ -1,0 +1,193 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ACadInspector.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ACadInspector.Views.CadCollaborationToolView"
+             x:DataType="vm:CadCollaborationToolViewModel">
+  <ScrollViewer Margin="10"
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Spacing="8">
+      <Border Padding="8"
+              CornerRadius="8"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+              BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto"
+              RowSpacing="8">
+          <StackPanel>
+            <TextBlock Text="{CompiledBinding ConnectionStatus}"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="{CompiledBinding AuthMode, StringFormat='Auth: {0}'}"
+                       FontSize="11" />
+            <TextBlock Text="{CompiledBinding TransportMode, StringFormat='Transport: {0}'}"
+                       FontSize="11" />
+          </StackPanel>
+          <WrapPanel Grid.Row="1"
+                     Orientation="Horizontal"
+                     ItemHeight="30"
+                     ItemWidth="88">
+            <Button Content="Join"
+                    IsEnabled="{CompiledBinding CanJoin}"
+                    Command="{CompiledBinding JoinCommand}" />
+            <Button Content="Leave"
+                    IsEnabled="{CompiledBinding CanLeave}"
+                    Command="{CompiledBinding LeaveCommand}" />
+            <Button Content="Share"
+                    Command="{CompiledBinding ShareCommand}" />
+            <Button Content="Reconnect"
+                    IsEnabled="{CompiledBinding CanReconnect}"
+                    Command="{CompiledBinding ReconnectCommand}" />
+            <Button Content="Resync"
+                    Command="{CompiledBinding ResyncCommand}" />
+          </WrapPanel>
+          <TextBlock Grid.Row="2"
+                     Text="{CompiledBinding ShareStatus}"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Opacity="0.85" />
+        </Grid>
+      </Border>
+
+      <Border Padding="8"
+              CornerRadius="8"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+              BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+              RowSpacing="6">
+          <TextBlock Text="Settings"
+                     FontWeight="SemiBold" />
+          <TextBlock Grid.Row="1"
+                     Text="Transport"
+                     FontSize="11" />
+          <ComboBox Grid.Row="2"
+                    ItemsSource="{CompiledBinding TransportModes}"
+                    SelectedItem="{CompiledBinding SelectedTransportMode, Mode=TwoWay}" />
+          <TextBlock Grid.Row="3"
+                     Text="WebSocket URL"
+                     FontSize="11"
+                     IsVisible="{CompiledBinding ShowWebSocketUrlEditor}" />
+          <TextBox Grid.Row="4"
+                   Text="{CompiledBinding WebSocketUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   IsVisible="{CompiledBinding ShowWebSocketUrlEditor}" />
+          <TextBlock Grid.Row="5"
+                     Text="Shared File Path"
+                     FontSize="11"
+                     IsVisible="{CompiledBinding ShowSharedFilePathEditor}" />
+          <TextBox Grid.Row="6"
+                   Text="{CompiledBinding SharedFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   IsVisible="{CompiledBinding ShowSharedFilePathEditor}" />
+          <Grid Grid.Row="7"
+                ColumnDefinitions="*,*"
+                ColumnSpacing="8">
+            <StackPanel>
+              <TextBlock Text="Auth"
+                         FontSize="11" />
+              <ComboBox ItemsSource="{CompiledBinding AuthModes}"
+                        SelectedItem="{CompiledBinding SelectedAuthMode, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1"
+                        IsVisible="{CompiledBinding ShowBearerTokenEditor}">
+              <TextBlock Text="Bearer Token"
+                         FontSize="11" />
+              <TextBox Text="{CompiledBinding BearerToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Grid>
+          <Button Grid.Row="8"
+                  Content="Apply Settings"
+                  HorizontalAlignment="Left"
+                  Command="{CompiledBinding ApplySettingsCommand}" />
+        </Grid>
+      </Border>
+
+      <Border Padding="8"
+              CornerRadius="8"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+              BorderThickness="1">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+              ColumnSpacing="8">
+          <TextBlock Text="{CompiledBinding SyncLagMs, StringFormat='Lag: {0:F1} ms'}" />
+          <TextBlock Grid.Column="1"
+                     Text="{CompiledBinding QueueDepth, StringFormat='Queue: {0}'}" />
+          <TextBlock Grid.Column="2"
+                     Text="{CompiledBinding SnapshotAge, StringFormat='Snapshot: {0}'}" />
+          <TextBlock Grid.Column="3"
+                     Text="{CompiledBinding ResyncRequired, StringFormat='Resync: {0}'}" />
+        </Grid>
+      </Border>
+
+      <Border CornerRadius="8"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+              BorderThickness="1"
+              Padding="4">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Text="Participants"
+                     Margin="4"
+                     FontWeight="SemiBold" />
+          <ListBox Grid.Row="1"
+                   Height="200"
+                   ItemsSource="{CompiledBinding Participants}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CadCollabParticipantRowViewModel">
+                <Grid ColumnDefinitions="*,Auto,Auto"
+                      ColumnSpacing="8">
+                  <StackPanel>
+                    <TextBlock Text="{CompiledBinding DisplayName}" />
+                    <TextBlock Text="{CompiledBinding ActiveTool, StringFormat='Tool: {0}'}"
+                               FontSize="11"
+                               Opacity="0.8" />
+                    <TextBlock Text="{CompiledBinding PromptStage, StringFormat='Prompt: {0}'}"
+                               FontSize="11"
+                               Opacity="0.7" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="1"
+                             Text="{CompiledBinding ActiveCommand, StringFormat='Cmd: {0}'}"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2"
+                             Text="{CompiledBinding LastActive}"
+                             VerticalAlignment="Center"
+                             FontSize="11" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <Border CornerRadius="8"
+              BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+              BorderThickness="1"
+              Padding="4">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Text="Conflicts"
+                     Margin="4"
+                     FontWeight="SemiBold" />
+          <ListBox Grid.Row="1"
+                   Height="200"
+                   ItemsSource="{CompiledBinding Conflicts}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CadCollabConflictRowViewModel">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                      ColumnSpacing="8">
+                  <TextBlock Text="{CompiledBinding EntityKey}"
+                             FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1"
+                             Text="{CompiledBinding Summary}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2"
+                             Text="{CompiledBinding Policy}" />
+                  <Button Grid.Column="3"
+                          Content="Reapply"
+                          IsEnabled="{CompiledBinding CanReapply}"
+                          Command="{CompiledBinding $parent[vm:CadCollaborationToolViewModel].ReapplyConflictCommand}"
+                          CommandParameter="{CompiledBinding ConflictId}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

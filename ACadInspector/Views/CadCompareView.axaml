@@ -112,7 +112,7 @@
                 SearchModel="{CompiledBinding SummarySearchModel}"
                 AutoGenerateColumns="False"
                 CanUserSortColumns="True"
-                CanUserReorderColumns="True"
+                CanUserReorderColumns="False"
                 CanUserResizeColumns="True"
                 GridLinesVisibility="All"
                 IsReadOnly="True" />
@@ -170,7 +170,7 @@
                       SelectedItem="{CompiledBinding SelectedObjectDiff}"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
-                      CanUserReorderColumns="True"
+                      CanUserReorderColumns="False"
                       CanUserResizeColumns="True"
                       GridLinesVisibility="All"
                       IsReadOnly="True" />
@@ -184,7 +184,7 @@
                       SearchModel="{CompiledBinding PropertySearchModel}"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
-                      CanUserReorderColumns="True"
+                      CanUserReorderColumns="False"
                       CanUserResizeColumns="True"
                       GridLinesVisibility="All"
                       IsReadOnly="True" />
@@ -218,7 +218,7 @@
                       SearchModel="{CompiledBinding DxfTextSearchModel}"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
-                      CanUserReorderColumns="True"
+                      CanUserReorderColumns="False"
                       CanUserResizeColumns="True"
                       GridLinesVisibility="All"
                       IsReadOnly="True" />

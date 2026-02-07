@@ -9,6 +9,7 @@ namespace ACadInspector.Docking;
 
 public sealed class WorkspaceDockFactory : Factory
 {
+    private IRootDock? _rootLayout;
     private readonly PropertyGridViewModel _propertyGrid;
     private readonly CadIoOptionsViewModel _ioOptions;
     private readonly CadDocumentTreeViewModel _documentTree;
@@ -18,7 +19,9 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadBlocksToolViewModel _blocksTool;
     private readonly CadViewportsToolViewModel _viewportsTool;
     private readonly CadTextStyleToolViewModel _textStyleTool;
+    private readonly CadTextStyleEditorToolViewModel _textStyleEditorTool;
     private readonly CadLineTypeToolViewModel _lineTypeTool;
+    private readonly CadLineTypeEditorToolViewModel _lineTypeEditorTool;
     private readonly CadDimensionStyleToolViewModel _dimensionStyleTool;
     private readonly CadDxfSemanticsViewModel _dxfSemantics;
     private readonly CadDxfRawViewModel _dxfRaw;
@@ -26,8 +29,14 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadPreviewViewModel _preview;
     private readonly CadBatchViewModel _batch;
     private readonly CadScriptingViewModel _scripting;
+    private readonly CadCommandLineViewModel _commandLine;
+    private readonly CadEditorToolPanelViewModel _editorToolPanel;
+    private readonly CadCollaborationToolViewModel _collaborationTool;
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
+    private readonly CadEditorSessionHostService _sessionHost;
+    private readonly CadEditorControllerHostService _controllerHost;
+    private readonly CadCollaborationWorkspaceService _collaborationWorkspace;
 
     public WorkspaceDockFactory(
         PropertyGridViewModel propertyGrid,
@@ -39,7 +48,9 @@ public sealed class WorkspaceDockFactory : Factory
         CadBlocksToolViewModel blocksTool,
         CadViewportsToolViewModel viewportsTool,
         CadTextStyleToolViewModel textStyleTool,
+        CadTextStyleEditorToolViewModel textStyleEditorTool,
         CadLineTypeToolViewModel lineTypeTool,
+        CadLineTypeEditorToolViewModel lineTypeEditorTool,
         CadDimensionStyleToolViewModel dimensionStyleTool,
         CadDxfSemanticsViewModel dxfSemantics,
         CadDxfRawViewModel dxfRaw,
@@ -47,8 +58,14 @@ public sealed class WorkspaceDockFactory : Factory
         CadPreviewViewModel preview,
         CadBatchViewModel batch,
         CadScriptingViewModel scripting,
+        CadCommandLineViewModel commandLine,
+        CadEditorToolPanelViewModel editorToolPanel,
+        CadCollaborationToolViewModel collaborationTool,
         CadSelectionService selectionService,
-        CadDocumentContextService documentContext)
+        CadDocumentContextService documentContext,
+        CadEditorSessionHostService sessionHost,
+        CadEditorControllerHostService controllerHost,
+        CadCollaborationWorkspaceService collaborationWorkspace)
     {
         _propertyGrid = propertyGrid;
         _ioOptions = ioOptions;
@@ -59,7 +76,9 @@ public sealed class WorkspaceDockFactory : Factory
         _blocksTool = blocksTool;
         _viewportsTool = viewportsTool;
         _textStyleTool = textStyleTool;
+        _textStyleEditorTool = textStyleEditorTool;
         _lineTypeTool = lineTypeTool;
+        _lineTypeEditorTool = lineTypeEditorTool;
         _dimensionStyleTool = dimensionStyleTool;
         _dxfSemantics = dxfSemantics;
         _dxfRaw = dxfRaw;
@@ -67,8 +86,14 @@ public sealed class WorkspaceDockFactory : Factory
         _preview = preview;
         _batch = batch;
         _scripting = scripting;
+        _commandLine = commandLine;
+        _editorToolPanel = editorToolPanel;
+        _collaborationTool = collaborationTool;
         _selectionService = selectionService;
         _documentContext = documentContext;
+        _sessionHost = sessionHost;
+        _controllerHost = controllerHost;
+        _collaborationWorkspace = collaborationWorkspace;
     }
 
     public override IRootDock CreateLayout()
@@ -104,8 +129,14 @@ public sealed class WorkspaceDockFactory : Factory
         _textStyleTool.Id = "TextStyles";
         _textStyleTool.Title = "Text Styles";
 
+        _textStyleEditorTool.Id = "TextStyleEditor";
+        _textStyleEditorTool.Title = "Text Style Editor";
+
         _lineTypeTool.Id = "LineTypes";
         _lineTypeTool.Title = "Line Types";
+
+        _lineTypeEditorTool.Id = "LineTypeEditor";
+        _lineTypeEditorTool.Title = "Line Type Editor";
 
         _dimensionStyleTool.Id = "DimensionStyles";
         _dimensionStyleTool.Title = "Dimension Styles";
@@ -134,6 +165,15 @@ public sealed class WorkspaceDockFactory : Factory
         _scripting.Id = "Scripting";
         _scripting.Title = "Scripting";
 
+        _commandLine.Id = "CommandLine";
+        _commandLine.Title = "Command Line";
+
+        _editorToolPanel.Id = "EditorTools";
+        _editorToolPanel.Title = "Editor Tools";
+
+        _collaborationTool.Id = "Collaboration";
+        _collaborationTool.Title = "Collaboration";
+
         var leftTools = CreateToolDock();
         leftTools.Id = "LeftTools";
         leftTools.Title = "Document Tree";
@@ -146,6 +186,7 @@ public sealed class WorkspaceDockFactory : Factory
         rightTopTools.Id = "InspectorTools";
         rightTopTools.Title = "Inspector";
         rightTopTools.VisibleDockables = CreateList<IDockable>(
+            _editorToolPanel,
             _propertyGrid,
             _renderOptionsTool,
             _layerTool,
@@ -153,18 +194,28 @@ public sealed class WorkspaceDockFactory : Factory
             _blocksTool,
             _viewportsTool,
             _textStyleTool,
+            _textStyleEditorTool,
             _lineTypeTool,
+            _lineTypeEditorTool,
             _dimensionStyleTool,
             _preview);
-        rightTopTools.ActiveDockable = _propertyGrid;
-        rightTopTools.DefaultDockable = _propertyGrid;
+        rightTopTools.ActiveDockable = _editorToolPanel;
+        rightTopTools.DefaultDockable = _editorToolPanel;
 
         var rightBottomTools = CreateToolDock();
         rightBottomTools.Id = "SemanticsTools";
         rightBottomTools.Title = "Semantics";
-        rightBottomTools.VisibleDockables = CreateList<IDockable>(_dxfSemantics, _dxfRaw, _dwgSemantics, _batch, _scripting, _ioOptions);
-        rightBottomTools.ActiveDockable = _dxfSemantics;
-        rightBottomTools.DefaultDockable = _dxfSemantics;
+        rightBottomTools.VisibleDockables = CreateList<IDockable>(
+            _commandLine,
+            _collaborationTool,
+            _dxfSemantics,
+            _dxfRaw,
+            _dwgSemantics,
+            _batch,
+            _scripting,
+            _ioOptions);
+        rightBottomTools.ActiveDockable = _commandLine;
+        rightBottomTools.DefaultDockable = _commandLine;
 
         documents.Proportion = 0.6;
         leftTools.Proportion = 0.2;
@@ -208,6 +259,7 @@ public sealed class WorkspaceDockFactory : Factory
         pinned.IsCollapsable = true;
         pinned.Proportion = 0.0;
         root.PinnedDock = pinned;
+        _rootLayout = root;
 
         return root;
     }
@@ -215,20 +267,22 @@ public sealed class WorkspaceDockFactory : Factory
     public override void InitLayout(IDockable layout)
     {
         base.InitLayout(layout);
-        ResetActiveFlags();
-        SyncActiveDockables(layout);
+        if (layout is IRootDock rootDock)
+        {
+            _rootLayout = rootDock;
+        }
+
+        RefreshActiveFlags();
     }
 
     public override void OnDockableActivated(IDockable? dockable)
     {
         base.OnDockableActivated(dockable);
-        if (dockable is not null)
-        {
-            SetDockableActive(dockable, true);
-        }
+        RefreshActiveFlags();
 
         if (dockable is CadDocumentViewModel document)
         {
+            document.Render.ClearTransientInteractionVisuals();
             _selectionService.SelectedObject = document.Document;
             _documentTree.LoadDocument(document);
             _documentContext.ActiveDocument = document;
@@ -236,6 +290,7 @@ public sealed class WorkspaceDockFactory : Factory
 
         if (dockable is CadBlockEditorViewModel blockEditor)
         {
+            blockEditor.Render.ClearTransientInteractionVisuals();
             if (_documentContext.TryGetViewModel(blockEditor.Document, out var documentViewModel))
             {
                 _documentContext.ActiveDocument = documentViewModel;
@@ -249,10 +304,33 @@ public sealed class WorkspaceDockFactory : Factory
     public override void OnDockableDeactivated(IDockable? dockable)
     {
         base.OnDockableDeactivated(dockable);
-        if (dockable is not null)
+        RefreshActiveFlags();
+    }
+
+    public override void OnDockableRemoved(IDockable? dockable)
+    {
+        base.OnDockableRemoved(dockable);
+        CleanupClosedDockable(dockable);
+        RefreshActiveFlags();
+    }
+
+    public override void OnDockableClosed(IDockable? dockable)
+    {
+        base.OnDockableClosed(dockable);
+        CleanupClosedDockable(dockable);
+        RefreshActiveFlags();
+    }
+
+    private void RefreshActiveFlags()
+    {
+        var rootLayout = _rootLayout;
+        if (rootLayout is null)
         {
-            SetDockableActive(dockable, false);
+            return;
         }
+
+        ResetActiveFlags();
+        SyncActiveDockables(rootLayout);
     }
 
     private void ResetActiveFlags()
@@ -303,6 +381,37 @@ public sealed class WorkspaceDockFactory : Factory
             case PropertyGridViewModel viewModel:
                 viewModel.IsActive = isActive;
                 break;
+        }
+    }
+
+    private void CleanupClosedDockable(IDockable? dockable)
+    {
+        if (dockable is CadDocumentViewModel documentViewModel)
+        {
+            documentViewModel.Render.ClearTransientInteractionVisuals(preserveRemoteHints: false);
+
+            if (_sessionHost.TryGet(documentViewModel.Document, out var session))
+            {
+                _ = _collaborationWorkspace.CloseSessionAsync(session);
+            }
+
+            _sessionHost.Remove(documentViewModel.Document);
+            _controllerHost.Remove(documentViewModel.Document);
+            _documentContext.Unregister(documentViewModel.Document);
+
+            var selectedDocument = _documentContext.ResolveDocument(_selectionService.SelectedObject);
+            if (ReferenceEquals(selectedDocument, documentViewModel.Document))
+            {
+                _selectionService.ClearSelection();
+            }
+
+            _documentTree.LoadDocument(_documentContext.ActiveDocument);
+            return;
+        }
+
+        if (dockable is CadBlockEditorViewModel blockEditorViewModel)
+        {
+            blockEditorViewModel.Render.ClearTransientInteractionVisuals(preserveRemoteHints: false);
         }
     }
 }

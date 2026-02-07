@@ -123,6 +123,10 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(UpdateDwgSemantics);
 
+        this.WhenAnyValue(x => x.IsActive)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnIsActiveChanged);
+
         ClearHeaderSearchCommand = ReactiveCommand.Create(() => { HeaderSearchText = string.Empty; });
         ClearHeaderFilterCommand = ReactiveCommand.Create(() => { HeaderFilterText = string.Empty; });
         ClearClassSearchCommand = ReactiveCommand.Create(() => { ClassSearchText = string.Empty; });
@@ -133,6 +137,11 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
 
     private void UpdateDwgSemantics(object? selected)
     {
+        if (!IsActive)
+        {
+            return;
+        }
+
         _headerRows.Clear();
         _classRows.Clear();
         _summaryRows.Clear();
@@ -176,6 +185,23 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
         HeaderRowsView.Refresh();
         ClassRowsView.Refresh();
         SummaryRowsView.Refresh();
+    }
+
+    private void OnIsActiveChanged(bool isActive)
+    {
+        if (!isActive)
+        {
+            _headerRows.Clear();
+            _classRows.Clear();
+            _summaryRows.Clear();
+            DwgDocumentTitle = "No document";
+            HeaderRowsView.Refresh();
+            ClassRowsView.Refresh();
+            SummaryRowsView.Refresh();
+            return;
+        }
+
+        UpdateDwgSemantics(_selectionService.SelectedObject);
     }
 
     private void ApplyHeaderSearch()

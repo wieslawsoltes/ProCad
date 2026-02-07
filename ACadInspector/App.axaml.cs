@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -6,8 +7,20 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Notifications;
 using Avalonia.Markup.Xaml;
 using ACadInspector.Core;
+using ACadInspector.Collaboration.Presence;
+using ACadInspector.Collaboration.Services;
+using ACadInspector.Collaboration.Snapshots;
+using ACadInspector.Collaboration.Transports;
+using ACadInspector.Collaboration.UI;
+using ACadInspector.Commands;
 using ACadInspector.Diagnostics;
 using ACadInspector.Docking;
+using ACadInspector.Editing.Clipboard;
+using ACadInspector.Editing.Commands;
+using ACadInspector.Editing.Controllers;
+using ACadInspector.Editing.Interaction;
+using ACadInspector.Editing.Prompt;
+using ACadInspector.Editing.Sessions;
 using ACadInspector.IO;
 using ACadInspector.Services;
 using ACadInspector.Scripting;
@@ -54,6 +67,7 @@ public partial class App : Application
             ConfigureReactiveUi();
             AppLog.Write("ConfigureReactiveUi done.");
             RenderBackendRegistry.Factory = _services.GetRequiredService<IRenderBackendFactory>();
+            _ = _services.GetRequiredService<CadCommandScriptRecordingTracker>();
         }
         catch (Exception ex)
         {
@@ -79,7 +93,11 @@ public partial class App : Application
             desktop.MainWindow = mainWindow;
             desktop.MainWindow.Opened += (_, _) => AppLog.Write("MainWindow opened.");
             desktop.MainWindow.Activated += (_, _) => AppLog.Write("MainWindow activated.");
-            desktop.MainWindow.Closed += (_, _) => AppLog.Write("MainWindow closed.");
+            desktop.MainWindow.Closed += (_, _) =>
+            {
+                AppLog.Write("MainWindow closed.");
+                DisposeWorkspaceScopedServices();
+            };
 
             storageAccessor.SetProvider(() => desktop.MainWindow?.StorageProvider);
         }
@@ -100,6 +118,30 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void DisposeWorkspaceScopedServices()
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _services.GetService<CadEditorControllerHostService>()?.Clear();
+            _services.GetService<CadEditorSessionHostService>()?.Clear();
+            _services.GetService<CadCollaborationWorkspaceService>()?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write($"DisposeWorkspaceScopedServices failed: {ex}");
+        }
+
+        if (_services is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 
     private IServiceProvider ConfigureServices()
@@ -184,6 +226,152 @@ public partial class App : Application
         services.AddSingleton<ICadBatchFileDialogService, AvaloniaCadBatchFileDialogService>();
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
         services.AddSingleton<IRenderStatsExportService, AvaloniaRenderStatsExportService>();
+        services.AddSingleton<ICadClipboardService, InMemoryCadClipboardService>();
+        services.AddSingleton<ICadEditorSessionFactory, CadEditorSessionFactory>();
+        services.AddSingleton<CadEditorSessionHostService>();
+        services.AddSingleton<ICadCommandScriptRecordingService, CadCommandScriptRecordingService>();
+        services.AddSingleton<ICadCommandHandler, LineCadCommand>();
+        services.AddSingleton<ICadCommandHandler, XLineCadCommand>();
+        services.AddSingleton<ICadCommandHandler, RayCadCommand>();
+        services.AddSingleton<ICadCommandHandler, CircleCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ArcCadCommand>();
+        services.AddSingleton<ICadCommandHandler, EllipseCadCommand>();
+        services.AddSingleton<ICadCommandHandler, SplineCadCommand>();
+        services.AddSingleton<ICadCommandHandler, TextCadCommand>();
+        services.AddSingleton<ICadCommandHandler, MTextCadCommand>();
+        services.AddSingleton<ICadCommandHandler, DimLinearCadCommand>();
+        services.AddSingleton<ICadCommandHandler, DimAlignedCadCommand>();
+        services.AddSingleton<ICadCommandHandler, DimRadiusCadCommand>();
+        services.AddSingleton<ICadCommandHandler, DimDiameterCadCommand>();
+        services.AddSingleton<ICadCommandHandler, DimAngularCadCommand>();
+        services.AddSingleton<ICadCommandHandler, LeaderCadCommand>();
+        services.AddSingleton<ICadCommandHandler, MLeaderCadCommand>();
+        services.AddSingleton<ICadCommandHandler, HatchCadCommand>();
+        services.AddSingleton<ICadCommandHandler, BoundaryCadCommand>();
+        services.AddSingleton<ICadCommandHandler, PlineCadCommand>();
+        services.AddSingleton<ICadCommandHandler, PointCadCommand>();
+        services.AddSingleton<ICadCommandHandler, InsertCadCommand>();
+        services.AddSingleton<ICadCommandHandler, XRefReloadCadCommand>();
+        services.AddSingleton<ICadCommandHandler, XRefBindCadCommand>();
+        services.AddSingleton<ICadCommandHandler, XRefDetachCadCommand>();
+        services.AddSingleton<ICadCommandHandler, RectangCadCommand>();
+        services.AddSingleton<ICadCommandHandler, PolygonCadCommand>();
+        services.AddSingleton<ICadCommandHandler, MoveCadCommand>();
+        services.AddSingleton<ICadCommandHandler, StretchCadCommand>();
+        services.AddSingleton<ICadCommandHandler, RotateCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ScaleCadCommand>();
+        services.AddSingleton<ICadCommandHandler, MirrorCadCommand>();
+        services.AddSingleton<ICadCommandHandler, OffsetCadCommand>();
+        services.AddSingleton<ICadCommandHandler, TrimCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ExtendCadCommand>();
+        services.AddSingleton<ICadCommandHandler, BreakCadCommand>();
+        services.AddSingleton<ICadCommandHandler, JoinCadCommand>();
+        services.AddSingleton<ICadCommandHandler, FilletCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ChamferCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ArrayCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ExplodeCadCommand>();
+        services.AddSingleton<ICadCommandHandler, AlignCadCommand>();
+        services.AddSingleton<ICadCommandHandler, MatchPropCadCommand>();
+        services.AddSingleton<ICadCommandHandler, CopyClipCadCommand>();
+        services.AddSingleton<ICadCommandHandler, CutCadCommand>();
+        services.AddSingleton<ICadCommandHandler, PasteClipCadCommand>();
+        services.AddSingleton<ICadCommandHandler, CopyCadCommand>();
+        services.AddSingleton<ICadCommandHandler, EraseCadCommand>();
+        services.AddSingleton<ICadCommandHandler, UndoCadCommand>();
+        services.AddSingleton<ICadCommandHandler, RedoCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ClearSelectionCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ScriptFileCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ScriptRecordCadCommand>();
+        services.AddSingleton<ICadCommandHandler, ScriptRecordSaveCadCommand>();
+        services.AddSingleton<HelpCadCommand>(provider =>
+            new HelpCadCommand(
+                () => provider.GetRequiredService<ICadCommandRegistry>().GetRegisteredCommands()));
+        services.AddSingleton<ICadCommandHandler>(provider => provider.GetRequiredService<HelpCadCommand>());
+        services.AddSingleton<ICadCommandRegistry>(provider =>
+        {
+            var registry = new CadCommandRegistry();
+            foreach (var handler in provider.GetServices<ICadCommandHandler>())
+            {
+                registry.Register(handler);
+            }
+
+            return registry;
+        });
+        services.AddSingleton<ICadCommandIntellisenseService, CadCommandIntellisenseService>();
+        services.AddSingleton<ICadEditorControllerFactory, CadEditorControllerFactory>();
+        services.AddSingleton<CadEditorControllerHostService>();
+        services.AddSingleton<CadCommandScriptRecordingTracker>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, LineInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, PlineInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, XLineInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, RayInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, CircleInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ArcInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, EllipseInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, PolygonInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, SplineInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, RectangInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, PointInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, InsertInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, TextInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, MTextInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, MoveInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, CopyInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, RotateInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ScaleInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, MirrorInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, EraseInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, OffsetInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, StretchInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, BreakInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, TrimInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ExtendInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, PasteClipInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, BoundaryInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, HatchInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, CopyClipInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, CutInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ExplodeInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, JoinInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, FilletInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ChamferInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, ArrayInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, AlignInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, MatchPropInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, DimLinearInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, DimAlignedInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, DimRadiusInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, DimDiameterInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, DimAngularInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, LeaderInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapter, MLeaderInteractiveCommandAdapter>();
+        services.AddSingleton<ICadInteractiveCommandAdapterRegistry, CadInteractiveCommandAdapterRegistry>();
+        services.AddSingleton<ICadSnapService, CadSnapService>();
+        services.AddSingleton<ICadTrackingService, CadTrackingService>();
+        services.AddSingleton<ICadGripService, CadGripService>();
+        services.AddSingleton<ICadScriptCommandHost>(provider =>
+            new CadScriptCommandHost(() => provider.GetRequiredService<ICadCommandRegistry>()));
+        services.AddSingleton<ICadRealtimeTransportFactory, VibeCadRealtimeTransportFactory>();
+        services.AddSingleton<ICadCollabService, CadCollabService>();
+        services.AddSingleton<ICadCollabUiService, CadCollabUiService>();
+        services.AddSingleton<ICadCollabConnectionOptionsProvider, CadCollabConnectionOptionsProvider>();
+        services.AddSingleton<CadCollaborationWorkspaceService>();
+        services.AddSingleton<ICadCollabControlService>(provider =>
+            provider.GetRequiredService<CadCollaborationWorkspaceService>());
+        services.AddSingleton<CadCollabPresenceRegistry>();
+        services.AddSingleton<ICadCollabSnapshotStoreFactory>(_ =>
+        {
+            if (OperatingSystem.IsBrowser())
+            {
+                return new BrowserCadCollabSnapshotStoreFactory();
+            }
+
+            var basePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ACadInspector",
+                "Collaboration");
+            return new FileCadCollabSnapshotStoreFactory(basePath);
+        });
         services.AddSingleton<CadSelectionService>();
         services.AddSingleton<CadSelectionFocusService>();
         services.AddSingleton<CadDynamicBlockOverrideService>();
@@ -205,7 +393,9 @@ public partial class App : Application
         services.AddSingleton<CadBlocksToolViewModel>();
         services.AddSingleton<CadViewportsToolViewModel>();
         services.AddSingleton<CadTextStyleToolViewModel>();
+        services.AddSingleton<CadTextStyleEditorToolViewModel>();
         services.AddSingleton<CadLineTypeToolViewModel>();
+        services.AddSingleton<CadLineTypeEditorToolViewModel>();
         services.AddSingleton<CadDimensionStyleToolViewModel>();
         services.AddSingleton<CadPreviewViewModel>();
         services.AddSingleton<CadDxfSemanticsViewModel>();
@@ -214,6 +404,9 @@ public partial class App : Application
         services.AddSingleton<CadIoOptionsViewModel>();
         services.AddSingleton<CadBatchViewModel>();
         services.AddSingleton<CadScriptingViewModel>();
+        services.AddSingleton<CadCommandLineViewModel>();
+        services.AddSingleton<CadEditorToolPanelViewModel>();
+        services.AddSingleton<CadCollaborationToolViewModel>();
         services.AddSingleton<WorkspaceDockFactory>();
         services.AddSingleton<WorkspaceViewModelFactory>();
         services.AddSingleton<CadCompareViewModelFactory>();

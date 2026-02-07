@@ -38,15 +38,15 @@ internal static class CadRenderEntityTypeColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }
@@ -66,15 +66,15 @@ internal static class CadRenderEntityTypeColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }

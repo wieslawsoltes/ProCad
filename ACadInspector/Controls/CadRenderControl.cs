@@ -83,6 +83,12 @@ public sealed class CadRenderControl : Control
     public static readonly StyledProperty<RenderAnnotation?> SelectionAnnotationProperty =
         AvaloniaProperty.Register<CadRenderControl, RenderAnnotation?>(nameof(SelectionAnnotation));
 
+    public static readonly StyledProperty<RenderOverlayScene?> OverlaySceneProperty =
+        AvaloniaProperty.Register<CadRenderControl, RenderOverlayScene?>(nameof(OverlayScene));
+
+    public static readonly StyledProperty<CadDynamicInputPayload?> DynamicInputProperty =
+        AvaloniaProperty.Register<CadRenderControl, CadDynamicInputPayload?>(nameof(DynamicInput));
+
     public static readonly StyledProperty<CadRenderFocusRequest?> FocusRequestProperty =
         AvaloniaProperty.Register<CadRenderControl, CadRenderFocusRequest?>(nameof(FocusRequest));
 
@@ -231,6 +237,18 @@ public sealed class CadRenderControl : Control
         set => SetValue(SelectionAnnotationProperty, value);
     }
 
+    public RenderOverlayScene? OverlayScene
+    {
+        get => GetValue(OverlaySceneProperty);
+        set => SetValue(OverlaySceneProperty, value);
+    }
+
+    public CadDynamicInputPayload? DynamicInput
+    {
+        get => GetValue(DynamicInputProperty);
+        set => SetValue(DynamicInputProperty, value);
+    }
+
     public CadRenderFocusRequest? FocusRequest
     {
         get => GetValue(FocusRequestProperty);
@@ -337,6 +355,8 @@ public sealed class CadRenderControl : Control
             change.Property == SelectionBoundsProperty ||
             change.Property == HoverAnnotationProperty ||
             change.Property == SelectionAnnotationProperty ||
+            change.Property == OverlaySceneProperty ||
+            change.Property == DynamicInputProperty ||
             change.Property == FocusRequestProperty ||
             change.Property == DebugBvhBoundsProperty)
         {
@@ -618,6 +638,8 @@ public sealed class CadRenderControl : Control
             SelectionBounds,
             HoverAnnotation,
             SelectionAnnotation,
+            OverlayScene,
+            DynamicInput,
             DebugBvhBounds);
         Volatile.Write(ref _renderState, snapshot);
     }

@@ -12,14 +12,21 @@ internal static class CadTextStyleColumnDefinitions
         var columns = new DataGridColumnDefinitionList
         {
             CreateImageColumn("Preview", nameof(CadTextStyleRowViewModel.Preview), static row => row.Preview),
+            CreateCheckBoxColumn("Current", nameof(CadTextStyleRowViewModel.IsCurrent), static row => row.IsCurrent),
             CreateTextColumn("Name", nameof(CadTextStyleRowViewModel.Name), static row => row.Name),
             CreateTextColumn("Handle", nameof(CadTextStyleRowViewModel.Handle), static row => row.Handle),
             CreateTextColumn("Font", nameof(CadTextStyleRowViewModel.Font), static row => row.Font),
             CreateTextColumn("Big Font", nameof(CadTextStyleRowViewModel.BigFont), static row => row.BigFont),
             CreateTextColumn("Height", nameof(CadTextStyleRowViewModel.Height), static row => row.Height),
             CreateTextColumn("Width", nameof(CadTextStyleRowViewModel.Width), static row => row.Width),
-            CreateTextColumn("Oblique", nameof(CadTextStyleRowViewModel.ObliqueAngle), static row => row.ObliqueAngle),
-            CreateCheckBoxColumn("Shape", nameof(CadTextStyleRowViewModel.IsShapeFile), static row => row.IsShapeFile)
+            CreateTextColumn("Last Height", nameof(CadTextStyleRowViewModel.LastHeight), static row => row.LastHeight),
+            CreateTextColumn("Oblique°", nameof(CadTextStyleRowViewModel.ObliqueAngle), static row => row.ObliqueAngle),
+            CreateCheckBoxColumn("Shape", nameof(CadTextStyleRowViewModel.IsShapeFile), static row => row.IsShapeFile),
+            CreateCheckBoxColumn("Vertical", nameof(CadTextStyleRowViewModel.IsVertical), static row => row.IsVertical),
+            CreateCheckBoxColumn("Backward", nameof(CadTextStyleRowViewModel.IsMirrorBackward), static row => row.IsMirrorBackward),
+            CreateCheckBoxColumn("UpsideDown", nameof(CadTextStyleRowViewModel.IsMirrorUpsideDown), static row => row.IsMirrorUpsideDown),
+            CreateCheckBoxColumn("Bold", nameof(CadTextStyleRowViewModel.IsBold), static row => row.IsBold),
+            CreateCheckBoxColumn("Italic", nameof(CadTextStyleRowViewModel.IsItalic), static row => row.IsItalic)
         };
 
         return columns;
@@ -38,18 +45,18 @@ internal static class CadTextStyleColumnDefinitions
             Binding = binding,
             ColumnKey = propertyName,
             CanUserSort = false,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true,
             ImageWidth = 48,
             ImageHeight = 48,
             Stretch = Stretch.Uniform
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = false,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }
@@ -68,15 +75,15 @@ internal static class CadTextStyleColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }
@@ -95,16 +102,16 @@ internal static class CadTextStyleColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true,
             IsReadOnly = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }

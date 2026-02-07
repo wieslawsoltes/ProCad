@@ -39,10 +39,19 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(UpdatePreview);
+
+        this.WhenAnyValue(x => x.IsActive)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnIsActiveChanged);
     }
 
     private void UpdatePreview(object? selected)
     {
+        if (!IsActive)
+        {
+            return;
+        }
+
         RawDxfDocument.Text = string.Empty;
 
         if (selected is null)
@@ -61,6 +70,18 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
 
         _documentContext.TrySetActiveFromSelection(selected);
         RawDxfDocument.Text = BuildRawDxfPreview(selected, document);
+    }
+
+    private void OnIsActiveChanged(bool isActive)
+    {
+        if (!isActive)
+        {
+            RawDxfDocument.Text = string.Empty;
+            SelectedTitle = "No selection";
+            return;
+        }
+
+        UpdatePreview(_selectionService.SelectedObject);
     }
 
     private string BuildRawDxfPreview(object selected, CadDocument document)

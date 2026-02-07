@@ -22,7 +22,8 @@ public sealed partial class CadIoOptionsViewModel : CadToolViewModelBase, IFastP
     public DataGridCollectionView ReadOptionsView { get; }
     public DataGridCollectionView WriteOptionsView { get; }
 
-    public DataGridColumnDefinitionList ColumnDefinitions { get; }
+    public DataGridColumnDefinitionList ReadColumnDefinitions { get; }
+    public DataGridColumnDefinitionList WriteColumnDefinitions { get; }
 
     public SortingModel ReadSortingModel { get; } = new();
     public FilteringModel ReadFilteringModel { get; } = new();
@@ -97,7 +98,8 @@ public sealed partial class CadIoOptionsViewModel : CadToolViewModelBase, IFastP
 
         ReadOptionsView = new DataGridCollectionView(_readRows);
         WriteOptionsView = new DataGridCollectionView(_writeRows);
-        ColumnDefinitions = CadIoOptionsColumnDefinitions.Create();
+        ReadColumnDefinitions = CadIoOptionsColumnDefinitions.Create();
+        WriteColumnDefinitions = CadIoOptionsColumnDefinitions.Create();
 
         ReadSearchModel.HighlightMode = SearchHighlightMode.TextAndCell;
         ReadSearchModel.HighlightCurrent = true;
@@ -129,7 +131,7 @@ public sealed partial class CadIoOptionsViewModel : CadToolViewModelBase, IFastP
 
     private void ApplyReadFilter()
     {
-        DataGridFilterHelper.ApplyFilter(ReadFilteringModel, ColumnDefinitions, ReadFilterText);
+        DataGridFilterHelper.ApplyFilter(ReadFilteringModel, ReadColumnDefinitions, ReadFilterText);
     }
 
     private void ApplyWriteSearch()
@@ -139,7 +141,7 @@ public sealed partial class CadIoOptionsViewModel : CadToolViewModelBase, IFastP
 
     private void ApplyWriteFilter()
     {
-        DataGridFilterHelper.ApplyFilter(WriteFilteringModel, ColumnDefinitions, WriteFilterText);
+        DataGridFilterHelper.ApplyFilter(WriteFilteringModel, WriteColumnDefinitions, WriteFilterText);
     }
 
     public CadReadOptions BuildReadOptions(CadFileFormat format)

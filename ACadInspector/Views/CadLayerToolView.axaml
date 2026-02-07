@@ -29,14 +29,14 @@
                 Command="{CompiledBinding LayerList.ClearLayerFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"
-                ItemsSource="{CompiledBinding LayerList.LayerRowsView}"
-                ColumnDefinitionsSource="{CompiledBinding LayerList.LayerColumnDefinitions}"
-                SortingModel="{CompiledBinding LayerList.LayerSortingModel}"
-                FilteringModel="{CompiledBinding LayerList.LayerFilteringModel}"
-                SearchModel="{CompiledBinding LayerList.LayerSearchModel}"
+                ItemsSource="{CompiledBinding LayerRowsView}"
+                ColumnDefinitionsSource="{CompiledBinding LayerColumnDefinitions}"
+                SortingModel="{CompiledBinding LayerSortingModel}"
+                FilteringModel="{CompiledBinding LayerFilteringModel}"
+                SearchModel="{CompiledBinding LayerSearchModel}"
                 AutoGenerateColumns="False"
                 CanUserSortColumns="True"
-                CanUserReorderColumns="True"
+                CanUserReorderColumns="False"
                 CanUserResizeColumns="True"
                 GridLinesVisibility="All"
                 IsReadOnly="False" />

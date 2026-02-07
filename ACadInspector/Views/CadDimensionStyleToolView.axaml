@@ -38,7 +38,7 @@
                 RowHeight="56"
                 AutoGenerateColumns="False"
                 CanUserSortColumns="True"
-                CanUserReorderColumns="True"
+                CanUserReorderColumns="False"
                 CanUserResizeColumns="True"
                 GridLinesVisibility="All"
                 IsReadOnly="True" />

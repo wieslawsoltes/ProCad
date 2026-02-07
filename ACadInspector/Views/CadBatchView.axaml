@@ -120,7 +120,7 @@
                     SelectedItem="{CompiledBinding SelectedItem}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />
@@ -159,7 +159,7 @@
                     SearchModel="{CompiledBinding ResultSearchModel}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />
@@ -198,7 +198,7 @@
                     SearchModel="{CompiledBinding ScriptResultSearchModel}"
                     AutoGenerateColumns="False"
                     CanUserSortColumns="True"
-                    CanUserReorderColumns="True"
+                    CanUserReorderColumns="False"
                     CanUserResizeColumns="True"
                     GridLinesVisibility="All"
                     IsReadOnly="True" />

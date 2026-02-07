@@ -10,10 +10,10 @@ internal static class PropertyGridColumnDefinitions
         var columns = new DataGridColumnDefinitionList
         {
             CreateTextColumn("Name", nameof(PropertyGridRowViewModel.Name), static row => row.Name),
+            CreateTextColumn("Value", nameof(PropertyGridRowViewModel.ValueText), static row => row.ValueText, static (row, value) => row.ValueText = value),
             CreateTextColumn("Type", nameof(PropertyGridRowViewModel.TypeName), static row => row.TypeName),
             CreateTextColumn("DXF Codes", nameof(PropertyGridRowViewModel.DxfCodes), static row => row.DxfCodes),
             CreateTextColumn("DXF Ref", nameof(PropertyGridRowViewModel.DxfReferenceTypeText), static row => row.DxfReferenceTypeText),
-            CreateTextColumn("Value", nameof(PropertyGridRowViewModel.ValueText), static row => row.ValueText, static (row, value) => row.ValueText = value),
             CreateTextColumn("Validation", nameof(PropertyGridRowViewModel.ValidationMessageText), static row => row.ValidationMessageText)
         };
 
@@ -35,15 +35,15 @@ internal static class PropertyGridColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }

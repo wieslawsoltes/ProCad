@@ -12,11 +12,13 @@ internal static class CadLineTypeColumnDefinitions
         var columns = new DataGridColumnDefinitionList
         {
             CreateImageColumn("Preview", nameof(CadLineTypeRowViewModel.Preview), static row => row.Preview),
+            CreateCheckBoxColumn("Current", nameof(CadLineTypeRowViewModel.IsCurrent), static row => row.IsCurrent),
             CreateTextColumn("Name", nameof(CadLineTypeRowViewModel.Name), static row => row.Name),
             CreateTextColumn("Handle", nameof(CadLineTypeRowViewModel.Handle), static row => row.Handle),
             CreateTextColumn("Description", nameof(CadLineTypeRowViewModel.Description), static row => row.Description),
             CreateTextColumn("Pattern", nameof(CadLineTypeRowViewModel.PatternLength), static row => row.PatternLength),
             CreateTextColumn("Segments", nameof(CadLineTypeRowViewModel.SegmentCount), static row => row.SegmentCount),
+            CreateTextColumn("Summary", nameof(CadLineTypeRowViewModel.SegmentSummary), static row => row.SegmentSummary),
             CreateCheckBoxColumn("Complex", nameof(CadLineTypeRowViewModel.IsComplex), static row => row.IsComplex),
             CreateCheckBoxColumn("Shapes", nameof(CadLineTypeRowViewModel.HasShapes), static row => row.HasShapes)
         };
@@ -37,18 +39,18 @@ internal static class CadLineTypeColumnDefinitions
             Binding = binding,
             ColumnKey = propertyName,
             CanUserSort = false,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true,
             ImageWidth = 48,
             ImageHeight = 48,
             Stretch = Stretch.Uniform
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = false,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }
@@ -67,15 +69,15 @@ internal static class CadLineTypeColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }
@@ -94,16 +96,16 @@ internal static class CadLineTypeColumnDefinitions
             ColumnKey = propertyName,
             SortMemberPath = propertyName,
             CanUserSort = true,
-            CanUserReorder = true,
+            CanUserReorder = false,
             CanUserResize = true,
             IsReadOnly = true
         };
 
-        column.Options = new DataGridColumnDefinitionOptions
+        DataGridColumnDefinitionThreadSafety.SetOptions(column, new DataGridColumnDefinitionOptions
         {
             IsSearchable = true,
             FilterValueAccessor = accessor
-        };
+        });
 
         return column;
     }

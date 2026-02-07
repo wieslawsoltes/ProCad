@@ -29,8 +29,20 @@
                  Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
         <Button Content="Clear"
                 Command="{CompiledBinding ClearFilterCommand}" />
+        <Button Content="Insert"
+                Command="{CompiledBinding InsertBlockCommand}"
+                CommandParameter="{CompiledBinding SelectedBlock}" />
         <Button Content="Open"
                 Command="{CompiledBinding OpenBlockCommand}"
+                CommandParameter="{CompiledBinding SelectedBlock}" />
+        <Button Content="Reload XRef"
+                Command="{CompiledBinding ReloadXRefCommand}"
+                CommandParameter="{CompiledBinding SelectedBlock}" />
+        <Button Content="Bind XRef"
+                Command="{CompiledBinding BindXRefCommand}"
+                CommandParameter="{CompiledBinding SelectedBlock}" />
+        <Button Content="Detach XRef"
+                Command="{CompiledBinding DetachXRefCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
       </StackPanel>
       <DataGrid Grid.Row="1"
@@ -43,7 +55,7 @@
                 RowHeight="72"
                 AutoGenerateColumns="False"
                 CanUserSortColumns="True"
-                CanUserReorderColumns="True"
+                CanUserReorderColumns="False"
                 CanUserResizeColumns="True"
                 GridLinesVisibility="All"
                 IsReadOnly="True">
@@ -52,9 +64,23 @@
             <MenuItem Header="Edit Block"
                       Command="{CompiledBinding OpenBlockCommand}"
                       CommandParameter="{CompiledBinding SelectedBlock}" />
+            <MenuItem Header="Insert Block"
+                      Command="{CompiledBinding InsertBlockCommand}"
+                      CommandParameter="{CompiledBinding SelectedBlock}" />
+            <Separator />
+            <MenuItem Header="Reload XRef"
+                      Command="{CompiledBinding ReloadXRefCommand}"
+                      CommandParameter="{CompiledBinding SelectedBlock}" />
+            <MenuItem Header="Bind XRef"
+                      Command="{CompiledBinding BindXRefCommand}"
+                      CommandParameter="{CompiledBinding SelectedBlock}" />
+            <MenuItem Header="Detach XRef"
+                      Command="{CompiledBinding DetachXRefCommand}"
+                      CommandParameter="{CompiledBinding SelectedBlock}" />
           </ContextMenu>
         </DataGrid.ContextMenu>
         <i:Interaction.Behaviors>
+          <behaviors:CadBlocksDragDropBehavior />
           <behaviors:DataGridRowDoubleClickBehavior Command="{CompiledBinding OpenBlockCommand}" />
           <behaviors:DataGridBringSelectedIntoViewBehavior />
         </i:Interaction.Behaviors>

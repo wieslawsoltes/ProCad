@@ -66,12 +66,21 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(UpdateRows);
 
+        this.WhenAnyValue(x => x.IsActive)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(OnIsActiveChanged);
+
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });
         ClearFilterCommand = ReactiveCommand.Create(() => { FilterText = string.Empty; });
     }
 
     private void UpdateRows(object? selected)
     {
+        if (!IsActive)
+        {
+            return;
+        }
+
         _propertyRows.Clear();
 
         if (selected is null)
@@ -101,6 +110,19 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
         }
 
         PropertyRowsView.Refresh();
+    }
+
+    private void OnIsActiveChanged(bool isActive)
+    {
+        if (!isActive)
+        {
+            _propertyRows.Clear();
+            SelectedTitle = "No selection";
+            PropertyRowsView.Refresh();
+            return;
+        }
+
+        UpdateRows(_selectionService.SelectedObject);
     }
 
     private void ApplySearch()
