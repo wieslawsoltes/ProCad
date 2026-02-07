@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACadInspector.Editing\ACadInspector.Editing.csproj" />
+    <ProjectReference Include="..\external\VibeOffice\src\Vibe.Office.Collaboration.Transports\Vibe.Office.Collaboration.Transports.csproj" />
+  </ItemGroup>
+
+</Project>

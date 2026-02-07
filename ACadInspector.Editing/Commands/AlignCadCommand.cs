@@ -1,0 +1,511 @@
+using ACadInspector.Editing.Operations;
+using ACadSharp.Entities;
+using CSMath;
+
+namespace ACadInspector.Editing.Commands;
+
+public sealed class AlignCadCommand : ICadCommandHandler
+{
+    public string Name => "ALIGN";
+    public IReadOnlyList<string> Aliases => ["AL"];
+
+    public bool CanExecute(CadCommandContext context)
+    {
+        return context.Session is not null;
+    }
+
+    public ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
+    {
+        if (!CadCommandSessionHelper.TryGetSession(context, out var session, out var error))
+        {
+            return ValueTask.FromResult(error);
+        }
+
+        if (!CadCommandParsing.TryParseAlignArguments(
+                context.Arguments,
+                out var sourceFirstPoint,
+                out var destinationFirstPoint,
+                out var sourceSecondPoint,
+                out var destinationSecondPoint,
+                out var hasSecondPair,
+                out var consumed,
+                out var parseError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(parseError!));
+        }
+
+        if (!TryCreateTransform(
+                sourceFirstPoint,
+                destinationFirstPoint,
+                sourceSecondPoint,
+                destinationSecondPoint,
+                hasSecondPair,
+                out var transform,
+                out var transformError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(transformError!));
+        }
+
+        var targetTokens = context.Arguments.Skip(consumed).ToArray();
+        if (!CadCommandTargetResolver.TryResolve(session, targetTokens, out var targets, out var targetError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(targetError!));
+        }
+
+        var forward = new List<CadOperation>(targets.Count);
+        var inverse = new List<CadOperation>(targets.Count);
+
+        foreach (var target in targets)
+        {
+            if (!session.EntityIndex.TryGetId(target, out var id))
+            {
+                id = session.EntityIndex.Register(target);
+            }
+
+            switch (target)
+            {
+                case Line line:
+                {
+                    var fromStart = line.StartPoint;
+                    var fromEnd = line.EndPoint;
+                    var toStart = transform.TransformPoint(fromStart);
+                    var toEnd = transform.TransformPoint(fromEnd);
+                    forward.Add(CadOperationPayloadCodec.TransformLine(id, fromStart, fromEnd, toStart, toEnd));
+                    inverse.Add(CadOperationPayloadCodec.TransformLine(id, toStart, toEnd, fromStart, fromEnd));
+                    break;
+                }
+                case Arc arc:
+                {
+                    var fromCenter = arc.Center;
+                    var fromRadius = arc.Radius;
+                    var fromStartAngle = arc.StartAngle;
+                    var fromEndAngle = arc.EndAngle;
+                    var toCenter = transform.TransformPoint(fromCenter);
+                    var toRadius = arc.Radius;
+                    var toStartAngle = transform.HasRotation
+                        ? CadGeometryTransform.NormalizeAngle(fromStartAngle + transform.AngleRadians)
+                        : fromStartAngle;
+                    var toEndAngle = transform.HasRotation
+                        ? CadGeometryTransform.NormalizeAngle(fromEndAngle + transform.AngleRadians)
+                        : fromEndAngle;
+
+                    forward.Add(CadOperationPayloadCodec.TransformArc(
+                        id,
+                        fromCenter,
+                        fromRadius,
+                        fromStartAngle,
+                        fromEndAngle,
+                        toCenter,
+                        toRadius,
+                        toStartAngle,
+                        toEndAngle));
+                    inverse.Add(CadOperationPayloadCodec.TransformArc(
+                        id,
+                        toCenter,
+                        toRadius,
+                        toStartAngle,
+                        toEndAngle,
+                        fromCenter,
+                        fromRadius,
+                        fromStartAngle,
+                        fromEndAngle));
+                    break;
+                }
+                case Circle circle:
+                {
+                    var fromCenter = circle.Center;
+                    var fromRadius = circle.Radius;
+                    var toCenter = transform.TransformPoint(fromCenter);
+                    forward.Add(CadOperationPayloadCodec.TransformCircle(id, fromCenter, fromRadius, toCenter, fromRadius));
+                    inverse.Add(CadOperationPayloadCodec.TransformCircle(id, toCenter, fromRadius, fromCenter, fromRadius));
+                    break;
+                }
+                case LwPolyline polyline:
+                {
+                    var fromVertices = CadGeometryTransform.ToVertices(polyline);
+                    var fromClosed = polyline.IsClosed;
+                    var toVertices = fromVertices.Select(transform.TransformPoint).ToArray();
+                    forward.Add(CadOperationPayloadCodec.TransformLwPolyline(id, fromVertices, fromClosed, toVertices, fromClosed));
+                    inverse.Add(CadOperationPayloadCodec.TransformLwPolyline(id, toVertices, fromClosed, fromVertices, fromClosed));
+                    break;
+                }
+                case Point point:
+                {
+                    var fromLocation = point.Location;
+                    var toLocation = transform.TransformPoint(fromLocation);
+                    forward.Add(CadOperationPayloadCodec.TransformPoint(id, fromLocation, toLocation));
+                    inverse.Add(CadOperationPayloadCodec.TransformPoint(id, toLocation, fromLocation));
+                    break;
+                }
+                case XLine xline:
+                {
+                    var fromFirstPoint = xline.FirstPoint;
+                    var fromDirection = CadGeometryTransform.NormalizeDirection(xline.Direction);
+                    var toFirstPoint = transform.TransformPoint(fromFirstPoint);
+                    var toDirection = transform.TransformDirection(fromDirection);
+                    forward.Add(CadOperationPayloadCodec.TransformXLine(id, fromFirstPoint, fromDirection, toFirstPoint, toDirection));
+                    inverse.Add(CadOperationPayloadCodec.TransformXLine(id, toFirstPoint, toDirection, fromFirstPoint, fromDirection));
+                    break;
+                }
+                case Ray ray:
+                {
+                    var fromStartPoint = ray.StartPoint;
+                    var fromDirection = CadGeometryTransform.NormalizeDirection(ray.Direction);
+                    var toStartPoint = transform.TransformPoint(fromStartPoint);
+                    var toDirection = transform.TransformDirection(fromDirection);
+                    forward.Add(CadOperationPayloadCodec.TransformRay(id, fromStartPoint, fromDirection, toStartPoint, toDirection));
+                    inverse.Add(CadOperationPayloadCodec.TransformRay(id, toStartPoint, toDirection, fromStartPoint, fromDirection));
+                    break;
+                }
+                case TextEntity text:
+                {
+                    var fromInsertPoint = text.InsertPoint;
+                    var fromAlignmentPoint = text.AlignmentPoint;
+                    var fromHeight = text.Height;
+                    var fromRotation = text.Rotation;
+                    var toInsertPoint = transform.TransformPoint(fromInsertPoint);
+                    var toAlignmentPoint = transform.TransformPoint(fromAlignmentPoint);
+                    var toHeight = fromHeight;
+                    var toRotation = transform.HasRotation
+                        ? CadGeometryTransform.NormalizeAngle(fromRotation + transform.AngleRadians)
+                        : fromRotation;
+                    forward.Add(CadOperationPayloadCodec.TransformText(
+                        id,
+                        fromInsertPoint,
+                        fromAlignmentPoint,
+                        fromHeight,
+                        fromRotation,
+                        toInsertPoint,
+                        toAlignmentPoint,
+                        toHeight,
+                        toRotation));
+                    inverse.Add(CadOperationPayloadCodec.TransformText(
+                        id,
+                        toInsertPoint,
+                        toAlignmentPoint,
+                        toHeight,
+                        toRotation,
+                        fromInsertPoint,
+                        fromAlignmentPoint,
+                        fromHeight,
+                        fromRotation));
+                    break;
+                }
+                case MText mtext:
+                {
+                    var fromInsertPoint = mtext.InsertPoint;
+                    var fromTextDirection = CadGeometryTransform.NormalizeDirection(mtext.AlignmentPoint);
+                    var fromHeight = mtext.Height;
+                    var fromRectangleWidth = mtext.RectangleWidth;
+                    var toInsertPoint = transform.TransformPoint(fromInsertPoint);
+                    var toTextDirection = transform.TransformDirection(fromTextDirection);
+                    var toHeight = fromHeight;
+                    var toRectangleWidth = fromRectangleWidth;
+                    forward.Add(CadOperationPayloadCodec.TransformMText(
+                        id,
+                        fromInsertPoint,
+                        fromTextDirection,
+                        fromHeight,
+                        fromRectangleWidth,
+                        toInsertPoint,
+                        toTextDirection,
+                        toHeight,
+                        toRectangleWidth));
+                    inverse.Add(CadOperationPayloadCodec.TransformMText(
+                        id,
+                        toInsertPoint,
+                        toTextDirection,
+                        toHeight,
+                        toRectangleWidth,
+                        fromInsertPoint,
+                        fromTextDirection,
+                        fromHeight,
+                        fromRectangleWidth));
+                    break;
+                }
+                case Ellipse ellipse:
+                {
+                    var fromCenter = ellipse.Center;
+                    var fromMajorAxisEndPoint = ellipse.MajorAxisEndPoint;
+                    var fromRadiusRatio = ellipse.RadiusRatio;
+                    var fromStartParameter = ellipse.StartParameter;
+                    var fromEndParameter = ellipse.EndParameter;
+                    var fromNormal = ellipse.Normal;
+                    var toCenter = transform.TransformPoint(fromCenter);
+                    var toMajorAxisEndPoint = transform.TransformVector(fromMajorAxisEndPoint);
+                    var toRadiusRatio = fromRadiusRatio;
+                    var toStartParameter = fromStartParameter;
+                    var toEndParameter = fromEndParameter;
+                    var toNormal = transform.TransformVector(fromNormal);
+                    forward.Add(CadOperationPayloadCodec.TransformEllipse(
+                        id,
+                        fromCenter,
+                        fromMajorAxisEndPoint,
+                        fromRadiusRatio,
+                        fromStartParameter,
+                        fromEndParameter,
+                        fromNormal,
+                        toCenter,
+                        toMajorAxisEndPoint,
+                        toRadiusRatio,
+                        toStartParameter,
+                        toEndParameter,
+                        toNormal));
+                    inverse.Add(CadOperationPayloadCodec.TransformEllipse(
+                        id,
+                        toCenter,
+                        toMajorAxisEndPoint,
+                        toRadiusRatio,
+                        toStartParameter,
+                        toEndParameter,
+                        toNormal,
+                        fromCenter,
+                        fromMajorAxisEndPoint,
+                        fromRadiusRatio,
+                        fromStartParameter,
+                        fromEndParameter,
+                        fromNormal));
+                    break;
+                }
+                case Spline spline:
+                {
+                    var fromDegree = spline.Degree;
+                    var fromClosed = spline.IsClosed;
+                    var fromIsPeriodic = spline.IsPeriodic;
+                    var fromFitPoints = spline.FitPoints.ToArray();
+                    var fromControlPoints = spline.ControlPoints.ToArray();
+                    var fromKnots = spline.Knots.ToArray();
+                    var fromWeights = spline.Weights.ToArray();
+                    var fromStartTangent = spline.StartTangent;
+                    var fromEndTangent = spline.EndTangent;
+                    var fromNormal = spline.Normal;
+
+                    var toDegree = fromDegree;
+                    var toClosed = fromClosed;
+                    var toIsPeriodic = fromIsPeriodic;
+                    var toFitPoints = fromFitPoints.Select(transform.TransformPoint).ToArray();
+                    var toControlPoints = fromControlPoints.Select(transform.TransformPoint).ToArray();
+                    var toKnots = fromKnots;
+                    var toWeights = fromWeights;
+                    var toStartTangent = transform.TransformVector(fromStartTangent);
+                    var toEndTangent = transform.TransformVector(fromEndTangent);
+                    var toNormal = transform.TransformVector(fromNormal);
+                    forward.Add(CadOperationPayloadCodec.TransformSpline(
+                        id,
+                        fromDegree,
+                        fromClosed,
+                        fromIsPeriodic,
+                        fromFitPoints,
+                        fromControlPoints,
+                        fromKnots,
+                        fromWeights,
+                        fromStartTangent,
+                        fromEndTangent,
+                        fromNormal,
+                        toDegree,
+                        toClosed,
+                        toIsPeriodic,
+                        toFitPoints,
+                        toControlPoints,
+                        toKnots,
+                        toWeights,
+                        toStartTangent,
+                        toEndTangent,
+                        toNormal));
+                    inverse.Add(CadOperationPayloadCodec.TransformSpline(
+                        id,
+                        toDegree,
+                        toClosed,
+                        toIsPeriodic,
+                        toFitPoints,
+                        toControlPoints,
+                        toKnots,
+                        toWeights,
+                        toStartTangent,
+                        toEndTangent,
+                        toNormal,
+                        fromDegree,
+                        fromClosed,
+                        fromIsPeriodic,
+                        fromFitPoints,
+                        fromControlPoints,
+                        fromKnots,
+                        fromWeights,
+                        fromStartTangent,
+                        fromEndTangent,
+                        fromNormal));
+                    break;
+                }
+                case Hatch hatch:
+                {
+                    if (!CadHatchGeometry.TryGetLoops(hatch, out var fromLoops, out var loopError))
+                    {
+                        return ValueTask.FromResult(CadCommandResult.Fail($"ALIGN could not transform HATCH: {loopError}"));
+                    }
+
+                    var toLoops = fromLoops
+                        .Select(loop => loop.Select(transform.TransformPoint).ToArray())
+                        .ToArray();
+                    var patternName = CadHatchGeometry.ResolvePatternName(hatch);
+                    forward.Add(CadOperationPayloadCodec.TransformHatch(
+                        id,
+                        fromLoops,
+                        toLoops,
+                        hatch.IsSolid,
+                        patternName,
+                        hatch.Normal));
+                    inverse.Add(CadOperationPayloadCodec.TransformHatch(
+                        id,
+                        toLoops,
+                        fromLoops,
+                        hatch.IsSolid,
+                        patternName,
+                        hatch.Normal));
+                    break;
+                }
+                case Insert insert:
+                {
+                    if (insert.Block is null)
+                    {
+                        return ValueTask.FromResult(CadCommandResult.Fail("ALIGN cannot transform INSERT without a block reference."));
+                    }
+
+                    var fromInsertPoint = insert.InsertPoint;
+                    var fromXScale = insert.XScale;
+                    var fromYScale = insert.YScale;
+                    var fromZScale = insert.ZScale;
+                    var fromRotation = insert.Rotation;
+                    var fromNormal = insert.Normal;
+                    var toInsertPoint = transform.TransformPoint(fromInsertPoint);
+                    var toXScale = fromXScale;
+                    var toYScale = fromYScale;
+                    var toZScale = fromZScale;
+                    var toRotation = transform.HasRotation
+                        ? CadGeometryTransform.NormalizeAngle(fromRotation + transform.AngleRadians)
+                        : fromRotation;
+                    var toNormal = fromNormal;
+
+                    forward.Add(CadOperationPayloadCodec.TransformInsert(
+                        id,
+                        insert.Block.Name,
+                        fromInsertPoint,
+                        fromXScale,
+                        fromYScale,
+                        fromZScale,
+                        fromRotation,
+                        fromNormal,
+                        toInsertPoint,
+                        toXScale,
+                        toYScale,
+                        toZScale,
+                        toRotation,
+                        toNormal));
+                    inverse.Add(CadOperationPayloadCodec.TransformInsert(
+                        id,
+                        insert.Block.Name,
+                        toInsertPoint,
+                        toXScale,
+                        toYScale,
+                        toZScale,
+                        toRotation,
+                        toNormal,
+                        fromInsertPoint,
+                        fromXScale,
+                        fromYScale,
+                        fromZScale,
+                        fromRotation,
+                        fromNormal));
+                    break;
+                }
+                default:
+                    return ValueTask.FromResult(CadCommandResult.Fail($"ALIGN does not support entity type '{target.GetType().Name}' yet."));
+            }
+        }
+
+        var actorId = session.SessionId.Value;
+        var forwardBatch = session.NextBatch(actorId, forward);
+        var inverseBatch = session.NextBatch(actorId, inverse.AsEnumerable().Reverse().ToArray());
+        session.Apply(forwardBatch);
+        session.UndoRedo.Record(forwardBatch, inverseBatch);
+
+        return ValueTask.FromResult(CadCommandResult.Ok($"Aligned {forward.Count} entity(s).", forward));
+    }
+
+    private static bool TryCreateTransform(
+        XYZ sourceFirstPoint,
+        XYZ destinationFirstPoint,
+        XYZ sourceSecondPoint,
+        XYZ destinationSecondPoint,
+        bool hasSecondPair,
+        out CadAlignTransform transform,
+        out string? error)
+    {
+        error = null;
+        var translation = new XYZ(
+            destinationFirstPoint.X - sourceFirstPoint.X,
+            destinationFirstPoint.Y - sourceFirstPoint.Y,
+            destinationFirstPoint.Z - sourceFirstPoint.Z);
+
+        if (!hasSecondPair)
+        {
+            transform = new CadAlignTransform(sourceFirstPoint, translation, HasRotation: false, AngleRadians: 0.0);
+            return true;
+        }
+
+        var sourceVector = new XYZ(
+            sourceSecondPoint.X - sourceFirstPoint.X,
+            sourceSecondPoint.Y - sourceFirstPoint.Y,
+            sourceSecondPoint.Z - sourceFirstPoint.Z);
+        var destinationVector = new XYZ(
+            destinationSecondPoint.X - destinationFirstPoint.X,
+            destinationSecondPoint.Y - destinationFirstPoint.Y,
+            destinationSecondPoint.Z - destinationFirstPoint.Z);
+
+        var sourceLength = Math.Sqrt((sourceVector.X * sourceVector.X) + (sourceVector.Y * sourceVector.Y));
+        var destinationLength = Math.Sqrt((destinationVector.X * destinationVector.X) + (destinationVector.Y * destinationVector.Y));
+        if (sourceLength <= 1e-8 || destinationLength <= 1e-8)
+        {
+            transform = default;
+            error = "ALIGN second point pair requires non-zero vectors.";
+            return false;
+        }
+
+        var sourceAngle = Math.Atan2(sourceVector.Y, sourceVector.X);
+        var destinationAngle = Math.Atan2(destinationVector.Y, destinationVector.X);
+        var rotation = destinationAngle - sourceAngle;
+        if (double.IsNaN(rotation) || double.IsInfinity(rotation))
+        {
+            transform = default;
+            error = "ALIGN failed to compute a stable rotation.";
+            return false;
+        }
+
+        transform = new CadAlignTransform(sourceFirstPoint, translation, HasRotation: true, AngleRadians: rotation);
+        return true;
+    }
+
+    private readonly record struct CadAlignTransform(XYZ RotationPivot, XYZ Translation, bool HasRotation, double AngleRadians)
+    {
+        public XYZ TransformPoint(XYZ value)
+        {
+            var point = HasRotation
+                ? CadGeometryTransform.RotateAroundZ(value, RotationPivot, AngleRadians)
+                : value;
+            return CadGeometryTransform.Translate(point, Translation);
+        }
+
+        public XYZ TransformDirection(XYZ direction)
+        {
+            return HasRotation
+                ? CadGeometryTransform.RotateDirectionAroundZ(direction, AngleRadians)
+                : direction;
+        }
+
+        public XYZ TransformVector(XYZ vector)
+        {
+            return HasRotation
+                ? CadGeometryTransform.RotateVectorAroundZ(vector, AngleRadians)
+                : vector;
+        }
+    }
+}

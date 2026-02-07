@@ -3,8 +3,12 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="ACadInspector.Browser/ACadInspector.Browser.csproj" />
+  <Project Path="ACadInspector.Collaboration.ServerHost/ACadInspector.Collaboration.ServerHost.csproj" />
+  <Project Path="ACadInspector.Collaboration/ACadInspector.Collaboration.csproj" />
   <Project Path="ACadInspector.Core/ACadInspector.Core.csproj" />
   <Project Path="ACadInspector.Desktop/ACadInspector.Desktop.csproj" />
+  <Project Path="ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj" />
+  <Project Path="ACadInspector.Editing/ACadInspector.Editing.csproj" />
   <Project Path="ACadInspector.Generators/ACadInspector.Generators.csproj" />
   <Project Path="ACadInspector.IO/ACadInspector.IO.csproj" />
   <Project Path="ACadInspector.TraceCli/ACadInspector.TraceCli.csproj" />

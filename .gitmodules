@@ -1,3 +1,6 @@
 [submodule "external/ACadSharp"]
 	path = external/ACadSharp
 	url = https://github.com/wieslawsoltes/ACadSharp
+[submodule "external/VibeOffice"]
+	path = external/VibeOffice
+	url = https://github.com/wieslawsoltes/VibeOffice
