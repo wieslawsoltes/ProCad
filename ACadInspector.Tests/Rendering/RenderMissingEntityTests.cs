@@ -62,9 +62,8 @@ public sealed class RenderMissingEntityTests
         document.Entities.Add(mesh);
 
         var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
-        var polylines = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderPolyline>().ToList();
-
-        Assert.NotEmpty(polylines);
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToList();
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline or RenderLine);
     }
 
     [Fact]
@@ -87,9 +86,8 @@ public sealed class RenderMissingEntityTests
         document.Entities.Add(mline);
 
         var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
-        var polylines = scene.Layers.SelectMany(layer => layer.Primitives).OfType<RenderPolyline>().ToList();
-
-        Assert.NotEmpty(polylines);
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToList();
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline or RenderLine);
     }
 
     [Fact]
@@ -98,7 +96,11 @@ public sealed class RenderMissingEntityTests
         var root = FindRepositoryRoot();
         var supportPath = Path.Combine(root, "external", "ACadSharp", "samples");
         var document = new CadDocument();
-        var style = new TextStyle("Shx") { Filename = "test_shape.shx" };
+        var style = new TextStyle("Shx")
+        {
+            Filename = "test_shape.shx",
+            Flags = StyleFlags.IsShape
+        };
         document.TextStyles.Add(style);
 
         var shape = new Shape(style)

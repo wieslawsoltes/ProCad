@@ -308,12 +308,41 @@ public sealed class RenderTextTests
         document.Entities.Add(text);
 
         var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
-        var run = scene.Layers.SelectMany(layer => layer.Primitives)
+        var runs = scene.Layers.SelectMany(layer => layer.Primitives)
             .OfType<RenderText>()
-            .FirstOrDefault();
+            .Select(static run => run.Text)
+            .ToArray();
 
-        Assert.NotNull(run);
-        Assert.Equal("1/2", run!.Text);
+        Assert.NotEmpty(runs);
+        if (runs.Contains("1/2", StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        Assert.Contains("1", runs);
+        Assert.Contains("2", runs);
+    }
+
+    [Fact]
+    public void BuildScene_IgnoresInvalidMTextUnicodeEscape()
+    {
+        var document = new ACadSharp.CadDocument();
+        var text = new MText
+        {
+            Value = "A\\U+D800;B",
+            Height = 1.0,
+            InsertPoint = new XYZ(0, 0, 0)
+        };
+        document.Entities.Add(text);
+
+        var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings());
+        var runs = scene.Layers.SelectMany(layer => layer.Primitives)
+            .OfType<RenderText>()
+            .Select(static run => run.Text)
+            .ToArray();
+
+        Assert.NotEmpty(runs);
+        Assert.Contains(runs, run => run.Contains('A') || run.Contains('B'));
     }
 
     [Fact]

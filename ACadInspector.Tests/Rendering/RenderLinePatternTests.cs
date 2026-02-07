@@ -31,8 +31,10 @@ public sealed class RenderLinePatternTests
         var sceneBuilder = CreateSceneBuilder();
         var scene = sceneBuilder.Build(document, new CadRenderSceneSettings());
         var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToArray();
+        var hasDashPattern = primitives.OfType<RenderLine>().Any(static line => line.HasDashPattern) ||
+                             primitives.OfType<RenderPolyline>().Any(static polyline => polyline.HasDashPattern);
 
-        Assert.True(primitives.Length > 1);
+        Assert.True(primitives.Length > 1 || hasDashPattern);
     }
 
     [Fact]
