@@ -99,6 +99,7 @@ public sealed class CadEditorSessionHostService : IDisposable
     public void NotifySessionChanged(ICadEditorSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
+        RefreshSelectionForChangedSession(session);
         var revision = session.Revision;
         if (_changeStamps.TryGetValue(session.Document, out var currentStamp))
         {
@@ -209,6 +210,71 @@ public sealed class CadEditorSessionHostService : IDisposable
         {
             resolved = canonicalEntity;
             return true;
+        }
+
+        return false;
+    }
+
+    private void RefreshSelectionForChangedSession(ICadEditorSession session)
+    {
+        var selectedObject = _selectionService.SelectedObject;
+        var selectedObjects = _selectionService.SelectedObjects.Cast<object?>().ToArray();
+        if (selectedObjects.Length == 0 && selectedObject is not null)
+        {
+            selectedObjects = [selectedObject];
+        }
+
+        if (!SelectionTargetsDocument(session.Document, selectedObject, selectedObjects))
+        {
+            return;
+        }
+
+        var normalized = NormalizeSelectionForSession(session, selectedObjects)
+            .Where(static item => item is not null)
+            .ToArray();
+        if (normalized.Length == 0)
+        {
+            _selectionService.ClearSelection();
+            return;
+        }
+
+        var changed = _selectionService.ApplySelection(normalized, CadSelectionMode.Replace);
+        if (selectedObject is not null &&
+            TryNormalizeSelectionItem(session, selectedObject, out var normalizedPrimary) &&
+            normalizedPrimary is not null)
+        {
+            _selectionService.SetPrimarySelection(normalizedPrimary);
+        }
+
+        if (!changed)
+        {
+            _selectionService.RefreshSelection();
+        }
+    }
+
+    private bool SelectionTargetsDocument(
+        CadDocument document,
+        object? selectedObject,
+        IReadOnlyList<object?> selectedObjects)
+    {
+        if (selectedObject is not null &&
+            ReferenceEquals(_documentContext.ResolveDocument(selectedObject), document))
+        {
+            return true;
+        }
+
+        for (var index = 0; index < selectedObjects.Count; index++)
+        {
+            var candidate = selectedObjects[index];
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            if (ReferenceEquals(_documentContext.ResolveDocument(candidate), document))
+            {
+                return true;
+            }
         }
 
         return false;

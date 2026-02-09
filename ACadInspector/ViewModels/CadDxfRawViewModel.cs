@@ -19,6 +19,7 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
     private CadDocument? _rawDxfCacheDocument;
+    private long _rawDxfCacheSelectionStamp = -1;
     private string? _rawDxfCacheText;
 
     public TextDocument RawDxfDocument { get; } = new();
@@ -69,7 +70,7 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         }
 
         _documentContext.TrySetActiveFromSelection(selected);
-        RawDxfDocument.Text = BuildRawDxfPreview(selected, document);
+        RawDxfDocument.Text = BuildRawDxfPreview(selected, document, _selectionService.SelectionStamp);
     }
 
     private void OnIsActiveChanged(bool isActive)
@@ -84,9 +85,9 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         UpdatePreview(_selectionService.SelectedObject);
     }
 
-    private string BuildRawDxfPreview(object selected, CadDocument document)
+    private string BuildRawDxfPreview(object selected, CadDocument document, long selectionStamp)
     {
-        var text = GetOrCreateRawDxfText(document);
+        var text = GetOrCreateRawDxfText(document, selectionStamp);
         if (string.IsNullOrWhiteSpace(text))
         {
             return string.Empty;
@@ -116,9 +117,11 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         return text;
     }
 
-    private string GetOrCreateRawDxfText(CadDocument document)
+    private string GetOrCreateRawDxfText(CadDocument document, long selectionStamp)
     {
-        if (ReferenceEquals(_rawDxfCacheDocument, document) && _rawDxfCacheText is not null)
+        if (ReferenceEquals(_rawDxfCacheDocument, document) &&
+            _rawDxfCacheSelectionStamp == selectionStamp &&
+            _rawDxfCacheText is not null)
         {
             return _rawDxfCacheText;
         }
@@ -132,6 +135,7 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: false);
         var text = reader.ReadToEnd();
         _rawDxfCacheDocument = document;
+        _rawDxfCacheSelectionStamp = selectionStamp;
         _rawDxfCacheText = text;
         return text;
     }

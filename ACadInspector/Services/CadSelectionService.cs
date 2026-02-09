@@ -101,6 +101,12 @@ public sealed class CadSelectionService : ReactiveObject
         AdvanceSelection();
     }
 
+    public void RefreshSelection()
+    {
+        this.RaisePropertyChanged(nameof(SelectedObject));
+        AdvanceSelection();
+    }
+
     private void AdvanceSelection()
     {
         SelectionStamp++;
