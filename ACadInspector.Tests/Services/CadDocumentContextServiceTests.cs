@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Collections.Generic;
 using ACadInspector.Core;
 using ACadInspector.Services;
 using ACadInspector.ViewModels;
@@ -10,6 +12,42 @@ namespace ACadInspector.Tests.Services;
 
 public sealed class CadDocumentContextServiceTests
 {
+    [Fact]
+    public void RegisterUnregister_MultiDocumentRecoveryLoop_CompletesWithinBudget()
+    {
+        const int documentCount = 250;
+        const int budgetMilliseconds = 600;
+        var context = new CadDocumentContextService();
+        var viewModels = new List<CadDocumentViewModel>(documentCount);
+        for (var index = 0; index < documentCount; index++)
+        {
+            viewModels.Add(new CadDocumentViewModel(
+                new CadDocument(),
+                CadFileFormat.Dxf,
+                path: null,
+                displayName: $"Doc-{index}",
+                render: null!));
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < viewModels.Count; index++)
+        {
+            context.Register(viewModels[index]);
+        }
+
+        for (var index = viewModels.Count - 1; index >= 0; index--)
+        {
+            context.Unregister(viewModels[index].Document);
+        }
+
+        stopwatch.Stop();
+        Assert.Empty(context.GetDocuments());
+        Assert.Null(context.ActiveDocument);
+        Assert.True(
+            stopwatch.ElapsedMilliseconds <= budgetMilliseconds,
+            $"Document context recovery budget exceeded: {stopwatch.ElapsedMilliseconds} ms > {budgetMilliseconds} ms.");
+    }
+
     [Fact]
     public void ResolveDocument_UnregisteredEntitySelection_FallsBackToActiveDocument()
     {
