@@ -44,6 +44,60 @@ public sealed class CadScriptingViewModelTests
         Assert.Contains("completed", harness.ViewModel.CommandStatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task RunCommandScriptCommand_ForwardsPlaybackRangeOptions()
+    {
+        var harness = CreateHarness();
+        harness.ViewModel.CommandScriptDocument.Text = "LINE 0,0 1,1";
+        harness.ViewModel.ContinueOnCommandError = true;
+        harness.ViewModel.CommandStartLine = "3";
+        harness.ViewModel.CommandMaxCommands = "5";
+
+        await harness.ViewModel.RunCommandScriptCommand.Execute().ToTask();
+
+        var options = Assert.IsType<CadScriptCommandPlaybackOptions>(harness.CommandHost.Options);
+        Assert.False(options.StopOnError);
+        Assert.Equal(3, options.StartLine);
+        Assert.Equal(5, options.MaxCommands);
+    }
+
+    [Fact]
+    public async Task RunCommandScriptCommand_InvalidStartLine_ShowsValidationAndSkipsExecution()
+    {
+        var harness = CreateHarness();
+        harness.ViewModel.CommandScriptDocument.Text = "LINE 0,0 1,1";
+        harness.ViewModel.CommandStartLine = "0";
+
+        await harness.ViewModel.RunCommandScriptCommand.Execute().ToTask();
+
+        Assert.Contains("Start line must be an integer", harness.ViewModel.CommandStatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(harness.CommandHost.Options);
+    }
+
+    [Fact]
+    public async Task MacroCommands_SaveApplyDeleteWorkflow()
+    {
+        var harness = CreateHarness();
+        harness.ViewModel.MacroName = "LineMacro";
+        harness.ViewModel.CommandScriptDocument.Text = "LINE 0,0 1,1";
+        harness.ViewModel.ContinueOnCommandError = true;
+
+        await harness.ViewModel.SaveMacroCommand.Execute().ToTask();
+        var savedMacro = Assert.Single(harness.ViewModel.Macros);
+        Assert.Equal("LineMacro", savedMacro.Name);
+
+        harness.ViewModel.CommandScriptDocument.Text = "POINT 2,2";
+        harness.ViewModel.ContinueOnCommandError = false;
+        harness.ViewModel.SelectedMacro = savedMacro;
+        await harness.ViewModel.ApplyMacroCommand.Execute().ToTask();
+
+        Assert.Equal("LINE 0,0 1,1", harness.ViewModel.CommandScriptDocument.Text);
+        Assert.True(harness.ViewModel.ContinueOnCommandError);
+
+        await harness.ViewModel.DeleteMacroCommand.Execute().ToTask();
+        Assert.Empty(harness.ViewModel.Macros);
+    }
+
     private static Harness CreateHarness()
     {
         var scriptHost = new FakeScriptHost();
@@ -97,6 +151,7 @@ public sealed class CadScriptingViewModelTests
     private sealed class FakeScriptCommandHost : ICadScriptCommandHost
     {
         public string ScriptText { get; private set; } = string.Empty;
+        public CadScriptCommandPlaybackOptions? Options { get; private set; }
 
         public ValueTask<CadScriptCommandPlaybackResult> ExecuteAsync(
             string script,
@@ -105,6 +160,7 @@ public sealed class CadScriptingViewModelTests
             CancellationToken cancellationToken = default)
         {
             ScriptText = script;
+            Options = options;
             return ValueTask.FromResult(new CadScriptCommandPlaybackResult(
                 Success: true,
                 ExecutedCount: 1,

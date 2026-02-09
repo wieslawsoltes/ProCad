@@ -100,6 +100,7 @@ public sealed class ScriptRecordCadCommandTests
         public bool IsPaused { get; private set; }
         public bool IncludeFailedCommands { get; set; }
         public bool IncludeMetadataComments { get; set; }
+        public bool IncludeTimestampComments { get; set; } = true;
         public DateTimeOffset? StartedAtUtc { get; private set; }
         public DateTimeOffset? LastRecordedAtUtc { get; private set; }
         public int EntryCount => Entries.Count;
@@ -113,6 +114,7 @@ public sealed class ScriptRecordCadCommandTests
             IsPaused,
             IncludeFailedCommands,
             IncludeMetadataComments,
+            IncludeTimestampComments,
             StartedAtUtc,
             LastRecordedAtUtc,
             EntryCount,

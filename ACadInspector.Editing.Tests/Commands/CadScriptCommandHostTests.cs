@@ -1,3 +1,4 @@
+using System.Linq;
 using ACadInspector.Editing.Commands;
 using ACadInspector.Editing.Sessions;
 using ACadSharp;
@@ -76,6 +77,51 @@ POINT 10,20
         var point = Assert.Single(session.Document.Entities.OfType<Point>());
         Assert.Equal(10.0, point.Location.X);
         Assert.Equal(20.0, point.Location.Y);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_StartLine_SkipsCommandsBeforeConfiguredLine()
+    {
+        var (session, host) = CreateHarness();
+        var script = """
+POINT 1,1
+POINT 2,2
+POINT 3,3
+""";
+
+        var result = await host.ExecuteAsync(
+            script,
+            session,
+            new CadScriptCommandPlaybackOptions(StartLine: 3));
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.ExecutedCount);
+        var point = Assert.Single(session.Document.Entities.OfType<Point>());
+        Assert.Equal(3.0, point.Location.X);
+        Assert.Equal(3.0, point.Location.Y);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MaxCommands_StopsAfterConfiguredCount()
+    {
+        var (session, host) = CreateHarness();
+        var script = """
+POINT 1,1
+POINT 2,2
+POINT 3,3
+""";
+
+        var result = await host.ExecuteAsync(
+            script,
+            session,
+            new CadScriptCommandPlaybackOptions(StopOnError: false, MaxCommands: 2));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, result.ExecutedCount);
+        var points = session.Document.Entities.OfType<Point>().ToList();
+        Assert.Equal(2, points.Count);
+        Assert.Equal(1.0, points[0].Location.X);
+        Assert.Equal(2.0, points[1].Location.X);
     }
 
     private static (CadDocumentSession Session, ICadScriptCommandHost Host) CreateHarness()

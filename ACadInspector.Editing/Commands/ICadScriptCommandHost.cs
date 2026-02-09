@@ -11,9 +11,16 @@ public interface ICadScriptCommandHost
         CancellationToken cancellationToken = default);
 }
 
-public sealed record CadScriptCommandPlaybackOptions(bool StopOnError = true)
+public sealed record CadScriptCommandPlaybackOptions(
+    bool StopOnError = true,
+    int StartLine = 1,
+    int? MaxCommands = null)
 {
     public static CadScriptCommandPlaybackOptions Default { get; } = new();
+
+    public int NormalizedStartLine => StartLine < 1 ? 1 : StartLine;
+
+    public int? NormalizedMaxCommands => MaxCommands is > 0 ? MaxCommands : null;
 }
 
 public sealed record CadScriptCommandPlaybackEntry(

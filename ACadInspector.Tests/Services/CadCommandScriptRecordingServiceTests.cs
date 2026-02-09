@@ -65,6 +65,25 @@ public sealed class CadCommandScriptRecordingServiceTests
         }
     }
 
+    [Fact]
+    public async Task BuildScript_TimestampCommentsRespectToggle()
+    {
+        var harness = CreateHarness();
+        harness.Service.Start(clearExisting: true);
+        var controller = harness.ControllerHost.GetActiveController();
+        Assert.NotNull(controller);
+        await controller.SubmitAsync("ECHO timestamp");
+
+        harness.Service.IncludeMetadataComments = true;
+        harness.Service.IncludeTimestampComments = true;
+        var withTimestamp = harness.Service.BuildScript(includeHeader: false);
+        Assert.Contains("; UTC ", withTimestamp, StringComparison.Ordinal);
+
+        harness.Service.IncludeTimestampComments = false;
+        var withoutTimestamp = harness.Service.BuildScript(includeHeader: false);
+        Assert.DoesNotContain("; UTC ", withoutTimestamp, StringComparison.Ordinal);
+    }
+
     private static Harness CreateHarness()
     {
         var document = new CadDocument();

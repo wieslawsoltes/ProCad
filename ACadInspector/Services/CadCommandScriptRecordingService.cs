@@ -27,6 +27,7 @@ public sealed record CadScriptRecordingSnapshot(
     bool IsPaused,
     bool IncludeFailedCommands,
     bool IncludeMetadataComments,
+    bool IncludeTimestampComments,
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? LastRecordedAtUtc,
     int EntryCount,
@@ -44,6 +45,7 @@ public interface ICadCommandScriptRecordingService
     bool IsPaused { get; }
     bool IncludeFailedCommands { get; set; }
     bool IncludeMetadataComments { get; set; }
+    bool IncludeTimestampComments { get; set; }
     DateTimeOffset? StartedAtUtc { get; }
     DateTimeOffset? LastRecordedAtUtc { get; }
     int EntryCount { get; }
@@ -92,6 +94,9 @@ public sealed partial class CadCommandScriptRecordingService : ReactiveObject, I
     public partial bool IncludeMetadataComments { get; set; } = true;
 
     [Reactive]
+    public partial bool IncludeTimestampComments { get; set; } = true;
+
+    [Reactive]
     public partial DateTimeOffset? StartedAtUtc { get; private set; }
 
     [Reactive]
@@ -113,6 +118,7 @@ public sealed partial class CadCommandScriptRecordingService : ReactiveObject, I
         IsPaused: IsPaused,
         IncludeFailedCommands: IncludeFailedCommands,
         IncludeMetadataComments: IncludeMetadataComments,
+        IncludeTimestampComments: IncludeTimestampComments,
         StartedAtUtc: StartedAtUtc,
         LastRecordedAtUtc: LastRecordedAtUtc,
         EntryCount: _entries.Count,
@@ -236,6 +242,12 @@ public sealed partial class CadCommandScriptRecordingService : ReactiveObject, I
                 builder.Append("; SOURCE ");
                 builder.Append(entry.Source.ToString().ToUpperInvariant());
                 builder.AppendLine();
+                if (IncludeTimestampComments)
+                {
+                    builder.Append("; UTC ");
+                    builder.Append(entry.TimestampUtc.ToString("O", CultureInfo.InvariantCulture));
+                    builder.AppendLine();
+                }
             }
 
             builder.AppendLine(entry.Input);

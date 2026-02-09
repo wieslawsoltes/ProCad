@@ -35,6 +35,8 @@ public sealed class CadScriptCommandHost : ICadScriptCommandHost
         }
 
         var playbackOptions = options ?? CadScriptCommandPlaybackOptions.Default;
+        var startLine = playbackOptions.NormalizedStartLine;
+        var maxCommands = playbackOptions.NormalizedMaxCommands;
         var entries = new List<CadScriptCommandPlaybackEntry>();
         var executedCount = 0;
         var succeededCount = 0;
@@ -48,10 +50,20 @@ public sealed class CadScriptCommandHost : ICadScriptCommandHost
             lineNumber++;
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (lineNumber < startLine)
+            {
+                continue;
+            }
+
             var input = NormalizeInput(rawLine);
             if (input is null)
             {
                 continue;
+            }
+
+            if (maxCommands.HasValue && executedCount >= maxCommands.Value)
+            {
+                break;
             }
 
             executedCount++;

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ACadInspector.Editing.Commands;
@@ -24,11 +27,16 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
     private readonly CadScriptWorkspaceService _workspace;
     private readonly CadEditorSessionHostService _sessionHost;
     private readonly ICadCommandScriptRecordingService _recordingService;
+    private readonly ObservableCollection<CadScriptMacroEntryViewModel> _macros = new();
     private CancellationTokenSource? _execution;
     private CancellationTokenSource? _commandExecution;
     private readonly IDisposable _savePathSubscription;
     private readonly IDisposable _includeFailedSubscription;
     private readonly IDisposable _includeMetadataSubscription;
+    private readonly IDisposable _includeTimestampSubscription;
+    private readonly IDisposable _commandStartLineSubscription;
+    private readonly IDisposable _commandMaxCommandsSubscription;
+    private readonly IDisposable _macroNameSubscription;
     private bool _disposed;
 
     public TextDocument ScriptDocument { get; } = new();
@@ -73,7 +81,24 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
     public partial bool IncludeRecordingMetadataComments { get; set; } = true;
 
     [Reactive]
+    public partial bool IncludeRecordingTimestampComments { get; set; } = true;
+
+    [Reactive]
     public partial string RecordingSavePath { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string CommandStartLine { get; set; } = "1";
+
+    [Reactive]
+    public partial string CommandMaxCommands { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string MacroName { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial CadScriptMacroEntryViewModel? SelectedMacro { get; set; }
+
+    public ReadOnlyObservableCollection<CadScriptMacroEntryViewModel> Macros { get; }
 
     public ReactiveCommand<Unit, Unit> RunCommand { get; }
 
@@ -105,6 +130,12 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
 
     public ReactiveCommand<Unit, Unit> SaveRecordingCommand { get; }
 
+    public ReactiveCommand<Unit, Unit> SaveMacroCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> DeleteMacroCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> ApplyMacroCommand { get; }
+
     public CadScriptingViewModel(
         ICadScriptHost scriptHost,
         ICadScriptCommandHost scriptCommandHost,
@@ -121,10 +152,13 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         _workspace = workspace;
         _sessionHost = sessionHost;
         _recordingService = recordingService;
+        Macros = new ReadOnlyObservableCollection<CadScriptMacroEntryViewModel>(_macros);
 
         InitializeScriptText();
         InitializeCommandScriptText();
         InitializeRecordingState();
+        InitializeCommandPlaybackState();
+        InitializeMacros();
 
         var canRun = this.WhenAnyValue(x => x.IsRunning, running => !running);
         var canCancel = this.WhenAnyValue(x => x.IsRunning);
@@ -135,6 +169,10 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         var canResumeRecording = this.WhenAnyValue(x => x.IsRecording, x => x.IsRecordingPaused, (recording, paused) => recording && paused);
         var canStopRecording = this.WhenAnyValue(x => x.IsRecording);
         var canSaveRecording = this.WhenAnyValue(x => x.RecordedCommandCount, count => count > 0);
+        var hasSelectedMacro = this.WhenAnyValue(x => x.SelectedMacro)
+            .Select(macro => macro is not null);
+        var canSaveMacro = this.WhenAnyValue(x => x.MacroName)
+            .Select(name => !string.IsNullOrWhiteSpace(name));
 
         RunCommand = ReactiveCommand.CreateFromTask(RunAsync, canRun);
         CancelCommand = ReactiveCommand.Create(CancelExecution, canCancel);
@@ -151,6 +189,9 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         ClearRecordingCommand = ReactiveCommand.Create(ClearRecording);
         LoadRecordingCommand = ReactiveCommand.Create(LoadRecordingIntoCommandScript, canSaveRecording);
         SaveRecordingCommand = ReactiveCommand.CreateFromTask(SaveRecordingAsync, canSaveRecording);
+        SaveMacroCommand = ReactiveCommand.Create(SaveMacro, canSaveMacro);
+        DeleteMacroCommand = ReactiveCommand.Create(DeleteSelectedMacro, hasSelectedMacro);
+        ApplyMacroCommand = ReactiveCommand.Create(ApplySelectedMacro, hasSelectedMacro);
 
         _recordingService.SnapshotChanged += OnRecordingSnapshotChanged;
 
@@ -166,6 +207,25 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         _includeMetadataSubscription = this.WhenAnyValue(x => x.IncludeRecordingMetadataComments)
             .Skip(1)
             .Subscribe(value => _recordingService.IncludeMetadataComments = value);
+
+        _includeTimestampSubscription = this.WhenAnyValue(x => x.IncludeRecordingTimestampComments)
+            .Skip(1)
+            .Subscribe(value => _recordingService.IncludeTimestampComments = value);
+
+        _commandStartLineSubscription = this.WhenAnyValue(x => x.CommandStartLine)
+            .Skip(1)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(value => _workspace.CommandStartLine = value);
+
+        _commandMaxCommandsSubscription = this.WhenAnyValue(x => x.CommandMaxCommands)
+            .Skip(1)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(value => _workspace.CommandMaxCommands = value);
+
+        _macroNameSubscription = this.WhenAnyValue(x => x.MacroName)
+            .Skip(1)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(value => _workspace.LastMacroName = value);
     }
 
     private async Task RunAsync(CancellationToken cancellationToken)
@@ -243,7 +303,12 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         {
             var session = _sessionHost.GetOrCreate(activeDocument);
             _sessionHost.SyncSelectionToSession(session);
-            var options = new CadScriptCommandPlaybackOptions(StopOnError: !ContinueOnCommandError);
+            if (!TryCreatePlaybackOptions(out var options, out var parseError))
+            {
+                CommandStatusMessage = parseError;
+                return;
+            }
+
             var result = await _scriptCommandHost
                 .ExecuteAsync(commandScript, session, options, token)
                 .ConfigureAwait(true);
@@ -464,7 +529,203 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         RecordingSavePath = _workspace.RecordingSavePath;
         IncludeFailedRecordedCommands = _recordingService.IncludeFailedCommands;
         IncludeRecordingMetadataComments = _recordingService.IncludeMetadataComments;
+        IncludeRecordingTimestampComments = _recordingService.IncludeTimestampComments;
         ApplyRecordingSnapshot(_recordingService.Snapshot);
+    }
+
+    private void InitializeCommandPlaybackState()
+    {
+        CommandStartLine = string.IsNullOrWhiteSpace(_workspace.CommandStartLine)
+            ? "1"
+            : _workspace.CommandStartLine;
+        CommandMaxCommands = _workspace.CommandMaxCommands ?? string.Empty;
+    }
+
+    private void InitializeMacros()
+    {
+        LoadMacrosFromWorkspace();
+        MacroName = _workspace.LastMacroName;
+        if (_macros.Count > 0)
+        {
+            SelectedMacro = _macros[0];
+            if (string.IsNullOrWhiteSpace(MacroName))
+            {
+                MacroName = SelectedMacro.Name;
+            }
+        }
+    }
+
+    private void SaveMacro()
+    {
+        var name = MacroName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            CommandStatusMessage = "Macro name is required.";
+            return;
+        }
+
+        var script = CommandScriptDocument.Text;
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            CommandStatusMessage = "Macro script is empty.";
+            return;
+        }
+
+        for (var index = 0; index < _macros.Count; index++)
+        {
+            if (!string.Equals(_macros[index].Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            _macros[index].Script = script;
+            _macros[index].ContinueOnError = ContinueOnCommandError;
+            SelectedMacro = _macros[index];
+            PersistMacros();
+            CommandStatusMessage = $"Updated macro '{name}'.";
+            return;
+        }
+
+        var macro = new CadScriptMacroEntryViewModel(name, script, ContinueOnCommandError);
+        _macros.Add(macro);
+        SelectedMacro = macro;
+        PersistMacros();
+        CommandStatusMessage = $"Saved macro '{name}'.";
+    }
+
+    private void DeleteSelectedMacro()
+    {
+        var selected = SelectedMacro;
+        if (selected is null)
+        {
+            return;
+        }
+
+        var removed = _macros.Remove(selected);
+        if (!removed)
+        {
+            return;
+        }
+
+        SelectedMacro = _macros.Count == 0 ? null : _macros[0];
+        PersistMacros();
+        CommandStatusMessage = $"Deleted macro '{selected.Name}'.";
+    }
+
+    private void ApplySelectedMacro()
+    {
+        var selected = SelectedMacro;
+        if (selected is null)
+        {
+            return;
+        }
+
+        SetCommandScriptText(selected.Script);
+        ContinueOnCommandError = selected.ContinueOnError;
+        MacroName = selected.Name;
+        CommandStatusMessage = $"Loaded macro '{selected.Name}'.";
+    }
+
+    private void LoadMacrosFromWorkspace()
+    {
+        _macros.Clear();
+        var json = _workspace.MacroCatalogJson;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        try
+        {
+            var definitions = JsonSerializer.Deserialize<List<CadScriptMacroDefinition>>(json);
+            if (definitions is null)
+            {
+                return;
+            }
+
+            for (var index = 0; index < definitions.Count; index++)
+            {
+                var definition = definitions[index];
+                if (string.IsNullOrWhiteSpace(definition.Name) ||
+                    string.IsNullOrWhiteSpace(definition.Script))
+                {
+                    continue;
+                }
+
+                _macros.Add(new CadScriptMacroEntryViewModel(
+                    definition.Name.Trim(),
+                    definition.Script,
+                    definition.ContinueOnError));
+            }
+        }
+        catch (JsonException)
+        {
+            _workspace.MacroCatalogJson = string.Empty;
+        }
+    }
+
+    private void PersistMacros()
+    {
+        var definitions = new List<CadScriptMacroDefinition>(_macros.Count);
+        for (var index = 0; index < _macros.Count; index++)
+        {
+            var macro = _macros[index];
+            definitions.Add(new CadScriptMacroDefinition(
+                macro.Name,
+                macro.Script,
+                macro.ContinueOnError));
+        }
+
+        _workspace.MacroCatalogJson = JsonSerializer.Serialize(definitions);
+    }
+
+    private bool TryCreatePlaybackOptions(
+        out CadScriptCommandPlaybackOptions options,
+        out string error)
+    {
+        options = CadScriptCommandPlaybackOptions.Default;
+        error = string.Empty;
+
+        if (!TryParsePositiveInteger(CommandStartLine, defaultValue: 1, out var startLine))
+        {
+            error = "Start line must be an integer greater than or equal to 1.";
+            return false;
+        }
+
+        int? maxCommands = null;
+        if (!string.IsNullOrWhiteSpace(CommandMaxCommands))
+        {
+            if (!TryParsePositiveInteger(CommandMaxCommands, defaultValue: 1, out var parsedMax))
+            {
+                error = "Max commands must be empty or an integer greater than or equal to 1.";
+                return false;
+            }
+
+            maxCommands = parsedMax;
+        }
+
+        options = new CadScriptCommandPlaybackOptions(
+            StopOnError: !ContinueOnCommandError,
+            StartLine: startLine,
+            MaxCommands: maxCommands);
+        return true;
+    }
+
+    private static bool TryParsePositiveInteger(string text, int defaultValue, out int value)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            value = defaultValue;
+            return true;
+        }
+
+        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+        {
+            return false;
+        }
+
+        return value >= 1;
     }
 
     private async Task SaveRecordingAsync(CancellationToken cancellationToken)
@@ -560,7 +821,35 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
         _savePathSubscription.Dispose();
         _includeFailedSubscription.Dispose();
         _includeMetadataSubscription.Dispose();
+        _includeTimestampSubscription.Dispose();
+        _commandStartLineSubscription.Dispose();
+        _commandMaxCommandsSubscription.Dispose();
+        _macroNameSubscription.Dispose();
         _execution?.Dispose();
         _commandExecution?.Dispose();
     }
 }
+
+public sealed partial class CadScriptMacroEntryViewModel : ViewModelBase
+{
+    public CadScriptMacroEntryViewModel(string name, string script, bool continueOnError)
+    {
+        Name = name;
+        Script = script;
+        ContinueOnError = continueOnError;
+    }
+
+    [Reactive]
+    public partial string Name { get; set; }
+
+    [Reactive]
+    public partial string Script { get; set; }
+
+    [Reactive]
+    public partial bool ContinueOnError { get; set; }
+}
+
+public sealed record CadScriptMacroDefinition(
+    string Name,
+    string Script,
+    bool ContinueOnError);
