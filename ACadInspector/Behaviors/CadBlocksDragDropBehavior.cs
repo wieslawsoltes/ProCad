@@ -115,6 +115,7 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
         {
             var transfer = new DataTransfer();
             transfer.Add(DataTransferItem.Create(CadInsertDragDropFormats.BlockNameFormat, blockName));
+            transfer.Add(DataTransferItem.Create(CadInsertDragDropFormats.BlockNamePlatformFormat, blockName));
             transfer.Add(DataTransferItem.CreateText(blockName));
             await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy);
         }

@@ -87,7 +87,8 @@ public sealed class CadInsertDropBehavior : Behavior<CadRenderControl>
     private static bool TryGetBlockName(IDataTransfer data, out string blockName)
     {
         blockName = string.Empty;
-        var token = data.TryGetValue(CadInsertDragDropFormats.BlockNameFormat);
+        var token = data.TryGetValue(CadInsertDragDropFormats.BlockNameFormat) ??
+                    data.TryGetValue(CadInsertDragDropFormats.BlockNamePlatformFormat);
         if (!string.IsNullOrWhiteSpace(token))
         {
             blockName = token.Trim();
@@ -107,6 +108,7 @@ public sealed class CadInsertDropBehavior : Behavior<CadRenderControl>
     private static bool HasSupportedBlockPayload(IDataTransfer data)
     {
         return !string.IsNullOrWhiteSpace(data.TryGetValue(CadInsertDragDropFormats.BlockNameFormat)) ||
+               !string.IsNullOrWhiteSpace(data.TryGetValue(CadInsertDragDropFormats.BlockNamePlatformFormat)) ||
                !string.IsNullOrWhiteSpace(data.TryGetText());
     }
 }

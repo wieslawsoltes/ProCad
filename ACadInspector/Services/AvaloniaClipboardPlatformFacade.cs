@@ -10,10 +10,10 @@ namespace ACadInspector.Services;
 public sealed class AvaloniaClipboardPlatformFacade : ICadClipboardPlatformFacade
 {
     private static readonly DataFormat<string> CadJsonFormat =
-        DataFormat.CreateStringApplicationFormat(CadClipboardFormats.CadJsonMime);
+        DataFormat.CreateStringPlatformFormat(CadClipboardFormats.CadJsonMime);
 
     private static readonly DataFormat<string> CadDxfFormat =
-        DataFormat.CreateStringApplicationFormat(CadClipboardFormats.CadDxfMime);
+        DataFormat.CreateStringPlatformFormat(CadClipboardFormats.CadDxfMime);
 
     private readonly IClipboardAccessor _clipboardAccessor;
 
@@ -65,7 +65,7 @@ public sealed class AvaloniaClipboardPlatformFacade : ICadClipboardPlatformFacad
             ? CadJsonFormat
             : string.Equals(formatIdentifier, CadClipboardFormats.CadDxfMime, StringComparison.Ordinal)
                 ? CadDxfFormat
-                : DataFormat.CreateStringApplicationFormat(formatIdentifier);
+                : DataFormat.CreateStringPlatformFormat(formatIdentifier);
         return await clipboard.TryGetValueAsync(format).ConfigureAwait(false);
     }
 
