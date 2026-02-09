@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -107,6 +108,9 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
 
     [Reactive]
     public partial string StatusMessage { get; set; } = string.Empty;
+
+    [Reactive]
+    public partial string EditorPreviewSummary { get; set; } = string.Empty;
 
     public DataGridCollectionView StylesView { get; }
     public DataGridColumnDefinitionList ColumnDefinitions { get; }
@@ -349,6 +353,7 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
 
         _baselineSnapshot = CadTextStyleEditorSnapshot.FromStyle(style);
         ValidationMessage = string.Empty;
+        EditorPreviewSummary = BuildPreviewSummary(_baselineSnapshot.Value, previewUnavailableReason: null);
 
         var currentStyleName = _documentContext.ActiveDocument?.Document?.Header.CurrentTextStyleName;
         IsCurrentStyle = !string.IsNullOrWhiteSpace(currentStyleName) &&
@@ -388,6 +393,7 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
         CanSetCurrentStyle = false;
         ValidationMessage = string.Empty;
         StatusMessage = string.Empty;
+        EditorPreviewSummary = string.Empty;
     }
 
     private void EvaluateEditorState()
@@ -416,6 +422,7 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
             IsDirty = false;
             CanApplyChanges = false;
             ValidationMessage = string.Empty;
+            EditorPreviewSummary = string.Empty;
             return;
         }
 
@@ -424,12 +431,14 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
             ValidationMessage = error;
             IsDirty = true;
             CanApplyChanges = false;
+            EditorPreviewSummary = BuildPreviewSummary(_baselineSnapshot.Value, error);
             return;
         }
 
         ValidationMessage = string.Empty;
         IsDirty = !_baselineSnapshot.Value.Equals(editorSnapshot);
         CanApplyChanges = IsDirty;
+        EditorPreviewSummary = BuildPreviewSummary(editorSnapshot, previewUnavailableReason: null);
     }
 
     private bool TryBuildSnapshotFromEditor(out CadTextStyleEditorSnapshot snapshot, out string error)
@@ -485,10 +494,34 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
             return false;
         }
 
+        var fontFile = EditorFontFile.Trim();
+        if (EditorIsShapeFile && string.IsNullOrWhiteSpace(fontFile))
+        {
+            error = "Shape text styles require a font file.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fontFile) &&
+            Path.HasExtension(fontFile) &&
+            !HasAcceptedFontExtension(fontFile))
+        {
+            error = "Font file must use .shx, .ttf, or .otf extension.";
+            return false;
+        }
+
+        var bigFontFile = EditorBigFontFile.Trim();
+        if (!string.IsNullOrWhiteSpace(bigFontFile) &&
+            Path.HasExtension(bigFontFile) &&
+            !bigFontFile.EndsWith(".shx", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Big font file must use .shx extension.";
+            return false;
+        }
+
         snapshot = new CadTextStyleEditorSnapshot(
             Name: name,
-            FontFile: EditorFontFile.Trim(),
-            BigFontFile: EditorBigFontFile.Trim(),
+            FontFile: fontFile,
+            BigFontFile: bigFontFile,
             Height: height,
             Width: width,
             LastHeight: lastHeight,
@@ -641,9 +674,17 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
 
         try
         {
+            var previousName = selected.Name;
             if (!string.Equals(selected.Name, snapshot.Name, StringComparison.Ordinal))
             {
                 selected.Name = snapshot.Name;
+                if (string.Equals(
+                        document.Header.CurrentTextStyleName,
+                        previousName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    document.Header.CurrentTextStyleName = snapshot.Name;
+                }
             }
 
             selected.Filename = snapshot.FontFile;
@@ -733,6 +774,51 @@ public sealed partial class CadTextStyleToolViewModel : CadToolViewModelBase
     {
         var trimmed = text.Trim();
         return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool HasAcceptedFontExtension(string fileName)
+    {
+        var extension = Path.GetExtension(fileName);
+        return string.Equals(extension, ".shx", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".ttf", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(extension, ".otf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildPreviewSummary(
+        CadTextStyleEditorSnapshot snapshot,
+        string? previewUnavailableReason)
+    {
+        if (!string.IsNullOrWhiteSpace(previewUnavailableReason))
+        {
+            return $"Preview unavailable: {previewUnavailableReason}";
+        }
+
+        var flags = new List<string>(4);
+        if (snapshot.IsShapeFile)
+        {
+            flags.Add("Shape");
+        }
+
+        if (snapshot.IsVerticalText)
+        {
+            flags.Add("Vertical");
+        }
+
+        if (snapshot.Bold)
+        {
+            flags.Add("Bold");
+        }
+
+        if (snapshot.Italic)
+        {
+            flags.Add("Italic");
+        }
+
+        var flagText = flags.Count == 0 ? "Regular" : string.Join(", ", flags);
+        var font = string.IsNullOrWhiteSpace(snapshot.FontFile) ? "(default font)" : snapshot.FontFile;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"Preview {snapshot.Name}: {font}; H={snapshot.Height:0.###}, W={snapshot.Width:0.###}, Oblique={snapshot.ObliqueDegrees:0.###}\u00B0; {flagText}");
     }
 
     private static StyleFlags ApplyFlag(StyleFlags value, StyleFlags flag, bool enabled)

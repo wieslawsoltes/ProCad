@@ -94,6 +94,9 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
     [Reactive]
     public partial string SegmentSummaryText { get; set; } = string.Empty;
 
+    [Reactive]
+    public partial string EditorPreviewSummary { get; set; } = string.Empty;
+
     public ObservableCollection<CadLineTypeSegmentEditorRowViewModel> SegmentRows => _segmentRows;
     public DataGridCollectionView LineTypesView { get; }
     public DataGridColumnDefinitionList ColumnDefinitions { get; }
@@ -331,6 +334,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
         _baselineSnapshot = BuildSnapshotFromLineType(lineType);
         ValidationMessage = string.Empty;
         SegmentSummaryText = _baselineSnapshot.Value.SegmentSummary;
+        EditorPreviewSummary = BuildPreviewSummary(_baselineSnapshot.Value, previewUnavailableReason: null);
 
         _suppressEditorSync = false;
     }
@@ -545,6 +549,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
             CanApplyChanges = false;
             ValidationMessage = string.Empty;
             SegmentSummaryText = string.Empty;
+            EditorPreviewSummary = string.Empty;
             return;
         }
 
@@ -554,6 +559,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
             IsDirty = true;
             CanApplyChanges = false;
             SegmentSummaryText = string.Empty;
+            EditorPreviewSummary = BuildPreviewSummary(_baselineSnapshot.Value, error);
             return;
         }
 
@@ -561,6 +567,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
         IsDirty = !_baselineSnapshot.Value.Equals(snapshot);
         CanApplyChanges = IsDirty;
         SegmentSummaryText = snapshot.SegmentSummary;
+        EditorPreviewSummary = BuildPreviewSummary(snapshot, previewUnavailableReason: null);
     }
 
     private bool TryBuildSnapshotFromEditor(
@@ -675,6 +682,12 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
             if (!short.TryParse(row.ShapeNumber.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out shapeNumber))
             {
                 error = $"Segment {segmentNumber}: shape number must be an integer.";
+                return false;
+            }
+
+            if (shapeNumber <= 0)
+            {
+                error = $"Segment {segmentNumber}: shape number must be greater than 0.";
                 return false;
             }
         }
@@ -866,9 +879,17 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
 
         try
         {
+            var previousName = selected.Name;
             if (!string.Equals(selected.Name, snapshot.Name, StringComparison.Ordinal))
             {
                 selected.Name = snapshot.Name;
+                if (string.Equals(
+                        document.Header.CurrentLineTypeName,
+                        previousName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    document.Header.CurrentLineTypeName = snapshot.Name;
+                }
             }
 
             selected.Description = snapshot.Description;
@@ -968,6 +989,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
         ValidationMessage = string.Empty;
         StatusMessage = string.Empty;
         SegmentSummaryText = string.Empty;
+        EditorPreviewSummary = string.Empty;
     }
 
     private static CadLineTypeEditorSnapshot BuildSnapshotFromLineType(LineType lineType)
@@ -1060,6 +1082,23 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
         }
 
         return null;
+    }
+
+    private static string BuildPreviewSummary(
+        CadLineTypeEditorSnapshot snapshot,
+        string? previewUnavailableReason)
+    {
+        if (!string.IsNullOrWhiteSpace(previewUnavailableReason))
+        {
+            return $"Preview unavailable: {previewUnavailableReason}";
+        }
+
+        var description = string.IsNullOrWhiteSpace(snapshot.Description)
+            ? "(no description)"
+            : snapshot.Description;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"Preview {snapshot.Name}: {description}; Pattern: {snapshot.SegmentSummary}");
     }
 
     private readonly record struct CadLineTypeEditorSnapshot(

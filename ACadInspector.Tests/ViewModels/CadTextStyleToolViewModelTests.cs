@@ -112,6 +112,64 @@ public sealed class CadTextStyleToolViewModelTests
         Assert.Equal(TextStyle.DefaultName, viewModel.SelectedStyle?.Style.Name);
     }
 
+    [Fact]
+    public void ApplyCommand_RenameCurrentStyle_UpdatesCurrentStyleHeader()
+    {
+        var (viewModel, document, _) = CreateHarness();
+        using (viewModel.NewStyleCommand.Execute().Subscribe())
+        {
+        }
+        var created = Assert.IsType<TextStyle>(viewModel.SelectedStyle?.Style);
+        using (viewModel.SetCurrentStyleCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.Equal(created.Name, document.Header.CurrentTextStyleName);
+        viewModel.EditorName = "StandardRenamed";
+        Assert.True(viewModel.CanApplyChanges);
+
+        using (viewModel.ApplyStyleCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.Equal("StandardRenamed", document.Header.CurrentTextStyleName);
+        Assert.Equal("StandardRenamed", viewModel.SelectedStyle?.Style.Name);
+        Assert.True(viewModel.IsCurrentStyle);
+    }
+
+    [Fact]
+    public void RevertCommand_RestoresBaselineAndClearsDirtyState()
+    {
+        var (viewModel, _, _) = CreateHarness();
+        var baselineName = viewModel.EditorName;
+
+        viewModel.EditorName = "TempName";
+        Assert.True(viewModel.IsDirty);
+
+        using (viewModel.RevertStyleCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.Equal(baselineName, viewModel.EditorName);
+        Assert.False(viewModel.IsDirty);
+        Assert.False(viewModel.CanApplyChanges);
+    }
+
+    [Fact]
+    public void ApplyCommand_InvalidShapeAndVerticalCombination_IsRejected()
+    {
+        var (viewModel, document, _) = CreateHarness();
+
+        viewModel.EditorIsShapeFile = true;
+        viewModel.EditorFontFile = string.Empty;
+
+        Assert.Contains("Shape text styles require a font file.", viewModel.ValidationMessage, System.StringComparison.Ordinal);
+        Assert.False(viewModel.CanApplyChanges);
+
+        Assert.True(document.TextStyles.Contains(TextStyle.DefaultName));
+        Assert.Equal(TextStyle.DefaultName, viewModel.SelectedStyle?.Style.Name);
+    }
+
     private static (CadTextStyleToolViewModel ViewModel, CadDocument Document, CadDocumentContextService Context) CreateHarness()
     {
         var selectionService = new CadSelectionService();

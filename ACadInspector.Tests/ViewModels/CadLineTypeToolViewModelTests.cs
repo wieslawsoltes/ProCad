@@ -132,6 +132,87 @@ public sealed class CadLineTypeToolViewModelTests
         Assert.False(viewModel.CanDeleteLineType);
     }
 
+    [Fact]
+    public void ApplyCommand_RenameCurrentLineType_UpdatesHeaderCurrentName()
+    {
+        var (viewModel, document) = CreateHarness();
+        using (viewModel.NewLineTypeCommand.Execute().Subscribe())
+        {
+        }
+
+        var baseLineType = Assert.IsType<LineType>(viewModel.SelectedLineType?.LineType);
+        using (viewModel.SetCurrentLineTypeCommand.Execute().Subscribe())
+        {
+        }
+        Assert.Equal(baseLineType.Name, document.Header.CurrentLineTypeName);
+
+        viewModel.EditorName = "CURRENT_RENAMED";
+        Assert.True(viewModel.CanApplyChanges);
+
+        using (viewModel.ApplyLineTypeCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.Equal("CURRENT_RENAMED", baseLineType.Name);
+        Assert.Equal("CURRENT_RENAMED", document.Header.CurrentLineTypeName);
+        Assert.True(viewModel.IsCurrentLineType);
+    }
+
+    [Fact]
+    public void ApplyCommand_ShapeSegmentRequiresPositiveShapeNumber()
+    {
+        var (viewModel, document) = CreateHarness();
+        using (viewModel.NewLineTypeCommand.Execute().Subscribe())
+        {
+        }
+
+        while (viewModel.SegmentRows.Count > 0)
+        {
+            viewModel.SelectedSegment = viewModel.SegmentRows[0];
+            using (viewModel.RemoveSegmentCommand.Execute().Subscribe())
+            {
+            }
+        }
+
+        using (viewModel.AddDashSegmentCommand.Execute().Subscribe())
+        {
+        }
+
+        var segment = Assert.Single(viewModel.SegmentRows);
+        segment.IsShape = true;
+        segment.ShapeNumber = "0";
+        segment.StyleName = TextStyle.DefaultName;
+
+        Assert.Contains("shape number must be greater than 0", viewModel.ValidationMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.False(viewModel.CanApplyChanges);
+        Assert.Contains(document.LineTypes, lineType => lineType.Name == viewModel.SelectedLineType?.LineType.Name);
+    }
+
+    [Fact]
+    public void RevertCommand_RestoresSegmentStateAndClearsDirty()
+    {
+        var (viewModel, _) = CreateHarness();
+        using (viewModel.NewLineTypeCommand.Execute().Subscribe())
+        {
+        }
+
+        var originalSummary = viewModel.SegmentSummaryText;
+        using (viewModel.AddDotSegmentCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.True(viewModel.IsDirty);
+        Assert.NotEqual(originalSummary, viewModel.SegmentSummaryText);
+
+        using (viewModel.RevertLineTypeCommand.Execute().Subscribe())
+        {
+        }
+
+        Assert.False(viewModel.IsDirty);
+        Assert.False(viewModel.CanApplyChanges);
+        Assert.Equal(originalSummary, viewModel.SegmentSummaryText);
+    }
+
     private static (CadLineTypeToolViewModel ViewModel, CadDocument Document) CreateHarness()
     {
         var selectionService = new CadSelectionService();
