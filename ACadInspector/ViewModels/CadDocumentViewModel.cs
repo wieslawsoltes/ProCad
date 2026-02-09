@@ -1,10 +1,11 @@
+using System;
 using ACadInspector.Core;
 using ACadSharp;
 using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadDocumentViewModel : CadDocumentViewModelBase
+public sealed partial class CadDocumentViewModel : CadDocumentViewModelBase, IDisposable
 {
     public CadDocument Document { get; }
     public CadRenderViewModel Render { get; }
@@ -34,5 +35,10 @@ public sealed partial class CadDocumentViewModel : CadDocumentViewModelBase
         Format = format;
         Path = path;
         Title = displayName;
+    }
+
+    public void Dispose()
+    {
+        Render.Dispose();
     }
 }

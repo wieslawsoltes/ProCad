@@ -406,12 +406,14 @@ public sealed class WorkspaceDockFactory : Factory
             }
 
             _documentTree.LoadDocument(_documentContext.ActiveDocument);
+            documentViewModel.Dispose();
             return;
         }
 
         if (dockable is CadBlockEditorViewModel blockEditorViewModel)
         {
             blockEditorViewModel.Render.ClearTransientInteractionVisuals(preserveRemoteHints: false);
+            blockEditorViewModel.Dispose();
         }
     }
 }

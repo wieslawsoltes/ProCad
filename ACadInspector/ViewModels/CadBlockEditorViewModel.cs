@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Reactive.Disposables;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Threading;
@@ -16,7 +17,7 @@ using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase
+public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase, IDisposable
 {
     private const string AllVisibilityState = "(All)";
 
@@ -35,6 +36,7 @@ public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase
     private readonly CadRenderLayoutSelection _layoutSelection;
     private readonly string? _documentPath;
     private readonly BlockEditorDynamicOverrideProvider _overrideProvider;
+    private readonly CompositeDisposable _subscriptions = new();
     private CancellationTokenSource? _rebuildCts;
     private bool _suppressUpdates;
 
@@ -93,23 +95,28 @@ public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase
 
         this.WhenAnyValue(x => x.BlockName)
             .Skip(1)
-            .Subscribe(UpdateBlockName);
+            .Subscribe(UpdateBlockName)
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.BlockDescription)
             .Skip(1)
-            .Subscribe(UpdateBlockDescription);
+            .Subscribe(UpdateBlockDescription)
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.BlockUnits)
             .Skip(1)
-            .Subscribe(UpdateBlockUnits);
+            .Subscribe(UpdateBlockUnits)
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.ShowAttributes, x => x.ShowAttributeDefinitions)
             .Skip(1)
-            .Subscribe(_ => QueueRebuild());
+            .Subscribe(_ => QueueRebuild())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.SelectedVisibilityState)
             .Skip(1)
-            .Subscribe(_ => QueueRebuild());
+            .Subscribe(_ => QueueRebuild())
+            .DisposeWith(_subscriptions);
 
         foreach (var parameter in DynamicParameters)
         {
@@ -117,14 +124,25 @@ public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase
             {
                 case CadDynamicBlockLinearParameterViewModel linear:
                     linear.WhenAnyValue(x => x.OverrideEnabled, x => x.OverrideValue)
-                        .Subscribe(_ => QueueRebuild());
+                        .Subscribe(_ => QueueRebuild())
+                        .DisposeWith(_subscriptions);
                     break;
                 case CadDynamicBlockFlipParameterViewModel flip:
                     flip.WhenAnyValue(x => x.OverrideEnabled, x => x.IsFlipped)
-                        .Subscribe(_ => QueueRebuild());
+                        .Subscribe(_ => QueueRebuild())
+                        .DisposeWith(_subscriptions);
                     break;
             }
         }
+    }
+
+    public void Dispose()
+    {
+        _rebuildCts?.Cancel();
+        _rebuildCts?.Dispose();
+        _rebuildCts = null;
+        _subscriptions.Dispose();
+        Render.Dispose();
     }
 
     private void QueueRebuild()
