@@ -21,40 +21,48 @@ public sealed class CopyClipCadCommand : ICadCommandHandler
         return context.Session is not null;
     }
 
-    public ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
+    public async ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
     {
         if (!CadCommandSessionHelper.TryGetSession(context, out var session, out var error))
         {
-            return ValueTask.FromResult(error);
+            return error;
         }
 
         if (!CadCommandTargetResolver.TryResolve(session, context.Arguments, out var targets, out var targetError))
         {
-            return ValueTask.FromResult(CadCommandResult.Fail(targetError!));
+            return CadCommandResult.Fail(targetError!);
         }
 
         var clipboardEntities = new List<CadClipboardEntity>(targets.Count);
+        var sourceEntities = new List<Entity>(targets.Count);
         XYZ? basePoint = null;
         foreach (var target in targets)
         {
             if (target is not Entity entity)
             {
-                return ValueTask.FromResult(CadCommandResult.Fail("COPYCLIP target is not a CAD entity."));
+                return CadCommandResult.Fail("COPYCLIP target is not a CAD entity.");
             }
 
             if (!CadClipboardEntityCodec.TryEncode(entity, out var clipboardEntity, out var encodeError))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail(encodeError!));
+                return CadCommandResult.Fail(encodeError!);
             }
 
             clipboardEntities.Add(clipboardEntity);
+            sourceEntities.Add(entity);
             basePoint ??= clipboardEntity.ReferencePoint;
         }
 
-        _clipboardService.SetPayload(new CadClipboardPayload(
+        var payload = new CadClipboardPayload(
             clipboardEntities,
-            basePoint ?? XYZ.Zero));
+            basePoint ?? XYZ.Zero,
+            Dependencies: CadClipboardDependencyGraphBuilder.Build(session.Document, sourceEntities));
+        _clipboardService.SetPayload(payload);
+        if (_clipboardService is ICadSystemClipboardSync systemClipboardSync)
+        {
+            await systemClipboardSync.PublishAsync(payload, context.CancellationToken).ConfigureAwait(false);
+        }
 
-        return ValueTask.FromResult(CadCommandResult.Ok($"Copied {clipboardEntities.Count} entity(s) to clipboard."));
+        return CadCommandResult.Ok($"Copied {clipboardEntities.Count} entity(s) to clipboard.");
     }
 }

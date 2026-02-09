@@ -23,19 +23,20 @@ public sealed class CutCadCommand : ICadCommandHandler
         return context.Session is not null;
     }
 
-    public ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
+    public async ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
     {
         if (!CadCommandSessionHelper.TryGetSession(context, out var session, out var error))
         {
-            return ValueTask.FromResult(error);
+            return error;
         }
 
         if (!CadCommandTargetResolver.TryResolve(session, context.Arguments, out var targets, out var targetError))
         {
-            return ValueTask.FromResult(CadCommandResult.Fail(targetError!));
+            return CadCommandResult.Fail(targetError!);
         }
 
         var clipboardEntities = new List<CadClipboardEntity>(targets.Count);
+        var sourceEntities = new List<Entity>(targets.Count);
         XYZ? basePoint = null;
         var forward = new List<CadOperation>(targets.Count);
         var inverse = new List<CadOperation>(targets.Count);
@@ -49,10 +50,11 @@ public sealed class CutCadCommand : ICadCommandHandler
 
             if (!CadClipboardEntityCodec.TryEncode(target, out var clipboardEntity, out var encodeError))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail(encodeError!));
+                return CadCommandResult.Fail(encodeError!);
             }
 
             clipboardEntities.Add(clipboardEntity);
+            sourceEntities.Add(target);
             basePoint ??= clipboardEntity.ReferencePoint;
 
             switch (target)
@@ -182,7 +184,7 @@ public sealed class CutCadCommand : ICadCommandHandler
                 {
                     if (!CadHatchGeometry.TryGetLoops(hatch, out var loops, out var loopError))
                     {
-                        return ValueTask.FromResult(CadCommandResult.Fail($"CUT could not process HATCH: {loopError}"));
+                        return CadCommandResult.Fail($"CUT could not process HATCH: {loopError}");
                     }
 
                     var patternName = CadHatchGeometry.ResolvePatternName(hatch);
@@ -200,7 +202,7 @@ public sealed class CutCadCommand : ICadCommandHandler
                 {
                     if (insert.Block is null)
                     {
-                        return ValueTask.FromResult(CadCommandResult.Fail("CUT cannot process INSERT without a block reference."));
+                        return CadCommandResult.Fail("CUT cannot process INSERT without a block reference.");
                     }
 
                     forward.Add(CadOperationPayloadCodec.DeleteInsert(
@@ -225,13 +227,19 @@ public sealed class CutCadCommand : ICadCommandHandler
                     break;
                 }
                 default:
-                    return ValueTask.FromResult(CadCommandResult.Fail($"CUT does not support entity type '{target.GetType().Name}' yet."));
+                    return CadCommandResult.Fail($"CUT does not support entity type '{target.GetType().Name}' yet.");
             }
         }
 
-        _clipboardService.SetPayload(new CadClipboardPayload(
+        var payload = new CadClipboardPayload(
             clipboardEntities,
-            basePoint ?? XYZ.Zero));
+            basePoint ?? XYZ.Zero,
+            Dependencies: CadClipboardDependencyGraphBuilder.Build(session.Document, sourceEntities));
+        _clipboardService.SetPayload(payload);
+        if (_clipboardService is ICadSystemClipboardSync systemClipboardSync)
+        {
+            await systemClipboardSync.PublishAsync(payload, context.CancellationToken).ConfigureAwait(false);
+        }
 
         var actorId = session.SessionId.Value;
         var forwardBatch = session.NextBatch(actorId, forward);
@@ -241,6 +249,6 @@ public sealed class CutCadCommand : ICadCommandHandler
         session.UndoRedo.Record(forwardBatch, inverseBatch);
         session.SetSelection(Array.Empty<object?>(), CadSelectionMode.Replace);
 
-        return ValueTask.FromResult(CadCommandResult.Ok($"Cut {forward.Count} entity(s) to clipboard.", forward));
+        return CadCommandResult.Ok($"Cut {forward.Count} entity(s) to clipboard.", forward);
     }
 }

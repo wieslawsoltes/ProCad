@@ -80,6 +80,7 @@ public partial class App : Application
         var shell = _services.GetRequiredService<ShellViewModel>();
         AppLog.Write("ShellViewModel resolved.");
         var storageAccessor = _services.GetRequiredService<IStorageProviderAccessor>();
+        var clipboardAccessor = _services.GetRequiredService<IClipboardAccessor>();
         var notificationService = _services.GetRequiredService<IAppNotificationService>();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -100,6 +101,7 @@ public partial class App : Application
             };
 
             storageAccessor.SetProvider(() => desktop.MainWindow?.StorageProvider);
+            clipboardAccessor.SetProvider(() => desktop.MainWindow?.Clipboard);
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
@@ -111,6 +113,8 @@ public partial class App : Application
 
             storageAccessor.SetProvider(() =>
                 TopLevel.GetTopLevel(singleViewPlatform.MainView)?.StorageProvider);
+            clipboardAccessor.SetProvider(() =>
+                TopLevel.GetTopLevel(singleViewPlatform.MainView)?.Clipboard);
         }
         else
         {
@@ -221,12 +225,15 @@ public partial class App : Application
         services.AddSingleton<ICadRenderSceneBuilder, CadRenderSceneBuilder>();
 
         services.AddSingleton<IStorageProviderAccessor, StorageProviderAccessor>();
+        services.AddSingleton<IClipboardAccessor, ClipboardAccessor>();
         services.AddSingleton<IAppNotificationService, AvaloniaAppNotificationService>();
         services.AddSingleton<ICadFileDialogService, AvaloniaCadFileDialogService>();
         services.AddSingleton<ICadBatchFileDialogService, AvaloniaCadBatchFileDialogService>();
         services.AddSingleton<ICadBatchExportService, AvaloniaCadBatchExportService>();
         services.AddSingleton<IRenderStatsExportService, AvaloniaRenderStatsExportService>();
-        services.AddSingleton<ICadClipboardService, InMemoryCadClipboardService>();
+        services.AddSingleton<ICadSystemClipboardBridge, AvaloniaCadSystemClipboardBridge>();
+        services.AddSingleton<ICadClipboardPlatformFacade, AvaloniaClipboardPlatformFacade>();
+        services.AddSingleton<ICadClipboardService, SystemClipboardCadClipboardService>();
         services.AddSingleton<ICadEditorSessionFactory, CadEditorSessionFactory>();
         services.AddSingleton<CadEditorSessionHostService>();
         services.AddSingleton<ICadCommandScriptRecordingService, CadCommandScriptRecordingService>();

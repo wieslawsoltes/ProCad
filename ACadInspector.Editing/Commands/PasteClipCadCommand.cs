@@ -23,16 +23,30 @@ public sealed class PasteClipCadCommand : ICadCommandHandler
         return context.Session is not null;
     }
 
-    public ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
+    public async ValueTask<CadCommandResult> ExecuteAsync(CadCommandContext context)
     {
         if (!CadCommandSessionHelper.TryGetSession(context, out var session, out var error))
         {
-            return ValueTask.FromResult(error);
+            return error;
         }
 
         if (!_clipboardService.TryGetPayload(out var payload) || payload.Entities.Count == 0)
         {
-            return ValueTask.FromResult(CadCommandResult.Fail("Clipboard is empty."));
+            if (_clipboardService is ICadSystemClipboardSync systemClipboardSync)
+            {
+                var hydrated = await systemClipboardSync
+                    .TryHydrateAsync(context.CancellationToken)
+                    .ConfigureAwait(false);
+                if (hydrated)
+                {
+                    _clipboardService.TryGetPayload(out payload);
+                }
+            }
+        }
+
+        if (payload is null || payload.Entities.Count == 0)
+        {
+            return CadCommandResult.Fail("Clipboard is empty.");
         }
 
         var pasteOrig = context.CommandName.Equals("PASTEORIG", StringComparison.OrdinalIgnoreCase) ||
@@ -43,7 +57,7 @@ public sealed class PasteClipCadCommand : ICadCommandHandler
         {
             if (context.Arguments.Count > 0)
             {
-                return ValueTask.FromResult(CadCommandResult.Fail("Usage: PASTEORIG"));
+                return CadCommandResult.Fail("Usage: PASTEORIG");
             }
         }
         else if (context.Arguments.Count > 0)
@@ -52,9 +66,11 @@ public sealed class PasteClipCadCommand : ICadCommandHandler
             if (context.Arguments.Count != 1 ||
                 !CadCommandParsing.TryParsePointArgument(context.Arguments, out insertionPoint, out parseError))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail(parseError ?? "Usage: PASTECLIP [x,y[,z]]"));
+                return CadCommandResult.Fail(parseError ?? "Usage: PASTECLIP [x,y[,z]]");
             }
         }
+
+        CadClipboardDependencyResolver.EnsureDependencies(session.Document, payload.Dependencies);
 
         var translation = new XYZ(
             insertionPoint.X - payload.BasePoint.X,
@@ -70,13 +86,13 @@ public sealed class PasteClipCadCommand : ICadCommandHandler
             var id = CadEntityId.New();
             if (!CadClipboardEntityCodec.TryDecodeCreateOperation(item, id, translation, out var createOperation, out var decodeError))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail(decodeError!));
+                return CadCommandResult.Fail(decodeError!);
             }
 
             forward.Add(createOperation);
             if (!TryCreateDeleteOperation(createOperation, out var deleteOperation))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail("Unable to create inverse operation for pasted entity."));
+                return CadCommandResult.Fail("Unable to create inverse operation for pasted entity.");
             }
 
             inverse.Add(deleteOperation);
@@ -104,7 +120,7 @@ public sealed class PasteClipCadCommand : ICadCommandHandler
             session.SetSelection(createdEntities, CadSelectionMode.Replace);
         }
 
-        return ValueTask.FromResult(CadCommandResult.Ok($"Pasted {forward.Count} entity(s).", forward));
+        return CadCommandResult.Ok($"Pasted {forward.Count} entity(s).", forward);
     }
 
     private static bool TryCreateDeleteOperation(CadOperation createOperation, out CadOperation deleteOperation)
