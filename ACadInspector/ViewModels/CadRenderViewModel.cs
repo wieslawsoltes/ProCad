@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reactive.Disposables;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -20,7 +21,7 @@ using ReactiveUI.SourceGenerators;
 
 namespace ACadInspector.ViewModels;
 
-public sealed partial class CadRenderViewModel : ViewModelBase
+public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 {
     private readonly CadDocument _document;
     private readonly string? _documentPath;
@@ -46,6 +47,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
     private bool _modelShowGrid = true;
     private bool _modelShowAxes = true;
     private bool _initialAutoFitCompleted;
+    private readonly CompositeDisposable _subscriptions = new();
+    private bool _disposed;
 
     [Reactive]
     public partial RenderScene? Scene { get; set; }
@@ -280,33 +283,42 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
         this.WhenAnyValue(x => x.SelectedLayout)
             .Where(layout => layout is not null)
-            .Subscribe(layout => OnLayoutChanged(layout!));
+            .Subscribe(layout => OnLayoutChanged(layout!))
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.Scene)
-            .Subscribe(_ => OnSceneChanged());
+            .Subscribe(_ => OnSceneChanged())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.LayerList.LayerVisibilityOverrides)
-            .Subscribe(_ => UpdateHitTestIndex());
+            .Subscribe(_ => UpdateHitTestIndex())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.EntityTypeList.EntityTypeVisibilityOverrides)
-            .Subscribe(_ => OnEntityTypeVisibilityChanged());
+            .Subscribe(_ => OnEntityTypeVisibilityChanged())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.EnableDashPatternRendering, x => x.EnableColorRendering)
             .Skip(1)
-            .Subscribe(_ => OnRenderStyleOptionsChanged());
+            .Subscribe(_ => OnRenderStyleOptionsChanged())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.ShowDebugOverlay, x => x.DebugBvhDepth, x => x.Scene)
-            .Subscribe(_ => UpdateDebugOverlay());
+            .Subscribe(_ => UpdateDebugOverlay())
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.OsnapEnabled)
-            .Subscribe(enabled => _interactionController.UpdateSnapEnabled(enabled));
+            .Subscribe(enabled => _interactionController.UpdateSnapEnabled(enabled))
+            .DisposeWith(_subscriptions);
 
         this.WhenAnyValue(x => x.OtrackEnabled, x => x.OrthoEnabled, x => x.PolarEnabled)
-            .Subscribe(tuple => _interactionController.UpdateTracking(tuple.Item1, tuple.Item2, tuple.Item3));
+            .Subscribe(tuple => _interactionController.UpdateTracking(tuple.Item1, tuple.Item2, tuple.Item3))
+            .DisposeWith(_subscriptions);
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(UpdateSelectionFromService);
+            .Subscribe(UpdateSelectionFromService)
+            .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.HoverAnnotation)
             .ObserveOn(RxApp.MainThreadScheduler)
@@ -315,7 +327,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
                 HoverAnnotation = annotation;
                 HoverBounds = annotation?.Bounds;
                 UpdateDebugOverlay();
-            });
+            })
+            .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.SelectionAnnotation)
             .ObserveOn(RxApp.MainThreadScheduler)
@@ -324,11 +337,13 @@ public sealed partial class CadRenderViewModel : ViewModelBase
                 SelectionAnnotation = annotation;
                 SelectionBounds = annotation?.Bounds;
                 UpdateDebugOverlay();
-            });
+            })
+            .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.HoveredObject)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(obj => HoveredObject = obj);
+            .Subscribe(obj => HoveredObject = obj)
+            .DisposeWith(_subscriptions);
 
         if (dynamicBlockOverrideChanges is not null)
         {
@@ -340,12 +355,14 @@ public sealed partial class CadRenderViewModel : ViewModelBase
                     {
                         _ = RebuildSceneAsync(SelectedLayout);
                     }
-                });
+                })
+                .DisposeWith(_subscriptions);
         }
 
         _focusService.WhenAnyValue(x => x.FocusRequest)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(HandleFocusRequest);
+            .Subscribe(HandleFocusRequest)
+            .DisposeWith(_subscriptions);
 
         _commandRuntime.StateChanged += OnCommandRuntimeStateChanged;
         _interactionController.InteractionStatusChanged += OnInteractionStatusChanged;
@@ -577,7 +594,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase
 
     private async Task HandleInsertDropAsync(CadInsertDropRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.BlockName))
+        var blockName = request.BlockName?.Trim();
+        if (string.IsNullOrWhiteSpace(blockName))
         {
             return;
         }
@@ -589,25 +607,40 @@ public sealed partial class CadRenderViewModel : ViewModelBase
             return;
         }
 
-        static string EscapeToken(string value)
+        if (!string.Equals(_commandRuntime.State.ActiveCommand, "INSERT", StringComparison.OrdinalIgnoreCase))
         {
-            return value.Replace("\\", "\\\\", StringComparison.Ordinal)
-                .Replace("\"", "\\\"", StringComparison.Ordinal);
+            _interactionController.BeginCommand("INSERT");
         }
 
-        var blockName = EscapeToken(request.BlockName.Trim());
-        var pointToken = string.Create(
-            System.Globalization.CultureInfo.InvariantCulture,
-            $"{request.WorldPoint.X:0.###},{request.WorldPoint.Y:0.###}");
-        var command = string.Create(
-            System.Globalization.CultureInfo.InvariantCulture,
-            $"INSERT \"{blockName}\" {pointToken}");
-        var resolution = await _commandRuntime.SubmitAsync(command, session).ConfigureAwait(true);
+        var nameResolution = await _commandRuntime
+            .SubmitTokenAsync(
+                new CadPromptToken(CadPromptTokenType.Text, blockName),
+                session,
+                commit: false)
+            .ConfigureAwait(true);
+        UpdateRuntimeState(nameResolution.State);
+
+        if (nameResolution.Result?.Success == false)
+        {
+            InteractionStatus = nameResolution.Result.Message ?? "INSERT failed to resolve block name.";
+            return;
+        }
+
+        var pointResolution = await _commandRuntime
+            .SubmitTokenAsync(
+                new CadPromptToken(CadPromptTokenType.Coordinate, FormatPointToken(request.WorldPoint)),
+                session,
+                commit: true)
+            .ConfigureAwait(true);
+        var resolution = pointResolution;
 
         if (_sessionHost is not null)
         {
             _sessionHost.SyncSelectionToUi(session);
-            _sessionHost.NotifySessionChanged(session);
+            if (HasCommittedOperations(nameResolution) || HasCommittedOperations(pointResolution))
+            {
+                _sessionHost.NotifySessionChanged(session);
+            }
         }
 
         if (!_allowLayoutUpdates && SelectedLayout is not null)
@@ -624,6 +657,18 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         {
             InteractionStatus = resolution.State.LastMessage!;
         }
+    }
+
+    private static string FormatPointToken(System.Numerics.Vector2 point)
+    {
+        return string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{point.X:0.###},{point.Y:0.###}");
+    }
+
+    private static bool HasCommittedOperations(CadPromptResolution resolution)
+    {
+        return resolution.Result?.Operations is { Count: > 0 };
     }
 
     private async Task HandleInteractionAsync(CadInteractionEvent interactionEvent)
@@ -1958,6 +2003,36 @@ public sealed partial class CadRenderViewModel : ViewModelBase
         }
 
         return hasValue;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _layoutRebuildCts?.Cancel();
+        _layoutRebuildCts?.Dispose();
+        _layoutRebuildCts = null;
+
+        _commandRuntime.StateChanged -= OnCommandRuntimeStateChanged;
+        _interactionController.InteractionStatusChanged -= OnInteractionStatusChanged;
+        if (_sessionHost is not null)
+        {
+            _sessionHost.SessionChanged -= OnSessionChanged;
+            _sessionHost.SessionRemoved -= OnSessionRemoved;
+        }
+
+        if (_collaborationWorkspace is not null)
+        {
+            _collaborationWorkspace.PresenceChanged -= OnCollaborationPresenceChanged;
+        }
+
+        _subscriptions.Dispose();
+        _interactionController.Dispose();
+        ClearTransientInteractionVisuals(preserveRemoteHints: false);
     }
 
     private sealed class NullRenderStatsExportService : IRenderStatsExportService

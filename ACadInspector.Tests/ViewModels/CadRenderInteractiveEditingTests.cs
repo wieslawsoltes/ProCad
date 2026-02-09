@@ -187,6 +187,31 @@ public sealed class CadRenderInteractiveEditingTests
     }
 
     [Fact]
+    public async Task Interaction_OverlayRefreshBudget_RepeatedPointerMoveWithinThreshold()
+    {
+        const int moveCount = 160;
+        const int budgetMilliseconds = 1400;
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(document);
+
+        runtime.BeginCommand("LINE");
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 1f)).ToTask();
+
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < moveCount; index++)
+        {
+            await viewModel.InteractionCommand.Execute(CreatePointerMove(2f + index * 0.05f, 3f)).ToTask();
+        }
+
+        stopwatch.Stop();
+
+        Assert.NotEmpty(viewModel.OverlayScene.Primitives);
+        Assert.True(
+            stopwatch.ElapsedMilliseconds <= budgetMilliseconds,
+            $"Overlay refresh budget exceeded: {stopwatch.ElapsedMilliseconds} ms > {budgetMilliseconds} ms.");
+    }
+
+    [Fact]
     public async Task Interaction_LineCommand_FirstPick_ShowsPickPointAdorner()
     {
         var document = new CadDocument();
@@ -721,6 +746,64 @@ public sealed class CadRenderInteractiveEditingTests
     }
 
     [Fact]
+    public async Task Interaction_MinimalShortcutProfile_DisablesFunctionCommandMatrix()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(
+            document,
+            shortcutProfile: CadShortcutProfile.Minimal);
+
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("F1", CadInteractionModifiers.Control | CadInteractionModifiers.Shift)).ToTask();
+
+        await WaitUntilAsync(() => !runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task Interaction_ShortcutConflictResolution_PrefersScopeSpecificBindings()
+    {
+        var document = new CadDocument();
+        var customBindings = new[]
+        {
+            new CadShortcutBinding(
+                Gesture: new CadShortcutGesture("Q", CadInteractionModifiers.Control),
+                Action: CadShortcutActionKind.Command,
+                CommandName: "CIRCLE",
+                Scope: CadShortcutScope.Always,
+                TransparentWhenCommandActive: false),
+            new CadShortcutBinding(
+                Gesture: new CadShortcutGesture("Q", CadInteractionModifiers.Control),
+                Action: CadShortcutActionKind.Command,
+                CommandName: "LINE",
+                Scope: CadShortcutScope.CommandInactiveOnly,
+                TransparentWhenCommandActive: false),
+            new CadShortcutBinding(
+                Gesture: new CadShortcutGesture("Q", CadInteractionModifiers.Control),
+                Action: CadShortcutActionKind.Command,
+                CommandName: "TEXT",
+                Scope: CadShortcutScope.CommandActiveOnly,
+                TransparentWhenCommandActive: false,
+                Priority: 50)
+        };
+
+        var (viewModel, _, runtime) = CreateSystem(
+            document,
+            additionalHandlers: [new CircleCadCommand()],
+            shortcutBindings: customBindings);
+
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("Q", CadInteractionModifiers.Control)).ToTask();
+        Assert.True(
+            runtime.State.IsActive &&
+            string.Equals(runtime.State.ActiveCommand, "LINE", System.StringComparison.OrdinalIgnoreCase),
+            $"Expected LINE when command was inactive, got '{runtime.State.ActiveCommand ?? "<null>"}'.");
+
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("Q", CadInteractionModifiers.Control)).ToTask();
+        Assert.True(
+            runtime.State.IsActive &&
+            string.Equals(runtime.State.ActiveCommand, "TEXT", System.StringComparison.OrdinalIgnoreCase),
+            $"Expected TEXT when command was active, got '{runtime.State.ActiveCommand ?? "<null>"}'.");
+    }
+
+    [Fact]
     public async Task Interaction_DeleteShortcut_DoesNotEraseWhileCommandIsActive()
     {
         var document = new CadDocument();
@@ -873,6 +956,124 @@ public sealed class CadRenderInteractiveEditingTests
     }
 
     [Fact]
+    public async Task Interaction_ShiftSpaceCyclesOverlappingSelectionCandidates()
+    {
+        var document = new CadDocument();
+        var horizontal = new Line
+        {
+            StartPoint = new XYZ(-5, 0, 0),
+            EndPoint = new XYZ(5, 0, 0)
+        };
+        var vertical = new Line
+        {
+            StartPoint = new XYZ(0, -5, 0),
+            EndPoint = new XYZ(0, 5, 0)
+        };
+        document.Entities.Add(horizontal);
+        document.Entities.Add(vertical);
+
+        var (viewModel, session, _) = CreateSystem(document);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+        var first = Assert.Single(session.SelectionSet.Items.OfType<Line>());
+        var firstIsHorizontal = System.Math.Abs(first.StartPoint.Y - first.EndPoint.Y) < 1e-6;
+
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("Space", CadInteractionModifiers.Shift)).ToTask();
+
+        await WaitUntilAsync(() =>
+        {
+            var selected = session.SelectionSet.Items.OfType<Line>().ToArray();
+            if (selected.Length != 1)
+            {
+                return false;
+            }
+
+            var selectedIsHorizontal = System.Math.Abs(selected[0].StartPoint.Y - selected[0].EndPoint.Y) < 1e-6;
+            return selectedIsHorizontal != firstIsHorizontal;
+        });
+    }
+
+    [Fact]
+    public async Task Interaction_AltCtrlClick_RemovesSubSelectionFromCurrentSet()
+    {
+        var document = new CadDocument();
+        var first = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0)
+        };
+        var second = new Line
+        {
+            StartPoint = new XYZ(0, 8, 0),
+            EndPoint = new XYZ(10, 8, 0)
+        };
+        document.Entities.Add(first);
+        document.Entities.Add(second);
+
+        var (viewModel, session, _) = CreateSystem(document);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 8f, CadInteractionModifiers.Shift)).ToTask();
+
+        Assert.Equal(2, session.SelectionSet.Count);
+
+        await viewModel.InteractionCommand
+            .Execute(CreatePointerDown(1f, 8f, CadInteractionModifiers.Alt | CadInteractionModifiers.Control))
+            .ToTask();
+
+        var selected = session.SelectionSet.Items.OfType<Line>().ToArray();
+        Assert.True(
+            selected.Length == 1,
+            string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"Expected one selected line after Alt+Ctrl remove; actual count={selected.Length}, status={viewModel.InteractionStatus}."));
+
+        Assert.True(
+            System.Math.Abs(selected[0].StartPoint.Y) < 1e-6 &&
+            System.Math.Abs(selected[0].EndPoint.Y) < 1e-6,
+            string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"Expected remaining line at Y=0, actual startY={selected[0].StartPoint.Y:0.###}, endY={selected[0].EndPoint.Y:0.###}."));
+    }
+
+    [Fact]
+    public async Task Interaction_AltShiftClick_AddsEntityToSubSelectionSet()
+    {
+        var document = new CadDocument();
+        var first = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0)
+        };
+        var second = new Line
+        {
+            StartPoint = new XYZ(0, 8, 0),
+            EndPoint = new XYZ(10, 8, 0)
+        };
+        document.Entities.Add(first);
+        document.Entities.Add(second);
+
+        var (viewModel, session, _) = CreateSystem(document);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 8f, CadInteractionModifiers.Alt | CadInteractionModifiers.Shift)).ToTask();
+
+        await WaitUntilAsync(() =>
+        {
+            var selected = session.SelectionSet.Items.OfType<Line>().ToArray();
+            if (selected.Length != 2)
+            {
+                return false;
+            }
+
+            var hasLower = selected.Any(entity =>
+                System.Math.Abs(entity.StartPoint.Y) < 1e-6 &&
+                System.Math.Abs(entity.EndPoint.Y) < 1e-6);
+            var hasUpper = selected.Any(entity =>
+                System.Math.Abs(entity.StartPoint.Y - 8d) < 1e-6 &&
+                System.Math.Abs(entity.EndPoint.Y - 8d) < 1e-6);
+            return hasLower && hasUpper;
+        });
+    }
+
+    [Fact]
     public async Task Interaction_DragMove_ResolvesParallelConstraint()
     {
         var document = new CadDocument();
@@ -914,7 +1115,8 @@ public sealed class CadRenderInteractiveEditingTests
         CadDocument document,
         IReadOnlyList<ICadCommandHandler>? additionalHandlers = null,
         IReadOnlyList<ICadInteractiveCommandAdapter>? additionalAdapters = null,
-        IReadOnlyList<CadShortcutBinding>? shortcutBindings = null)
+        IReadOnlyList<CadShortcutBinding>? shortcutBindings = null,
+        CadShortcutProfile shortcutProfile = CadShortcutProfile.AutoCadLike)
     {
         var sceneBuilder = CreateSceneBuilder();
         var settings = new CadRenderSceneSettings();
@@ -953,7 +1155,7 @@ public sealed class CadRenderInteractiveEditingTests
             sessionHost,
             runtime,
             adapterRegistry,
-            shortcutBindings,
+            shortcutBindings ?? CadShortcutBindingCatalog.Create(shortcutProfile),
             collaborationWorkspace: null,
             statsExportService: null,
             statsFileName: null);

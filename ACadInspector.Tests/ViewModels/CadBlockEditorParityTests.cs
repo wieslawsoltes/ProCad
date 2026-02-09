@@ -49,6 +49,61 @@ public sealed class CadBlockEditorParityTests
         Assert.False(controller.CommandRuntime.State.IsActive);
     }
 
+    [Fact]
+    public async Task BlockEditor_InsertDrop_CommitsThroughDocumentControllerSession()
+    {
+        var (document, documentViewModel, block, factory, controllerHost) = CreateSystem();
+        var insertBlock = new BlockRecord("PARITY_INSERT");
+        insertBlock.Entities.Add(new Line(new CSMath.XYZ(0, 0, 0), new CSMath.XYZ(1, 0, 0)));
+        document.BlockRecords.Add(insertBlock);
+        var editor = factory.Create(documentViewModel, block);
+        var controller = controllerHost.GetOrCreate(document);
+        var revisionBefore = controller.Session.Revision;
+
+        await editor.Render.InsertDroppedBlockCommand
+            .Execute(new CadInsertDropRequest("PARITY_INSERT", new Vector2(7f, 3f)))
+            .ToTask();
+
+        var inserted = Assert.Single(document.Entities.OfType<Insert>());
+        Assert.Equal("PARITY_INSERT", inserted.Block.Name);
+        Assert.Equal(7d, inserted.InsertPoint.X, 6);
+        Assert.Equal(3d, inserted.InsertPoint.Y, 6);
+        Assert.True(controller.Session.Revision > revisionBefore);
+        Assert.False(controller.CommandRuntime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task ModelSpaceAndBlockEditor_InsertDrop_UseEquivalentRuntimePath()
+    {
+        var (document, documentViewModel, block, factory, controllerHost) = CreateSystem();
+        var insertBlock = new BlockRecord("PARITY_SHARED");
+        insertBlock.Entities.Add(new Circle { Center = new CSMath.XYZ(0, 0, 0), Radius = 1d });
+        document.BlockRecords.Add(insertBlock);
+        var editor = factory.Create(documentViewModel, block);
+        var controller = controllerHost.GetOrCreate(document);
+        var revisionBefore = controller.Session.Revision;
+
+        await documentViewModel.Render.InsertDroppedBlockCommand
+            .Execute(new CadInsertDropRequest("PARITY_SHARED", new Vector2(1f, 2f)))
+            .ToTask();
+        await editor.Render.InsertDroppedBlockCommand
+            .Execute(new CadInsertDropRequest("PARITY_SHARED", new Vector2(5f, 6f)))
+            .ToTask();
+
+        var inserted = document.Entities.OfType<Insert>()
+            .Where(static entity => string.Equals(entity.Block?.Name, "PARITY_SHARED", System.StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(2, inserted.Length);
+        Assert.Contains(inserted, static entity =>
+            System.Math.Abs(entity.InsertPoint.X - 1d) < 1e-6 &&
+            System.Math.Abs(entity.InsertPoint.Y - 2d) < 1e-6);
+        Assert.Contains(inserted, static entity =>
+            System.Math.Abs(entity.InsertPoint.X - 5d) < 1e-6 &&
+            System.Math.Abs(entity.InsertPoint.Y - 6d) < 1e-6);
+        Assert.True(controller.Session.Revision > revisionBefore);
+        Assert.False(controller.CommandRuntime.State.IsActive);
+    }
+
     private static (
         CadDocument Document,
         CadDocumentViewModel DocumentViewModel,
@@ -68,11 +123,17 @@ public sealed class CadBlockEditorParityTests
         var sessionHost = new CadEditorSessionHostService(new CadEditorSessionFactory(), documentContext, selectionService);
         var commandRegistry = new CadCommandRegistry();
         commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new InsertCadCommand());
         var controllerHost = new CadEditorControllerHostService(
             sessionHost,
             new CadEditorControllerFactory(commandRegistry),
             documentContext);
-        var adapterRegistry = new CadInteractiveCommandAdapterRegistry([new LineInteractiveCommandAdapter()]);
+        var adapterRegistry = new CadInteractiveCommandAdapterRegistry(
+        [
+            new LineInteractiveCommandAdapter(),
+            new InsertInteractiveCommandAdapter()
+        ]);
+        var controller = controllerHost.GetOrCreate(document);
         var statsExport = new NullRenderStatsExportService();
         var documentRender = new CadRenderViewModel(
             document,
@@ -85,6 +146,10 @@ public sealed class CadBlockEditorParityTests
             dynamicBlockOverrideChanges: null,
             selectionService,
             focusService,
+            sessionHost,
+            controller.CommandRuntime,
+            interactiveAdapterRegistry: adapterRegistry,
+            collaborationWorkspace: null,
             statsExportService: statsExport);
         var documentViewModel = new CadDocumentViewModel(
             document,

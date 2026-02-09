@@ -73,7 +73,6 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     private readonly List<Entity> _selectionCycleCandidates = new();
     private int _selectionCycleIndex = -1;
     private ICadEditorSession? _currentSession;
-    private static readonly IReadOnlyList<CadShortcutBinding> DefaultShortcutBindings = CreateDefaultShortcutBindings();
 
     public event EventHandler<IReadOnlyList<CadOperation>>? OperationsCommitted;
 
@@ -101,7 +100,7 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         _interactiveAdapters = interactiveAdapters ?? new CadInteractiveCommandAdapterRegistry(Array.Empty<ICadInteractiveCommandAdapter>());
         _shortcutBindings = shortcutBindings is { Count: > 0 }
             ? shortcutBindings
-            : DefaultShortcutBindings;
+            : CadShortcutBindingCatalog.Create(CadShortcutProfile.AutoCadLike);
         _snapService = snapService ?? new CadSnapService();
         _trackingService = trackingService ?? new CadTrackingService();
         _gripService = gripService ?? new CadGripService();
@@ -285,7 +284,8 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                     }
 
                     RebuildGripSet(context.Session);
-                    if (_gripService.TryResolveHotGrip(
+                    if (!interactionEvent.Modifiers.HasFlag(CadInteractionModifiers.Alt) &&
+                        _gripService.TryResolveHotGrip(
                             resolvedPoint,
                             ResolveGripTolerance(interactionEvent.Tolerance),
                             _activeGripSet,
@@ -307,20 +307,18 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                         var selectionModifiers = MapModifiers(interactionEvent.Modifiers);
                         if (hitEntity is not null &&
                             interactionEvent.Modifiers.HasFlag(CadInteractionModifiers.Alt) &&
-                            _selectionService.SelectedObjects.Count > 1 &&
-                            IsEntitySelected(context.Session, hitEntity))
+                            TryHandleSubSelectionGesture(
+                                context.Session,
+                                hitEntity,
+                                interactionEvent.Modifiers,
+                                interactionEvent.Tolerance,
+                                resolvedPoint,
+                                out var subSelectionStatus))
                         {
-                            if (_selectionService.SetPrimarySelection(hitEntity))
-                            {
-                                NormalizeSelectionForSession(context.Session);
-                                UpdateSelectionAnnotationFromService(context.Session);
-                                UpdateGripFeedback(context.Session, resolvedPoint, interactionEvent.Tolerance);
-                            }
-
                             return BuildSnapshot(
                                 resolvedPoint,
                                 handled: true,
-                                status: "Sub-selection updated.");
+                                status: subSelectionStatus);
                         }
 
                         if (!selectionModifiers.HasFlag(CadInputModifiers.Control) &&
@@ -868,6 +866,111 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         return true;
     }
 
+    private bool TryHandleSubSelectionGesture(
+        ICadEditorSession? session,
+        Entity hitEntity,
+        CadInteractionModifiers modifiers,
+        float tolerance,
+        Vector2 resolvedPoint,
+        out string status)
+    {
+        status = string.Empty;
+        if (!modifiers.HasFlag(CadInteractionModifiers.Alt) ||
+            _selectionService.SelectedObjects.Count == 0)
+        {
+            return false;
+        }
+
+        var targetEntity = hitEntity;
+        var isSelected = TryResolveSelectedEntityReference(session, targetEntity, out var selectedReference);
+        if (modifiers.HasFlag(CadInteractionModifiers.Control))
+        {
+            if (!isSelected &&
+                TryResolveSelectedEntityHit(resolvedPoint, tolerance, session, out var selectedHit))
+            {
+                targetEntity = selectedHit;
+                isSelected = TryResolveSelectedEntityReference(session, targetEntity, out selectedReference);
+            }
+
+            if (!isSelected)
+            {
+                status = "Sub-selection remove ignored.";
+                return true;
+            }
+
+            _selectionService.ApplySelection([selectedReference], CadSelectionMode.Remove);
+            NormalizeSelectionForSession(session);
+            UpdateSelectionAnnotationFromService(session);
+            UpdateGripFeedback(session, resolvedPoint, tolerance);
+            status = "Sub-selection removed.";
+            return true;
+        }
+
+        if (modifiers.HasFlag(CadInteractionModifiers.Shift))
+        {
+            var changed = _selectionService.ApplySelection([hitEntity], CadSelectionMode.Add);
+            var primaryChanged = _selectionService.SetPrimarySelection(hitEntity);
+            if (changed || primaryChanged)
+            {
+                NormalizeSelectionForSession(session);
+                UpdateSelectionAnnotationFromService(session);
+                UpdateGripFeedback(session, resolvedPoint, tolerance);
+            }
+
+            status = changed || primaryChanged
+                ? "Sub-selection updated."
+                : "Sub-selection unchanged.";
+            return true;
+        }
+
+        if (_selectionService.SelectedObjects.Count > 1 && isSelected)
+        {
+            if (_selectionService.SetPrimarySelection(hitEntity))
+            {
+                NormalizeSelectionForSession(session);
+                UpdateSelectionAnnotationFromService(session);
+                UpdateGripFeedback(session, resolvedPoint, tolerance);
+            }
+
+            status = "Sub-selection updated.";
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryResolveSelectedEntityHit(
+        Vector2 worldPoint,
+        float tolerance,
+        ICadEditorSession? session,
+        out Entity selectedEntity)
+    {
+        selectedEntity = null!;
+        if (Scene is null)
+        {
+            return false;
+        }
+
+        _hitResults.Clear();
+        _hitTestEngine.HitTestPoint(Scene, SpatialIndex, worldPoint, tolerance, _hitResults);
+        for (var index = 0; index < _hitResults.Count; index++)
+        {
+            var hit = _hitResults[index];
+            var resolved = hit.OwnerEntity ?? hit.SourceEntity;
+            if (resolved is not Entity candidate ||
+                !TryResolveSessionEntity(session, candidate, out var canonicalEntity) ||
+                !IsEntitySelected(session, canonicalEntity))
+            {
+                continue;
+            }
+
+            selectedEntity = canonicalEntity;
+            return true;
+        }
+
+        return false;
+    }
+
     private void HandleToolInput(CadRenderHitTestRequest request, ICadEditorSession? session)
     {
         var kind = request.Kind == CadHitTestKind.Hover
@@ -896,52 +999,128 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         }
 
         var commandActive = _commandRuntime.State.IsActive;
+        if (!TryResolveShortcutBinding(interactionEvent, commandActive, out var binding))
+        {
+            return null;
+        }
+
+        switch (binding.Action)
+        {
+            case CadShortcutActionKind.SelectAll:
+                return TrySelectAll(session, out var selectionStatus) ? selectionStatus : null;
+            case CadShortcutActionKind.ArmSelectionMode:
+            {
+                if (!TryResolveSelectionDragMode(binding.SelectionMode, out var mode, out var modeStatus))
+                {
+                    return null;
+                }
+
+                _armedSelectionDragMode = mode;
+                return modeStatus;
+            }
+            case CadShortcutActionKind.CycleSelection:
+                return TryCycleSelectionShortcut(session, interactionEvent, out var cycleStatus)
+                    ? cycleStatus
+                    : null;
+            case CadShortcutActionKind.Command:
+            default:
+            {
+                if (string.IsNullOrWhiteSpace(binding.CommandName))
+                {
+                    return null;
+                }
+
+                return await ExecuteShortcutCommandAsync(
+                        binding.CommandName!,
+                        session,
+                        cancellationToken,
+                        binding.TransparentWhenCommandActive)
+                    .ConfigureAwait(false);
+            }
+        }
+    }
+
+    private bool TryResolveShortcutBinding(
+        CadInteractionEvent interactionEvent,
+        bool commandActive,
+        out CadShortcutBinding binding)
+    {
+        binding = null!;
+        var found = false;
+        var bestSpecificity = int.MinValue;
+        var bestPriority = int.MinValue;
+        var bestTransparencyRank = int.MinValue;
         for (var index = 0; index < _shortcutBindings.Count; index++)
         {
-            var binding = _shortcutBindings[index];
-            if (!binding.Gesture.Matches(interactionEvent))
+            var candidate = _shortcutBindings[index];
+            if (!candidate.Gesture.Matches(interactionEvent) ||
+                !IsShortcutScopeMatch(candidate.Scope, commandActive))
             {
                 continue;
             }
 
-            if (!IsShortcutScopeMatch(binding.Scope, commandActive))
+            var specificity = candidate.Scope == CadShortcutScope.Always ? 1 : 2;
+            var transparencyRank =
+                commandActive &&
+                candidate.Action == CadShortcutActionKind.Command &&
+                !candidate.TransparentWhenCommandActive
+                    ? 1
+                    : 0;
+            if (!found ||
+                specificity > bestSpecificity ||
+                (specificity == bestSpecificity && candidate.Priority > bestPriority) ||
+                (specificity == bestSpecificity &&
+                 candidate.Priority == bestPriority &&
+                 transparencyRank > bestTransparencyRank))
             {
-                continue;
-            }
-
-            switch (binding.Action)
-            {
-                case CadShortcutActionKind.SelectAll:
-                    return TrySelectAll(session, out var selectionStatus) ? selectionStatus : null;
-                case CadShortcutActionKind.ArmSelectionMode:
-                {
-                    if (!TryResolveSelectionDragMode(binding.SelectionMode, out var mode, out var modeStatus))
-                    {
-                        continue;
-                    }
-
-                    _armedSelectionDragMode = mode;
-                    return modeStatus;
-                }
-                case CadShortcutActionKind.Command:
-                default:
-                {
-                    if (string.IsNullOrWhiteSpace(binding.CommandName))
-                    {
-                        continue;
-                    }
-
-                    return await ExecuteShortcutCommandAsync(
-                            binding.CommandName!,
-                            session,
-                            cancellationToken,
-                            binding.TransparentWhenCommandActive)
-                        .ConfigureAwait(false);
-                }
+                found = true;
+                binding = candidate;
+                bestSpecificity = specificity;
+                bestPriority = candidate.Priority;
+                bestTransparencyRank = transparencyRank;
             }
         }
 
-        return null;
+        return found;
+    }
+
+    private bool TryCycleSelectionShortcut(
+        ICadEditorSession? session,
+        CadInteractionEvent interactionEvent,
+        out string status)
+    {
+        status = string.Empty;
+        var pickPoint = _lastPointerWorldPoint ?? interactionEvent.WorldPoint;
+        var pickTolerance = interactionEvent.Tolerance > 0f
+            ? interactionEvent.Tolerance
+            : 4f;
+        if (!TryResolveEntityHit(
+                pickPoint,
+                pickTolerance,
+                session,
+                out var candidate,
+                out var cycleStatus) ||
+            candidate is null)
+        {
+            status = "No object under cursor.";
+            return true;
+        }
+
+        if (_selectionService.SelectedObjects.Count > 1 &&
+            IsEntitySelected(session, candidate))
+        {
+            _selectionService.SetPrimarySelection(candidate);
+        }
+        else
+        {
+            _selectionService.ApplySelection([candidate], CadSelectionMode.Replace);
+        }
+
+        NormalizeSelectionForSession(session);
+        UpdateSelectionAnnotationFromService(session);
+        RebuildGripSet(session);
+        status = cycleStatus ?? "Selection cycled.";
+        return true;
     }
 
     private bool TryHandleBufferNavigation(CadInteractionEvent interactionEvent, out string status)
@@ -1098,7 +1277,15 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         }
 
         ResetKeyboardInput();
-        var input = _commandRuntime.State.IsActive && transparentWhenCommandActive
+        if (_commandRuntime.State.IsActive && !transparentWhenCommandActive)
+        {
+            _commandRuntime.BeginCommand(command);
+            return _commandRuntime.State.LastMessage ??
+                   _commandRuntime.State.ParameterHelp ??
+                   string.Create(CultureInfo.InvariantCulture, $"Started {command.ToUpperInvariant()}.");
+        }
+
+        var input = _commandRuntime.State.IsActive
             ? string.Create(CultureInfo.InvariantCulture, $"'{command}")
             : command;
         var resolution = await _commandRuntime.SubmitAsync(input, session, cancellationToken).ConfigureAwait(false);
@@ -3065,28 +3252,66 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
     private bool IsEntitySelected(ICadEditorSession? session, Entity entity)
     {
+        return TryResolveSelectedEntityReference(session, entity, out _);
+    }
+
+    private bool TryResolveSelectedEntityReference(
+        ICadEditorSession? session,
+        Entity entity,
+        out Entity selectedEntity)
+    {
         if (session is not null)
         {
             foreach (var item in session.SelectionSet.Items)
             {
-                if (ReferenceEquals(item, entity))
+                if (item is Entity candidate &&
+                    AreEquivalentEntities(session, candidate, entity))
                 {
+                    selectedEntity = candidate;
                     return true;
                 }
             }
 
+            selectedEntity = entity;
             return false;
         }
 
         foreach (var item in _selectionService.SelectedObjects)
         {
-            if (ReferenceEquals(item, entity))
+            if (item is Entity candidate &&
+                AreEquivalentEntities(null, candidate, entity))
             {
+                selectedEntity = candidate;
                 return true;
             }
         }
 
+        selectedEntity = entity;
         return false;
+    }
+
+    private static bool AreEquivalentEntities(ICadEditorSession? session, Entity left, Entity right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        if (left.Handle != 0 &&
+            right.Handle != 0 &&
+            left.Handle == right.Handle)
+        {
+            return true;
+        }
+
+        if (session is null)
+        {
+            return false;
+        }
+
+        return session.EntityIndex.TryGetId(left, out var leftId) &&
+               session.EntityIndex.TryGetId(right, out var rightId) &&
+               leftId.Equals(rightId);
     }
 
     private void AppendGripSeeds(ICadEditorSession? session, Entity entity, ICollection<CadGripPoint> target)
@@ -3266,94 +3491,6 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         }
 
         return new XYZ(direction.X / length, direction.Y / length, direction.Z / length);
-    }
-
-    private static IReadOnlyList<CadShortcutBinding> CreateDefaultShortcutBindings()
-    {
-        static CadShortcutBinding Command(
-            string key,
-            CadInteractionModifiers modifiers,
-            string commandName,
-            CadShortcutScope scope = CadShortcutScope.Always,
-            bool transparentWhenCommandActive = true)
-        {
-            return new CadShortcutBinding(
-                Gesture: new CadShortcutGesture(key, modifiers),
-                Action: CadShortcutActionKind.Command,
-                CommandName: commandName,
-                Scope: scope,
-                TransparentWhenCommandActive: transparentWhenCommandActive);
-        }
-
-        static CadShortcutBinding ArmSelection(string key, CadSelectionShortcutMode mode)
-        {
-            return new CadShortcutBinding(
-                Gesture: new CadShortcutGesture(key, CadInteractionModifiers.Alt),
-                Action: CadShortcutActionKind.ArmSelectionMode,
-                SelectionMode: mode,
-                Scope: CadShortcutScope.CommandInactiveOnly,
-                TransparentWhenCommandActive: false);
-        }
-
-        var inactive = CadShortcutScope.CommandInactiveOnly;
-        var drawModifiers = CadInteractionModifiers.Control | CadInteractionModifiers.Shift;
-        var modifyModifiers = CadInteractionModifiers.Control | CadInteractionModifiers.Alt;
-
-        return
-        [
-            Command("Delete", CadInteractionModifiers.Shift, "CUT"),
-            Command("Insert", CadInteractionModifiers.Shift, "PASTECLIP"),
-            Command("Insert", CadInteractionModifiers.Control, "COPYCLIP"),
-            Command("Z", CadInteractionModifiers.Control, "UNDO"),
-            Command("Z", CadInteractionModifiers.Control | CadInteractionModifiers.Shift, "REDO"),
-            Command("Y", CadInteractionModifiers.Control, "REDO"),
-            Command("C", CadInteractionModifiers.Control, "COPYCLIP"),
-            Command("X", CadInteractionModifiers.Control, "CUT"),
-            Command("V", CadInteractionModifiers.Control, "PASTECLIP"),
-            Command("V", CadInteractionModifiers.Control | CadInteractionModifiers.Shift, "PASTEORIG"),
-            new CadShortcutBinding(
-                Gesture: new CadShortcutGesture("A", CadInteractionModifiers.Control),
-                Action: CadShortcutActionKind.SelectAll,
-                Scope: CadShortcutScope.Always,
-                TransparentWhenCommandActive: false),
-            Command("Delete", CadInteractionModifiers.None, "ERASE", inactive, transparentWhenCommandActive: false),
-            ArmSelection("L", CadSelectionShortcutMode.Lasso),
-            ArmSelection("F", CadSelectionShortcutMode.Fence),
-            ArmSelection("P", CadSelectionShortcutMode.Polygon),
-
-            // Draw/annotation command launch matrix.
-            Command("F1", drawModifiers, "LINE", inactive, transparentWhenCommandActive: false),
-            Command("F2", drawModifiers, "PLINE", inactive, transparentWhenCommandActive: false),
-            Command("F3", drawModifiers, "CIRCLE", inactive, transparentWhenCommandActive: false),
-            Command("F4", drawModifiers, "ARC", inactive, transparentWhenCommandActive: false),
-            Command("F5", drawModifiers, "RECTANG", inactive, transparentWhenCommandActive: false),
-            Command("F6", drawModifiers, "POLYGON", inactive, transparentWhenCommandActive: false),
-            Command("F7", drawModifiers, "TEXT", inactive, transparentWhenCommandActive: false),
-            Command("F8", drawModifiers, "MTEXT", inactive, transparentWhenCommandActive: false),
-            Command("F9", drawModifiers, "INSERT", inactive, transparentWhenCommandActive: false),
-            Command("D", drawModifiers, "DIMLINEAR", inactive, transparentWhenCommandActive: false),
-            Command("G", drawModifiers, "LEADER", inactive, transparentWhenCommandActive: false),
-            Command("M", modifyModifiers, "MLEADER", inactive, transparentWhenCommandActive: false),
-
-            // Modify command launch matrix.
-            Command("F1", modifyModifiers, "MOVE", inactive, transparentWhenCommandActive: false),
-            Command("F2", modifyModifiers, "COPY", inactive, transparentWhenCommandActive: false),
-            Command("F3", modifyModifiers, "ROTATE", inactive, transparentWhenCommandActive: false),
-            Command("F4", modifyModifiers, "SCALE", inactive, transparentWhenCommandActive: false),
-            Command("F5", modifyModifiers, "MIRROR", inactive, transparentWhenCommandActive: false),
-            Command("F6", modifyModifiers, "OFFSET", inactive, transparentWhenCommandActive: false),
-            Command("F7", modifyModifiers, "TRIM", inactive, transparentWhenCommandActive: false),
-            Command("F8", modifyModifiers, "EXTEND", inactive, transparentWhenCommandActive: false),
-            Command("F9", modifyModifiers, "BREAK", inactive, transparentWhenCommandActive: false),
-            Command("F10", modifyModifiers, "JOIN", inactive, transparentWhenCommandActive: false),
-            Command("F11", modifyModifiers, "FILLET", inactive, transparentWhenCommandActive: false),
-            Command("F12", modifyModifiers, "CHAMFER", inactive, transparentWhenCommandActive: false),
-            Command("A", drawModifiers, "ARRAY", inactive, transparentWhenCommandActive: false),
-            Command("I", drawModifiers, "ALIGN", inactive, transparentWhenCommandActive: false),
-            Command("H", drawModifiers, "MATCHPROP", inactive, transparentWhenCommandActive: false),
-            Command("X", drawModifiers, "EXPLODE", inactive, transparentWhenCommandActive: false),
-            Command("K", drawModifiers, "STRETCH", inactive, transparentWhenCommandActive: false)
-        ];
     }
 
     private static int GetRequiredSelectionCount(string? activeCommand)
