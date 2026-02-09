@@ -70,6 +70,7 @@ public sealed class CadRealtimeSession : ICadRealtimeSession
         ThrowIfDisposed();
         await _transport.DisconnectAsync(cancellationToken).ConfigureAwait(false);
         await _transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        await RecoverFromStoreAsync(cancellationToken, force: true).ConfigureAwait(false);
     }
 
     public ValueTask ResyncAsync(CancellationToken cancellationToken = default)
@@ -332,9 +333,9 @@ public sealed class CadRealtimeSession : ICadRealtimeSession
         CadCollabPresence? Presence,
         double? TimeToLiveSeconds);
 
-    private async ValueTask RecoverFromStoreAsync(CancellationToken cancellationToken)
+    private async ValueTask RecoverFromStoreAsync(CancellationToken cancellationToken, bool force = false)
     {
-        if (_snapshotStore is null || _recoveryLoaded)
+        if (_snapshotStore is null || (_recoveryLoaded && !force))
         {
             return;
         }
@@ -342,7 +343,7 @@ public sealed class CadRealtimeSession : ICadRealtimeSession
         await _recoveryGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_recoveryLoaded)
+            if (_recoveryLoaded && !force)
             {
                 return;
             }

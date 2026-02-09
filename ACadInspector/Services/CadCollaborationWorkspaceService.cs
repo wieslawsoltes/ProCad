@@ -782,7 +782,8 @@ public sealed class CadCollaborationWorkspaceService : ICadCollabControlService,
             return;
         }
 
-        if (!TryGetActiveRealtimeSession(out var realtime))
+        var realtime = await EnsureActiveRealtimeSessionAsync(cancellationToken).ConfigureAwait(false);
+        if (realtime is null)
         {
             _uiService.UpdateConnection(
                 isConnected: false,
@@ -793,12 +794,15 @@ public sealed class CadCollaborationWorkspaceService : ICadCollabControlService,
             return;
         }
 
-        if (realtime is null)
-        {
-            return;
-        }
-
         await realtime.ReconnectAsync(cancellationToken).ConfigureAwait(false);
+        UpdateSnapshotAgeDiagnostics(DateTimeOffset.UtcNow);
+        var conflicts = MapConflicts(realtime.GetConflicts());
+        _uiService.UpdateConflicts(conflicts);
+        _uiService.UpdateDiagnostics(_uiService.Current.Diagnostics with
+        {
+            QueueDepth = conflicts.Length,
+            ResyncRequired = conflicts.Length > 0
+        });
     }
 
     public async ValueTask ResyncAsync(CancellationToken cancellationToken = default)
@@ -808,22 +812,21 @@ public sealed class CadCollaborationWorkspaceService : ICadCollabControlService,
             return;
         }
 
-        if (!TryGetActiveRealtimeSession(out var realtime))
-        {
-            return;
-        }
-
+        var realtime = await EnsureActiveRealtimeSessionAsync(cancellationToken).ConfigureAwait(false);
         if (realtime is null)
         {
             return;
         }
 
         await realtime.ResyncAsync(cancellationToken).ConfigureAwait(false);
-        MarkSessionSynced(realtime, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        MarkSessionSynced(realtime, now);
+        var conflicts = MapConflicts(realtime.GetConflicts());
+        _uiService.UpdateConflicts(conflicts);
         _uiService.UpdateDiagnostics(_uiService.Current.Diagnostics with
         {
-            ResyncRequired = false,
-            QueueDepth = 0,
+            ResyncRequired = conflicts.Length > 0,
+            QueueDepth = conflicts.Length,
             SnapshotAge = TimeSpan.Zero
         });
     }
@@ -835,26 +838,24 @@ public sealed class CadCollaborationWorkspaceService : ICadCollabControlService,
             return false;
         }
 
-        if (!TryGetActiveRealtimeSession(out var realtime))
-        {
-            return false;
-        }
-
+        var realtime = await EnsureActiveRealtimeSessionAsync(cancellationToken).ConfigureAwait(false);
         if (realtime is null)
         {
             return false;
         }
 
         var reapplied = await realtime.ReapplyConflictAsync(conflictId, cancellationToken).ConfigureAwait(false);
+        var conflicts = MapConflicts(realtime.GetConflicts());
+        _uiService.UpdateConflicts(conflicts);
+        _uiService.UpdateDiagnostics(_uiService.Current.Diagnostics with
+        {
+            QueueDepth = conflicts.Length,
+            ResyncRequired = conflicts.Length > 0
+        });
+
         if (reapplied)
         {
-            var mapped = MapConflicts(realtime.GetConflicts());
-            _uiService.UpdateConflicts(mapped);
-            _uiService.UpdateDiagnostics(_uiService.Current.Diagnostics with
-            {
-                QueueDepth = mapped.Length,
-                ResyncRequired = mapped.Length > 0
-            });
+            MarkSessionSynced(realtime, DateTimeOffset.UtcNow);
         }
 
         return reapplied;
@@ -1080,6 +1081,24 @@ public sealed class CadCollaborationWorkspaceService : ICadCollabControlService,
         }
 
         return TryGetRealtimeSession(activeSessionId.Value, out realtimeSession);
+    }
+
+    private async ValueTask<ICadRealtimeSession?> EnsureActiveRealtimeSessionAsync(CancellationToken cancellationToken)
+    {
+        if (TryGetActiveRealtimeSession(out var realtime) &&
+            realtime is not null)
+        {
+            return realtime;
+        }
+
+        var session = ResolveActiveSession();
+        if (session is null)
+        {
+            return null;
+        }
+
+        await EnsureSessionAsync(session, cancellationToken).ConfigureAwait(false);
+        return TryGetActiveRealtimeSession(out realtime) ? realtime : null;
     }
 
     private void OnTransportStateChanged(object? sender, CadRealtimeStateChangedEventArgs args)

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ACadInspector.Collaboration.Contracts;
 using ACadInspector.Collaboration.Presence;
 using ACadInspector.Collaboration.Services;
@@ -15,6 +16,43 @@ namespace ACadInspector.Tests.Services;
 
 public sealed class CadCollaborationWorkspaceServiceTests
 {
+    [Fact]
+    public async Task GetRemoteGhostHints_BulkPresence_CompletesWithinBudget()
+    {
+        const int participantCount = 400;
+        const int budgetMilliseconds = 450;
+
+        var realtime = new FakeRealtimeSession();
+        var service = CreateService(realtime, out _);
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+        await service.EnsureSessionAsync(session);
+
+        for (var index = 0; index < participantCount; index++)
+        {
+            realtime.RaisePresence(new CadCollabPresence(
+                UserId: Guid.NewGuid(),
+                DisplayName: $"Remote-{index}",
+                Color: "#44AAFF",
+                Status: "Editing",
+                ActiveTool: "LINE",
+                PromptStage: "Specify next point",
+                CursorPoint: new CadCollabPoint(index, index),
+                Viewport: null,
+                SelectedEntityIds: null,
+                UpdatedAtUtc: DateTimeOffset.UtcNow,
+                SessionId: session.SessionId.Value));
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var hints = service.GetRemoteGhostHints(session);
+        stopwatch.Stop();
+
+        Assert.True(hints.Count >= participantCount);
+        Assert.True(
+            stopwatch.ElapsedMilliseconds <= budgetMilliseconds,
+            $"Presence hint budget exceeded: {stopwatch.ElapsedMilliseconds} ms > {budgetMilliseconds} ms.");
+    }
+
     [Fact]
     public async Task RemotePresence_BuildsCursorSelectionAndViewportGhostHints()
     {
@@ -137,6 +175,80 @@ public sealed class CadCollaborationWorkspaceServiceTests
         Assert.Equal(1, realtime.ResyncCalls);
         Assert.Equal(conflictId, realtime.LastReapplyConflictId);
         Assert.False(uiService.Current.Diagnostics.ResyncRequired);
+    }
+
+    [Fact]
+    public async Task ReconnectResyncReapply_TargetOnlyActiveSession_WhenMultipleSessionsExist()
+    {
+        var factory = new FactoryCollabService();
+        var service = CreateService(factory, out var uiService);
+        var sessionFactory = new CadEditorSessionFactory();
+        var sessionA = sessionFactory.Create(new CadDocument());
+        var sessionB = sessionFactory.Create(new CadDocument());
+
+        await service.EnsureSessionAsync(sessionA);
+        await service.EnsureSessionAsync(sessionB);
+
+        Assert.Equal(2, factory.Sessions.Count);
+        var realtimeA = factory.Sessions[0];
+        var realtimeB = factory.Sessions[1];
+        realtimeA.ReapplyResult = true;
+        var conflictA = Guid.NewGuid().ToString("D");
+        var conflictB = Guid.NewGuid().ToString("D");
+        realtimeA.RaiseConflicts(
+        [
+            new CadRealtimeConflict(
+                ConflictId: conflictA,
+                EntityKey: "entity:a",
+                Summary: "A conflict",
+                ResolutionPolicy: "Transform + LWW fallback",
+                TimestampUtc: DateTimeOffset.UtcNow)
+        ]);
+        realtimeB.RaiseConflicts(
+        [
+            new CadRealtimeConflict(
+                ConflictId: conflictB,
+                EntityKey: "entity:b",
+                Summary: "B conflict",
+                ResolutionPolicy: "Transform + LWW fallback",
+                TimestampUtc: DateTimeOffset.UtcNow)
+        ]);
+
+        // Switch active context to sessionA before invoking control actions.
+        await service.EnsureSessionAsync(sessionA);
+
+        await service.ReconnectAsync();
+        await service.ResyncAsync();
+        var reapplied = await service.ReapplyConflictAsync(conflictA);
+
+        Assert.True(reapplied);
+        Assert.Equal(1, realtimeA.ReconnectCalls);
+        Assert.Equal(1, realtimeA.ResyncCalls);
+        Assert.Equal(conflictA, realtimeA.LastReapplyConflictId);
+
+        Assert.Equal(0, realtimeB.ReconnectCalls);
+        Assert.Equal(0, realtimeB.ResyncCalls);
+        Assert.Null(realtimeB.LastReapplyConflictId);
+        Assert.False(uiService.Current.Diagnostics.ResyncRequired);
+        Assert.Equal(0, uiService.Current.Diagnostics.QueueDepth);
+    }
+
+    [Fact]
+    public async Task ReconnectAsync_WithoutActiveRealtimeSession_UsesLastActiveSession()
+    {
+        var factory = new FactoryCollabService();
+        var service = CreateService(factory, out var uiService);
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+        await service.EnsureSessionAsync(session);
+        await service.CloseSessionAsync(session);
+
+        await service.ReconnectAsync();
+
+        Assert.Equal(2, factory.Sessions.Count);
+        var realtime = factory.Sessions[1];
+        Assert.Equal(1, realtime.ReconnectCalls);
+        Assert.True(uiService.Current.IsConnected);
+        Assert.Equal("Reconnected", uiService.Current.ConnectionStatus);
     }
 
     [Fact]
@@ -476,6 +588,141 @@ public sealed class CadCollaborationWorkspaceServiceTests
         Assert.Contains(hints, static hint => hint.Kind.StartsWith("RemoteTool", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [MemberData(nameof(RemoteToolPreviewFamilyCases))]
+    public async Task RemotePresence_WithToolPreviewFamilies_MapsToRemoteToolHints(
+        string kind,
+        bool includeEnd,
+        bool includeMid,
+        double? scalar)
+    {
+        var realtime = new FakeRealtimeSession();
+        var service = CreateService(realtime, out _);
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+        await service.EnsureSessionAsync(session);
+
+        var preview = new CadCollabToolPreviewPrimitive(
+            Kind: kind,
+            Start: new CadCollabPoint(1.5, 2.5),
+            End: includeEnd ? new CadCollabPoint(8.5, 9.5) : null,
+            Text: $"{kind}-preview",
+            Mid: includeMid ? new CadCollabPoint(4.5, 5.5) : null,
+            Scalar: scalar);
+
+        realtime.RaisePresence(new CadCollabPresence(
+            UserId: Guid.NewGuid(),
+            DisplayName: "Remote User",
+            Color: "#55AAEE",
+            Status: "Editing",
+            ActiveTool: "TEST",
+            PromptStage: "Specify next point",
+            CursorPoint: new CadCollabPoint(2, 3),
+            Viewport: null,
+            SelectedEntityIds: null,
+            UpdatedAtUtc: DateTimeOffset.UtcNow,
+            ToolPreview: [preview],
+            SessionId: session.SessionId.Value));
+
+        var hints = service.GetRemoteGhostHints(session);
+        var mapped = Assert.Single(
+            hints,
+            hint => string.Equals(hint.Kind, $"RemoteTool{kind}", StringComparison.Ordinal));
+        Assert.Equal(1.5f, mapped.Anchor.X);
+        Assert.Equal(2.5f, mapped.Anchor.Y);
+        Assert.Equal("#55AAEE", mapped.Color);
+        Assert.NotNull(mapped.Text);
+        Assert.Contains("Remote User", mapped.Text!, StringComparison.Ordinal);
+
+        if (includeEnd)
+        {
+            Assert.True(mapped.SecondaryAnchor.HasValue);
+            Assert.Equal(8.5f, mapped.SecondaryAnchor!.Value.X);
+            Assert.Equal(9.5f, mapped.SecondaryAnchor!.Value.Y);
+        }
+        else
+        {
+            Assert.Null(mapped.SecondaryAnchor);
+        }
+
+        if (includeMid)
+        {
+            Assert.True(mapped.TertiaryAnchor.HasValue);
+            Assert.Equal(4.5f, mapped.TertiaryAnchor!.Value.X);
+            Assert.Equal(5.5f, mapped.TertiaryAnchor!.Value.Y);
+        }
+        else
+        {
+            Assert.Null(mapped.TertiaryAnchor);
+        }
+
+        if (scalar is { } scalarValue)
+        {
+            Assert.Equal((float)scalarValue, mapped.Scalar);
+        }
+        else
+        {
+            Assert.Null(mapped.Scalar);
+        }
+    }
+
+    [Fact]
+    public async Task RemotePresence_ToolPreviewAcrossPromptStages_UsesLatestPromptAndPreview()
+    {
+        var realtime = new FakeRealtimeSession();
+        var service = CreateService(realtime, out var uiService);
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+        await service.EnsureSessionAsync(session);
+
+        var remoteUserId = Guid.NewGuid();
+        realtime.RaisePresence(new CadCollabPresence(
+            UserId: remoteUserId,
+            DisplayName: "Remote User",
+            Color: "#9966FF",
+            Status: "Editing",
+            ActiveTool: "ARC",
+            PromptStage: "Specify second point",
+            CursorPoint: new CadCollabPoint(1, 1),
+            Viewport: null,
+            SelectedEntityIds: null,
+            UpdatedAtUtc: DateTimeOffset.UtcNow,
+            ToolPreview:
+            [
+                new CadCollabToolPreviewPrimitive(
+                    Kind: "PreviewLine",
+                    Start: new CadCollabPoint(0, 0),
+                    End: new CadCollabPoint(4, 0))
+            ],
+            SessionId: session.SessionId.Value));
+
+        realtime.RaisePresence(new CadCollabPresence(
+            UserId: remoteUserId,
+            DisplayName: "Remote User",
+            Color: "#9966FF",
+            Status: "Editing",
+            ActiveTool: "ARC",
+            PromptStage: "Specify end angle",
+            CursorPoint: new CadCollabPoint(2, 3),
+            Viewport: null,
+            SelectedEntityIds: null,
+            UpdatedAtUtc: DateTimeOffset.UtcNow.AddMilliseconds(10),
+            ToolPreview:
+            [
+                new CadCollabToolPreviewPrimitive(
+                    Kind: "PreviewArc",
+                    Start: new CadCollabPoint(1, 1),
+                    End: new CadCollabPoint(5, 3),
+                    Mid: new CadCollabPoint(3, 4))
+            ],
+            SessionId: session.SessionId.Value));
+
+        var hints = service.GetRemoteGhostHints(session);
+        Assert.DoesNotContain(hints, static hint => string.Equals(hint.Kind, "RemoteToolPreviewLine", StringComparison.Ordinal));
+        Assert.Contains(hints, static hint => string.Equals(hint.Kind, "RemoteToolPreviewArc", StringComparison.Ordinal));
+
+        var participant = Assert.Single(uiService.Current.Participants, participant => participant.UserId == remoteUserId);
+        Assert.Equal("Specify end angle", participant.PromptStage);
+    }
+
     [Fact]
     public async Task ConnectionState_UsesConfiguredAuthAndTransportModes()
     {
@@ -498,6 +745,21 @@ public sealed class CadCollaborationWorkspaceServiceTests
 
         Assert.Equal("Bearer", uiService.Current.AuthMode);
         Assert.Equal("WebSocket", uiService.Current.TransportMode);
+    }
+
+    public static IEnumerable<object?[]> RemoteToolPreviewFamilyCases()
+    {
+        yield return ["PreviewLine", true, false, (double?)null];
+        yield return ["PreviewArc", true, true, 22.5];
+        yield return ["PreviewCircle", true, false, 5.0];
+        yield return ["PreviewPolyline", true, true, (double?)null];
+        yield return ["PreviewText", false, false, (double?)null];
+        yield return ["PreviewDim", true, false, 120.0];
+        yield return ["PreviewLeader", true, true, (double?)null];
+        yield return ["PreviewHatch", true, false, (double?)null];
+        yield return ["PreviewInsert", false, false, (double?)null];
+        yield return ["PreviewEllipse", true, true, 0.75];
+        yield return ["PreviewSpline", true, true, (double?)null];
     }
 
     private static CadCollaborationWorkspaceService CreateService(

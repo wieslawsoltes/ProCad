@@ -277,6 +277,176 @@ public sealed class CadRealtimeSessionTests
         Assert.Equal(1_025, recoveredRealtime.Version);
     }
 
+    [Fact]
+    public async Task ReconnectAsync_MultiClientReplayFromSharedStore_AppliesOnlyMissedBatches()
+    {
+        var snapshotStore = new InMemoryCadCollabSnapshotStore();
+        var hub = new InMemoryTransportHub();
+        var sessionA = new FakeCadEditorSession();
+        var sessionB = new FakeCadEditorSession();
+        var coordinatorA = new CadCollabSessionCoordinator(sessionA, new CadCollabOpHistory());
+        var coordinatorB = new CadCollabSessionCoordinator(sessionB, new CadCollabOpHistory());
+        await using var realtimeA = new CadRealtimeSession(Guid.NewGuid(), coordinatorA, hub.CreateTransport(), snapshotStore);
+        await using var realtimeB = new CadRealtimeSession(Guid.NewGuid(), coordinatorB, hub.CreateTransport(), snapshotStore);
+
+        await realtimeA.ConnectAsync();
+        await realtimeB.ConnectAsync();
+
+        await realtimeA.SubmitLocalAppliedAsync(
+        [
+            new CadOperation(
+                CadOperationKind.UpdateProperty,
+                EntityId: null,
+                Payload: new Dictionary<string, string> { ["Layer"] = "A-WALL" })
+        ]);
+
+        Assert.Equal(1, sessionB.ApplyCallCount);
+        Assert.Equal(1, realtimeB.Version);
+
+        await realtimeB.DisconnectAsync();
+
+        await realtimeA.SubmitLocalAppliedAsync(
+        [
+            new CadOperation(
+                CadOperationKind.UpdateProperty,
+                EntityId: null,
+                Payload: new Dictionary<string, string> { ["Layer"] = "A-ANNO" })
+        ]);
+
+        Assert.Equal(1, sessionB.ApplyCallCount);
+
+        await realtimeB.ReconnectAsync();
+
+        Assert.Equal(2, sessionB.ApplyCallCount);
+        Assert.Equal(2, realtimeB.Version);
+
+        await realtimeB.ReconnectAsync();
+
+        Assert.Equal(2, sessionB.ApplyCallCount);
+        Assert.Equal(2, realtimeB.Version);
+    }
+
+    private sealed class InMemoryTransportHub
+    {
+        private readonly object _sync = new();
+        private readonly List<InMemoryHubTransport> _transports = new();
+
+        public InMemoryHubTransport CreateTransport()
+        {
+            var transport = new InMemoryHubTransport(this);
+            lock (_sync)
+            {
+                _transports.Add(transport);
+            }
+
+            return transport;
+        }
+
+        public void Remove(InMemoryHubTransport transport)
+        {
+            lock (_sync)
+            {
+                _transports.Remove(transport);
+            }
+        }
+
+        public void Broadcast(InMemoryHubTransport sender, ReadOnlyMemory<byte> payload)
+        {
+            InMemoryHubTransport[] transports;
+            lock (_sync)
+            {
+                transports = _transports.ToArray();
+            }
+
+            foreach (var transport in transports)
+            {
+                if (ReferenceEquals(transport, sender) || !transport.IsConnected)
+                {
+                    continue;
+                }
+
+                transport.RaiseMessage(payload);
+            }
+        }
+    }
+
+    private sealed class InMemoryHubTransport : ICadRealtimeTransport
+    {
+        private readonly InMemoryTransportHub _hub;
+        private bool _disposed;
+
+        public InMemoryHubTransport(InMemoryTransportHub hub)
+        {
+            _hub = hub;
+        }
+
+        public bool IsConnected { get; private set; }
+
+        public event EventHandler<CadRealtimeMessageEventArgs>? MessageReceived;
+        public event EventHandler<CadRealtimeStateChangedEventArgs>? StateChanged;
+
+        public ValueTask ConnectAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed)
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            IsConnected = true;
+            StateChanged?.Invoke(this, new CadRealtimeStateChangedEventArgs(CadRealtimeTransportState.Connected, "Connected"));
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisconnectAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed)
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            IsConnected = false;
+            StateChanged?.Invoke(this, new CadRealtimeStateChangedEventArgs(CadRealtimeTransportState.Disconnected, "Disconnected"));
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask SendAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed || !IsConnected)
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            _hub.Broadcast(this, payload);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            _disposed = true;
+            IsConnected = false;
+            _hub.Remove(this);
+            return ValueTask.CompletedTask;
+        }
+
+        public void RaiseMessage(ReadOnlyMemory<byte> payload)
+        {
+            if (_disposed || !IsConnected)
+            {
+                return;
+            }
+
+            MessageReceived?.Invoke(this, new CadRealtimeMessageEventArgs(payload));
+        }
+    }
+
     private sealed class FakeCadEditorSession : ICadEditorSession
     {
         private long _revision;
