@@ -105,10 +105,10 @@ public sealed class RenderMissingEntityTests
 
         var shape = new Shape(style)
         {
-            ShapeNumber = 1,
             InsertionPoint = XYZ.Zero,
             Size = 2.0
         };
+        CadShapeCompatibility.SetShapeNumberForTests(shape, 1);
         document.Entities.Add(shape);
 
         var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings

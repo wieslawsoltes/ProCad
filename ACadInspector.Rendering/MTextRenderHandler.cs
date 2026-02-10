@@ -279,24 +279,24 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             return Array.Empty<MTextColumnLayout>();
         }
 
-        var column = text.Column;
-        if (column is null || column.ColumnType == ColumnType.NoColumns)
+        var column = text.ColumnData;
+        if (!text.HasColumns || column.ColumnType == ColumnType.NoColumns)
         {
             var width = MaxLineWidth(lines);
             var height = SumLineHeight(lines);
             return new[] { new MTextColumnLayout(lines, width, height) };
         }
 
-        var columnWidth = column.ColumnWidth > 0 ? (float)column.ColumnWidth * scale : 0f;
-        columnGutter = MathF.Max(0f, (float)column.ColumnGutter * scale);
+        var columnWidth = column.Width > 0 ? (float)column.Width * scale : 0f;
+        columnGutter = MathF.Max(0f, (float)column.Gutter * scale);
         var columnCount = column.ColumnCount > 0 ? column.ColumnCount : 1;
-        var useHeights = column.ColumnHeights.Count >= columnCount;
+        var useHeights = !column.AutoHeight && column.Heights.Count >= columnCount;
         var columns = new List<MTextColumnLayout>(columnCount);
 
         var currentLines = new List<MTextLineLayout>();
         var currentHeight = 0f;
         var columnIndex = 0;
-        var maxHeight = useHeights ? (float)column.ColumnHeights[columnIndex] * scale : float.PositiveInfinity;
+        var maxHeight = useHeights ? (float)column.Heights[columnIndex] * scale : float.PositiveInfinity;
 
         foreach (var line in lines)
         {
@@ -308,7 +308,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
                 columnIndex++;
                 currentLines = new List<MTextLineLayout>();
                 currentHeight = 0f;
-                maxHeight = useHeights ? (float)column.ColumnHeights[columnIndex] * scale : float.PositiveInfinity;
+                maxHeight = useHeights ? (float)column.Heights[columnIndex] * scale : float.PositiveInfinity;
             }
 
             currentLines.Add(line);
@@ -321,7 +321,7 @@ public sealed class MTextRenderHandler : IRenderEntityHandler
             columns.Add(new MTextColumnLayout(currentLines.ToArray(), width, currentHeight));
         }
 
-        if (column.ColumnFlowReversed || text.DrawingDirection == DrawingDirectionType.RightToLeft)
+        if (column.FlowReversed || text.DrawingDirection == DrawingDirectionType.RightToLeft)
         {
             columns.Reverse();
         }

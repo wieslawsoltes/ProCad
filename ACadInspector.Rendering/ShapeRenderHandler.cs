@@ -23,12 +23,12 @@ public sealed class ShapeRenderHandler : IRenderEntityHandler
             return;
         }
 
-        if (shape.ShapeNumber == 0)
+        if (!CadShapeCompatibility.TryGetShapeNumber(shape, out var shapeNumber))
         {
             return;
         }
 
-        if (!context.ShapeResolver.TryResolveShape(shapeFile, (short)shape.ShapeNumber, context.Settings, out var geometry))
+        if (!context.ShapeResolver.TryResolveShape(shapeFile, shapeNumber, context.Settings, out var geometry))
         {
             return;
         }
