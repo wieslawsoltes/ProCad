@@ -118,7 +118,8 @@ public sealed class CadSkiaRenderService
             }
         }
 
-        RenderScene(canvas, size, state, isInteractive, includeAnnotations: true, includeDebugOverlay: true);
+        RenderScene(canvas, size, state, isInteractive, includeAnnotations: false, includeDebugOverlay: false);
+        DrawOverlays(canvas, state);
     }
 
     private void RenderScene(
@@ -214,8 +215,8 @@ public sealed class CadSkiaRenderService
         canvas.Concat(ref matrix);
 
         DrawAnnotations(canvas, state);
-        DrawOverlayScene(canvas, state.OverlayScene);
-        DrawDynamicInputWorld(canvas, state.DynamicInput);
+        DrawOverlayScene(canvas, state.OverlayScene, state);
+        DrawDynamicInputWorld(canvas, state.DynamicInput, state);
 
         if (state.ShowDebugOverlay)
         {
@@ -230,7 +231,7 @@ public sealed class CadSkiaRenderService
         }
     }
 
-    private static void DrawOverlayScene(SKCanvas canvas, RenderOverlayScene overlayScene)
+    private static void DrawOverlayScene(SKCanvas canvas, RenderOverlayScene overlayScene, CadRenderStateSnapshot state)
     {
         if (overlayScene.Primitives.Count == 0)
         {
@@ -242,38 +243,41 @@ public sealed class CadSkiaRenderService
             switch (primitive.Kind)
             {
                 case RenderOverlayPrimitiveKind.PointMarker:
+                    var pointStroke = ResolveOverlayStrokeWidth(primitive, state);
+                    var pointRadius = ResolveOverlayMarkerRadius(primitive, state);
                     using (var paint = new SKPaint
                            {
                                IsAntialias = true,
                                Color = ToSkiaColor(primitive.Color),
                                Style = SKPaintStyle.Stroke,
-                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
-                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                               StrokeWidth = pointStroke,
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
                            })
                     {
-                        canvas.DrawCircle(primitive.Start.X, primitive.Start.Y, Math.Max(2f, primitive.MarkerRadius), paint);
+                        canvas.DrawCircle(primitive.Start.X, primitive.Start.Y, pointRadius, paint);
                         canvas.DrawLine(
-                            primitive.Start.X - primitive.MarkerRadius,
+                            primitive.Start.X - pointRadius,
                             primitive.Start.Y,
-                            primitive.Start.X + primitive.MarkerRadius,
+                            primitive.Start.X + pointRadius,
                             primitive.Start.Y,
                             paint);
                         canvas.DrawLine(
                             primitive.Start.X,
-                            primitive.Start.Y - primitive.MarkerRadius,
+                            primitive.Start.Y - pointRadius,
                             primitive.Start.X,
-                            primitive.Start.Y + primitive.MarkerRadius,
+                            primitive.Start.Y + pointRadius,
                             paint);
                     }
                     break;
                 case RenderOverlayPrimitiveKind.Line:
+                    var lineStroke = ResolveOverlayStrokeWidth(primitive, state);
                     using (var paint = new SKPaint
                            {
                                IsAntialias = true,
                                Color = ToSkiaColor(primitive.Color),
                                Style = SKPaintStyle.Stroke,
-                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
-                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                               StrokeWidth = lineStroke,
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
                            })
                     {
                         canvas.DrawLine(primitive.Start.X, primitive.Start.Y, primitive.End.X, primitive.End.Y, paint);
@@ -281,13 +285,14 @@ public sealed class CadSkiaRenderService
                     break;
                 case RenderOverlayPrimitiveKind.Rectangle:
                 case RenderOverlayPrimitiveKind.FilledRectangle:
+                    var rectStroke = ResolveOverlayStrokeWidth(primitive, state);
                     using (var paint = new SKPaint
                            {
                                IsAntialias = true,
                                Color = ToSkiaColor(primitive.Color),
                                Style = SKPaintStyle.Stroke,
-                               StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
-                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+                               StrokeWidth = rectStroke,
+                               PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
                            })
                     {
                         var rect = SKRect.Create(
@@ -311,10 +316,13 @@ public sealed class CadSkiaRenderService
                     }
                     break;
                 case RenderOverlayPrimitiveKind.SquareMarker:
-                    DrawSquareMarker(canvas, primitive);
+                    DrawSquareMarker(canvas, primitive, state);
                     break;
                 case RenderOverlayPrimitiveKind.DiamondMarker:
-                    DrawDiamondMarker(canvas, primitive);
+                    DrawDiamondMarker(canvas, primitive, state);
+                    break;
+                case RenderOverlayPrimitiveKind.CrossMarker:
+                    DrawCrossMarker(canvas, primitive, state);
                     break;
                 case RenderOverlayPrimitiveKind.Text:
                     if (string.IsNullOrWhiteSpace(primitive.Text))
@@ -322,52 +330,82 @@ public sealed class CadSkiaRenderService
                         break;
                     }
 
+                    var textSize = PixelsToWorld(12f, state);
+                    var textPadding = PixelsToWorld(3f, state);
+                    var textCorner = PixelsToWorld(3f, state);
+                    var anchor = primitive.End != primitive.Start
+                        ? primitive.End
+                        : primitive.Start;
+                    var textPosition = primitive.End != primitive.Start
+                        ? anchor + new Vector2(
+                            PixelsToWorld(primitive.Start.X, state),
+                            PixelsToWorld(primitive.Start.Y, state))
+                        : anchor;
                     using (var paint = new SKPaint
                            {
                                IsAntialias = true,
                                Color = ToSkiaColor(primitive.Color),
                                Style = SKPaintStyle.Fill,
-                               TextSize = 12f
+                               TextSize = textSize
                            })
                     {
                         if (primitive.FillColor is { } backgroundColor)
                         {
                             var bounds = new SKRect();
                             paint.MeasureText(primitive.Text, ref bounds);
+                            var baselineY = textPosition.Y;
                             var rect = new SKRect(
-                                primitive.Start.X - 3f,
-                                primitive.Start.Y - bounds.Height - 3f,
-                                primitive.Start.X + bounds.Width + 4f,
-                                primitive.Start.Y + 2f);
+                                textPosition.X - textPadding,
+                                textPosition.Y - bounds.Height - textPadding,
+                                textPosition.X + bounds.Width + textPadding,
+                                textPosition.Y + textPadding * 0.7f);
                             using var background = new SKPaint
                             {
                                 IsAntialias = true,
                                 Color = ToSkiaColor(backgroundColor),
                                 Style = SKPaintStyle.Fill
                             };
-                            canvas.DrawRoundRect(rect, 3f, 3f, background);
+                            canvas.DrawRoundRect(rect, textCorner, textCorner, background);
+
+                            canvas.Save();
+                            canvas.Translate(0f, baselineY);
+                            canvas.Scale(1f, -1f);
+                            canvas.Translate(0f, -baselineY);
+                            canvas.DrawText(primitive.Text, textPosition.X, baselineY, paint);
+                            canvas.Restore();
+                            break;
                         }
 
-                        canvas.DrawText(primitive.Text, primitive.Start.X, primitive.Start.Y, paint);
+                        var textBaselineY = textPosition.Y;
+                        canvas.Save();
+                        canvas.Translate(0f, textBaselineY);
+                        canvas.Scale(1f, -1f);
+                        canvas.Translate(0f, -textBaselineY);
+                        canvas.DrawText(primitive.Text, textPosition.X, textBaselineY, paint);
+                        canvas.Restore();
                     }
                     break;
             }
         }
     }
 
-    private static SKPathEffect? CreateOverlayPathEffect(RenderOverlayStrokeStyle strokeStyle)
+    private static SKPathEffect? CreateOverlayPathEffect(RenderOverlayStrokeStyle strokeStyle, CadRenderStateSnapshot state)
     {
+        var dash = Math.Max(PixelsToWorld(8f, state), 1e-4f);
+        var gap = Math.Max(PixelsToWorld(6f, state), 1e-4f);
+        var dot = Math.Max(PixelsToWorld(2f, state), 1e-4f);
+        var dotGap = Math.Max(PixelsToWorld(5f, state), 1e-4f);
         return strokeStyle switch
         {
-            RenderOverlayStrokeStyle.Dashed => SKPathEffect.CreateDash([8f, 6f], 0f),
-            RenderOverlayStrokeStyle.Dotted => SKPathEffect.CreateDash([2f, 5f], 0f),
+            RenderOverlayStrokeStyle.Dashed => SKPathEffect.CreateDash([dash, gap], 0f),
+            RenderOverlayStrokeStyle.Dotted => SKPathEffect.CreateDash([dot, dotGap], 0f),
             _ => null
         };
     }
 
-    private static void DrawSquareMarker(SKCanvas canvas, RenderOverlayPrimitive primitive)
+    private static void DrawSquareMarker(SKCanvas canvas, RenderOverlayPrimitive primitive, CadRenderStateSnapshot state)
     {
-        var radius = Math.Max(2f, primitive.MarkerRadius);
+        var radius = ResolveOverlayMarkerRadius(primitive, state);
         var rect = SKRect.Create(
             primitive.Start.X - radius,
             primitive.Start.Y - radius,
@@ -390,15 +428,15 @@ public sealed class CadSkiaRenderService
             IsAntialias = true,
             Color = ToSkiaColor(primitive.Color),
             Style = SKPaintStyle.Stroke,
-            StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
-            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+            StrokeWidth = ResolveOverlayStrokeWidth(primitive, state),
+            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
         };
         canvas.DrawRect(rect, strokePaint);
     }
 
-    private static void DrawDiamondMarker(SKCanvas canvas, RenderOverlayPrimitive primitive)
+    private static void DrawDiamondMarker(SKCanvas canvas, RenderOverlayPrimitive primitive, CadRenderStateSnapshot state)
     {
-        var radius = Math.Max(2f, primitive.MarkerRadius);
+        var radius = ResolveOverlayMarkerRadius(primitive, state);
         using var path = new SKPath();
         path.MoveTo(primitive.Start.X, primitive.Start.Y - radius);
         path.LineTo(primitive.Start.X + radius, primitive.Start.Y);
@@ -422,13 +460,40 @@ public sealed class CadSkiaRenderService
             IsAntialias = true,
             Color = ToSkiaColor(primitive.Color),
             Style = SKPaintStyle.Stroke,
-            StrokeWidth = Math.Max(1f, primitive.StrokeWidth),
-            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle)
+            StrokeWidth = ResolveOverlayStrokeWidth(primitive, state),
+            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
         };
         canvas.DrawPath(path, strokePaint);
     }
 
-    private static void DrawDynamicInputWorld(SKCanvas canvas, CadDynamicInputPayload? dynamicInput)
+    private static void DrawCrossMarker(SKCanvas canvas, RenderOverlayPrimitive primitive, CadRenderStateSnapshot state)
+    {
+        var radius = ResolveOverlayMarkerRadius(primitive, state);
+        using var strokePaint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = ToSkiaColor(primitive.Color),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = ResolveOverlayStrokeWidth(primitive, state),
+            StrokeCap = SKStrokeCap.Round,
+            PathEffect = CreateOverlayPathEffect(primitive.StrokeStyle, state)
+        };
+
+        canvas.DrawLine(
+            primitive.Start.X - radius,
+            primitive.Start.Y - radius,
+            primitive.Start.X + radius,
+            primitive.Start.Y + radius,
+            strokePaint);
+        canvas.DrawLine(
+            primitive.Start.X - radius,
+            primitive.Start.Y + radius,
+            primitive.Start.X + radius,
+            primitive.Start.Y - radius,
+            strokePaint);
+    }
+
+    private static void DrawDynamicInputWorld(SKCanvas canvas, CadDynamicInputPayload? dynamicInput, CadRenderStateSnapshot state)
     {
         if (dynamicInput?.Anchor is not { } anchor)
         {
@@ -441,6 +506,9 @@ public sealed class CadSkiaRenderService
             return;
         }
 
+        var padding = PixelsToWorld(5f, state);
+        var offset = PixelsToWorld(4f, state);
+        var corner = PixelsToWorld(3f, state);
         using var background = new SKPaint
         {
             IsAntialias = true,
@@ -452,18 +520,38 @@ public sealed class CadSkiaRenderService
             IsAntialias = true,
             Color = SKColors.White,
             Style = SKPaintStyle.Fill,
-            TextSize = 11f
+            TextSize = PixelsToWorld(11f, state)
         };
 
         var bounds = new SKRect();
         textPaint.MeasureText(content, ref bounds);
         var rect = new SKRect(
-            anchor.X + 4f,
-            anchor.Y - bounds.Height - 8f,
-            anchor.X + 4f + bounds.Width + 10f,
-            anchor.Y + 2f);
-        canvas.DrawRoundRect(rect, 3f, 3f, background);
-        canvas.DrawText(content, rect.Left + 5f, rect.Bottom - 4f, textPaint);
+            anchor.X + offset,
+            anchor.Y - bounds.Height - (padding + offset),
+            anchor.X + offset + bounds.Width + (padding * 2f),
+            anchor.Y + (padding * 0.4f));
+        canvas.DrawRoundRect(rect, corner, corner, background);
+        var baselineY = rect.Bottom - padding;
+        canvas.Save();
+        canvas.Translate(0f, baselineY);
+        canvas.Scale(1f, -1f);
+        canvas.Translate(0f, -baselineY);
+        canvas.DrawText(content, rect.Left + padding, baselineY, textPaint);
+        canvas.Restore();
+    }
+
+    private static float ResolveOverlayStrokeWidth(RenderOverlayPrimitive primitive, CadRenderStateSnapshot state)
+    {
+        return Math.Max(
+            PixelsToWorld(1f, state),
+            PixelsToWorld(Math.Max(1f, primitive.StrokeWidth), state));
+    }
+
+    private static float ResolveOverlayMarkerRadius(RenderOverlayPrimitive primitive, CadRenderStateSnapshot state)
+    {
+        return Math.Max(
+            PixelsToWorld(2f, state),
+            PixelsToWorld(Math.Max(2f, primitive.MarkerRadius), state));
     }
 
     private static void DrawDynamicInputScreen(SKCanvas canvas, CadDynamicInputPayload dynamicInput)
