@@ -93,10 +93,22 @@ public sealed class CadCommandRuntime : ICadCommandRuntime
         }
 
         var token = commandName.Trim();
+        var message = "Specify first point or option.";
+        if (_registry.TryResolve(token, out var handler))
+        {
+            token = handler.Name;
+        }
+        else
+        {
+            message = string.Create(
+                CultureInfo.InvariantCulture,
+                $"Started {token.ToUpperInvariant()}.");
+        }
+
         _activeCommand = token;
         _activeTokenSession = new PromptTokenSession(token);
         _activeInput = _activeTokenSession.BuildInput();
-        State = BuildState(_activeInput, _activeInput.Length, "Specify first point or option.");
+        State = BuildState(_activeInput, _activeInput.Length, message);
         OnStateChanged();
     }
 
@@ -193,6 +205,18 @@ public sealed class CadCommandRuntime : ICadCommandRuntime
     {
         if (string.IsNullOrWhiteSpace(token.Value))
         {
+            if (commit)
+            {
+                if (_activeTokenSession is null || _activeTokenSession.TokenCount == 0)
+                {
+                    Cancel();
+                    return new CadPromptResolution(true, null, State);
+                }
+
+                _activeInput = _activeTokenSession.BuildInput();
+                return await SubmitAsync(_activeInput, session, cancellationToken).ConfigureAwait(false);
+            }
+
             return new CadPromptResolution(false, null, State);
         }
 
@@ -536,10 +560,6 @@ public sealed class CadCommandRuntime : ICadCommandRuntime
         var activeParameter = ResolveActiveParameterIndex(input, normalizedCursor);
 
         var activeCommand = _activeCommand;
-        if (string.IsNullOrWhiteSpace(activeCommand) && _registry.TryParse(input, out var parsedCommand, out _))
-        {
-            activeCommand = parsedCommand;
-        }
 
         return new CadPromptState(
             Prompt: string.IsNullOrWhiteSpace(activeCommand) ? "Command" : $"{activeCommand}",

@@ -612,7 +612,7 @@ public sealed class LeaderCadCommand : CadAnnotationCadCommandBase
             [
                 new CadCommandParameterDescriptor("p1", CadCommandParameterKind.Coordinate, Description: "Leader start point"),
                 new CadCommandParameterDescriptor("p2", CadCommandParameterKind.Coordinate, Description: "Leader landing point"),
-                new CadCommandParameterDescriptor("pN", CadCommandParameterKind.Coordinate, IsOptional: true, Description: "Optional extra vertices")
+                new CadCommandParameterDescriptor("p3+", CadCommandParameterKind.Coordinate, IsOptional: true, IsVariadic: true, Description: "Optional extra vertices")
             ],
             keywords:
             [
@@ -621,7 +621,7 @@ public sealed class LeaderCadCommand : CadAnnotationCadCommandBase
                 new CadCommandKeywordDescriptor("Undo")
             ],
             minimumPoints: 2,
-            maximumPoints: 8)
+            maximumPoints: int.MaxValue)
     {
     }
 
@@ -659,7 +659,7 @@ public sealed class MLeaderCadCommand : CadAnnotationCadCommandBase
             [
                 new CadCommandParameterDescriptor("p1", CadCommandParameterKind.Coordinate, Description: "Leader start point"),
                 new CadCommandParameterDescriptor("p2", CadCommandParameterKind.Coordinate, Description: "Leader landing point"),
-                new CadCommandParameterDescriptor("pN", CadCommandParameterKind.Coordinate, IsOptional: true, Description: "Optional extra vertices")
+                new CadCommandParameterDescriptor("p3+", CadCommandParameterKind.Coordinate, IsOptional: true, IsVariadic: true, Description: "Optional extra vertices")
             ],
             keywords:
             [
@@ -668,7 +668,7 @@ public sealed class MLeaderCadCommand : CadAnnotationCadCommandBase
                 new CadCommandKeywordDescriptor("Landing")
             ],
             minimumPoints: 2,
-            maximumPoints: 8)
+            maximumPoints: int.MaxValue)
     {
     }
 

@@ -15,13 +15,15 @@ public abstract class CadPointPickInteractiveCommandAdapter :
 {
     private readonly string[] _stagePrompts;
     private readonly HashSet<string> _keywords;
+    private readonly bool _continueUntilExplicitCommit;
     private readonly Dictionary<Guid, AdapterState> _states = new();
     private readonly object _sync = new();
 
     protected CadPointPickInteractiveCommandAdapter(
         string commandName,
         IReadOnlyList<string> stagePrompts,
-        IReadOnlyList<string>? keywords = null)
+        IReadOnlyList<string>? keywords = null,
+        bool continueUntilExplicitCommit = false)
     {
         if (string.IsNullOrWhiteSpace(commandName))
         {
@@ -45,6 +47,7 @@ public abstract class CadPointPickInteractiveCommandAdapter :
         _keywords = keywords is null
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(keywords.Where(static keyword => !string.IsNullOrWhiteSpace(keyword)), StringComparer.OrdinalIgnoreCase);
+        _continueUntilExplicitCommit = continueUntilExplicitCommit;
     }
 
     public string CommandName { get; }
@@ -59,6 +62,19 @@ public abstract class CadPointPickInteractiveCommandAdapter :
         ArgumentNullException.ThrowIfNull(runtime);
         if (string.IsNullOrWhiteSpace(token.Value))
         {
+            if (commit)
+            {
+                var resolution = await runtime
+                    .SubmitTokenAsync(token, session, commit: true, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!resolution.State.IsActive)
+                {
+                    ResetPreview(session);
+                }
+
+                return resolution;
+            }
+
             return new CadPromptResolution(Handled: false, Result: null, runtime.State);
         }
 
@@ -67,7 +83,9 @@ public abstract class CadPointPickInteractiveCommandAdapter :
         {
             var state = GetOrCreateState(session);
             state.PickedPoints.Add(point);
-            var commitNow = commit || state.PickedPoints.Count >= _stagePrompts.Length;
+            var commitNow = commit ||
+                            (!_continueUntilExplicitCommit &&
+                             state.PickedPoints.Count >= _stagePrompts.Length);
 
             var resolution = await runtime
                 .SubmitTokenAsync(token, session, commitNow, cancellationToken)
@@ -85,7 +103,7 @@ public abstract class CadPointPickInteractiveCommandAdapter :
             _keywords.Contains(token.Value))
         {
             return await runtime
-                .SubmitTokenAsync(new CadPromptToken(CadPromptTokenType.Keyword, token.Value), session, commit: false, cancellationToken)
+                .SubmitTokenAsync(new CadPromptToken(CadPromptTokenType.Keyword, token.Value), session, commit, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -350,7 +368,8 @@ public sealed class LeaderInteractiveCommandAdapter : CadPointPickInteractiveCom
                 "Annotation",
                 "Format",
                 "Undo"
-            ])
+            ],
+            continueUntilExplicitCommit: true)
     {
     }
 }
@@ -370,7 +389,8 @@ public sealed class MLeaderInteractiveCommandAdapter : CadPointPickInteractiveCo
                 "Content",
                 "Style",
                 "Landing"
-            ])
+            ],
+            continueUntilExplicitCommit: true)
     {
     }
 }
@@ -885,7 +905,8 @@ public sealed class PlineInteractiveCommandAdapter : CadPointPickInteractiveComm
             [
                 "Close",
                 "Undo"
-            ])
+            ],
+            continueUntilExplicitCommit: true)
     {
     }
 }
@@ -2291,7 +2312,8 @@ public sealed class SplineInteractiveCommandAdapter : CadPointPickInteractiveCom
             keywords:
             [
                 "Close"
-            ])
+            ],
+            continueUntilExplicitCommit: true)
     {
     }
 }

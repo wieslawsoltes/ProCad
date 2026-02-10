@@ -225,7 +225,7 @@ public sealed class CadInteractiveCommandAdaptersTests
     }
 
     [Fact]
-    public async Task SplineAdapter_CommitsAfterSecondPickedPoint()
+    public async Task SplineAdapter_ContinuesCollectingPointsUntilExplicitCommit()
     {
         var commandRegistry = new CadCommandRegistry();
         commandRegistry.Register(new SplineCadCommand());
@@ -246,11 +246,175 @@ public sealed class CadInteractiveCommandAdaptersTests
             new CadPromptToken(CadPromptTokenType.Coordinate, "5,3"),
             session,
             commit: false);
+        var third = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "10,0"),
+            session,
+            commit: false);
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(second.Handled);
+        Assert.Null(second.Result);
+        Assert.True(third.Handled);
+        Assert.Null(third.Result);
+        Assert.True(runtime.State.IsActive);
+
+        var commit = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(commit.Result?.Success);
+        Assert.Contains("Created SPLINE", commit.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        var spline = Assert.Single(session.Document.Entities.OfType<Spline>());
+        Assert.True(spline.FitPoints.Count >= 3);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task PlineAdapter_ContinuesCollectingVerticesUntilExplicitCommit()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new PlineCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new PlineInteractiveCommandAdapter();
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+
+        runtime.BeginCommand("PLINE");
+
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "0,0"),
+            session,
+            commit: false);
+        var second = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "5,0"),
+            session,
+            commit: false);
+        var third = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "5,4"),
+            session,
+            commit: false);
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(second.Handled);
+        Assert.Null(second.Result);
+        Assert.True(third.Handled);
+        Assert.Null(third.Result);
+        Assert.True(runtime.State.IsActive);
+
+        var commit = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(commit.Result?.Success);
+        Assert.Contains("Created PLINE", commit.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, polyline.Vertices.Count);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task LeaderAdapter_ContinuesCollectingVerticesUntilExplicitCommit()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LeaderCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new LeaderInteractiveCommandAdapter();
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+
+        runtime.BeginCommand("LEADER");
+
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "0,0"),
+            session,
+            commit: false);
+        var second = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "5,0"),
+            session,
+            commit: false);
+        var third = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "8,3"),
+            session,
+            commit: false);
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(second.Handled);
+        Assert.Null(second.Result);
+        Assert.True(third.Handled);
+        Assert.Null(third.Result);
+        Assert.True(runtime.State.IsActive);
+
+        var commit = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(commit.Result?.Success);
+        Assert.Contains("Created LEADER", commit.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, polyline.Vertices.Count);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task MLeaderAdapter_ContinuesCollectingVerticesUntilExplicitCommit()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new MLeaderCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new MLeaderInteractiveCommandAdapter();
+        var session = new CadEditorSessionFactory().Create(new CadDocument());
+
+        runtime.BeginCommand("MLEADER");
+
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "0,0"),
+            session,
+            commit: false);
+        var second = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "5,0"),
+            session,
+            commit: false);
+        var third = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "8,3"),
+            session,
+            commit: false);
 
         Assert.True(first.Handled);
         Assert.Null(first.Result);
-        Assert.True(second.Result?.Success);
-        Assert.Contains("Created SPLINE", second.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(second.Handled);
+        Assert.Null(second.Result);
+        Assert.True(third.Handled);
+        Assert.Null(third.Result);
+        Assert.True(runtime.State.IsActive);
+
+        var commit = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(commit.Result?.Success);
+        Assert.Contains("Created MLEADER", commit.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, polyline.Vertices.Count);
+        Assert.Single(session.Document.Entities.OfType<MText>());
         Assert.False(runtime.State.IsActive);
     }
 

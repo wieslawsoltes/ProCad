@@ -98,12 +98,12 @@ internal static class CadCommandDescriptorCatalog
                 [P("p1", CadCommandParameterKind.Coordinate), P("p2", CadCommandParameterKind.Coordinate), P("vertex", CadCommandParameterKind.Coordinate), P("dimArcPoint", CadCommandParameterKind.Coordinate)]),
             ["LEADER"] = T(
                 "Creates a leader annotation.",
-                "LEADER startPoint landingPoint",
-                [P("startPoint", CadCommandParameterKind.Coordinate), P("landingPoint", CadCommandParameterKind.Coordinate)]),
+                "LEADER startPoint landingPoint [p3 ...]",
+                [P("startPoint", CadCommandParameterKind.Coordinate), P("landingPoint", CadCommandParameterKind.Coordinate), P("p3+", CadCommandParameterKind.Coordinate, optional: true)]),
             ["MLEADER"] = T(
                 "Creates a multileader annotation.",
-                "MLEADER startPoint landingPoint",
-                [P("startPoint", CadCommandParameterKind.Coordinate), P("landingPoint", CadCommandParameterKind.Coordinate)]),
+                "MLEADER startPoint landingPoint [p3 ...]",
+                [P("startPoint", CadCommandParameterKind.Coordinate), P("landingPoint", CadCommandParameterKind.Coordinate), P("p3+", CadCommandParameterKind.Coordinate, optional: true)]),
             ["HATCH"] = T(
                 "Creates hatch from closed boundaries.",
                 "HATCH [SOLID|patternName] [boundaryHandles...]",

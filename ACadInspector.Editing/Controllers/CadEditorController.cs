@@ -49,6 +49,15 @@ public sealed class CadEditorController : ICadEditorController
             Label: CommandRuntime.State.ActiveCommand,
             ActorId: Session.SessionId.Value,
             Source: CadUndoSource.CommandLine));
+        if (string.IsNullOrWhiteSpace(input) && CommandRuntime.State.IsActive)
+        {
+            return CommandRuntime.SubmitTokenAsync(
+                new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+                Session,
+                commit: true,
+                cancellationToken);
+        }
+
         return CommandRuntime.SubmitAsync(input, Session, cancellationToken);
     }
 
