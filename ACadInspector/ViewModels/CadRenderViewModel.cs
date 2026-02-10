@@ -49,6 +49,8 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
     private bool _initialAutoFitCompleted;
     private readonly CompositeDisposable _subscriptions = new();
     private bool _disposed;
+    private bool _runtimeWasActive;
+    private bool _suppressNextSceneInteractionRefresh;
 
     [Reactive]
     public partial RenderScene? Scene { get; set; }
@@ -315,9 +317,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             .Subscribe(tuple => _interactionController.UpdateTracking(tuple.Item1, tuple.Item2, tuple.Item3))
             .DisposeWith(_subscriptions);
 
-        _selectionService.WhenAnyValue(x => x.SelectedObject)
+        _selectionService.WhenAnyValue(x => x.SelectionStamp)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(UpdateSelectionFromService)
+            .Subscribe(_ => UpdateSelectionFromService(_selectionService.SelectedObject))
             .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.HoverAnnotation)
@@ -436,7 +438,9 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
         UpdateHitTestIndex();
         _interactionController.UpdateScene(Scene, _hitTestIndex);
         UpdateDebugOverlay();
-        UpdateSelectionFromService(_selectionService.SelectedObject);
+        var shouldRefreshInteraction = !_suppressNextSceneInteractionRefresh;
+        _suppressNextSceneInteractionRefresh = false;
+        UpdateSelectionFromService(_selectionService.SelectedObject, shouldRefreshInteraction);
 
         if (!_initialAutoFitCompleted && Scene is not null && FitOnLoad)
         {
@@ -515,6 +519,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
         }
 
         ClearTransientInteractionVisuals();
+        _suppressNextSceneInteractionRefresh = true;
         UpdateLayoutViewOptions(layout);
 
         if (!_allowLayoutUpdates)
@@ -772,10 +777,25 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
         _toolManager.RegisterTool(new CadSelectionTool(), context, activate: true);
     }
 
-    private void UpdateSelectionFromService(object? selected)
+    private void UpdateSelectionFromService(object? selected, bool refreshInteraction = true)
     {
         SelectedObject = selected;
         _annotationService.UpdateSelection(selected, null);
+        if (refreshInteraction)
+        {
+            RefreshInteractionVisuals();
+        }
+    }
+
+    private void RefreshInteractionVisuals()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var snapshot = _interactionController.RefreshVisualSnapshot();
+        ApplyToolVisualSnapshot(snapshot);
     }
 
     private void HandleFocusRequest(CadSelectionFocusRequest? request)
@@ -857,9 +877,16 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
     private void ApplyToolVisualSnapshot(CadToolVisualSnapshot snapshot)
     {
-        if (!string.IsNullOrWhiteSpace(snapshot.Prompt))
+        if (_commandRuntime.State.IsActive)
         {
-            ActiveCommandPrompt = snapshot.Prompt;
+            if (!string.IsNullOrWhiteSpace(snapshot.Prompt))
+            {
+                ActiveCommandPrompt = snapshot.Prompt;
+            }
+        }
+        else
+        {
+            ActiveCommandPrompt = "Selection";
         }
 
         if (!string.IsNullOrWhiteSpace(snapshot.Status))
@@ -872,9 +899,14 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
         ToolVisualHints = mergedHints;
         OverlayScene = BuildOverlayScene(mergedHints);
         RefreshActiveVisualHelpers(mergedHints, _commandRuntime.State);
-        if (TryResolveDynamicInputHint(snapshot.Hints, out var dynamicHint))
+        if (DynamicInputEnabled &&
+            TryResolveDynamicInputHint(snapshot.Hints, out var dynamicHint))
         {
             DynamicInput = new CadDynamicInputPayload(ActiveCommandPrompt, dynamicHint.Text, dynamicHint.Anchor);
+        }
+        else if (!DynamicInputEnabled || !_commandRuntime.State.IsActive)
+        {
+            DynamicInput = null;
         }
     }
 
@@ -908,8 +940,11 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
     private void UpdateRuntimeState(CadPromptState state)
     {
-        ActiveCommandPrompt = state.Prompt;
-        ActiveCommandHelp = state.ParameterHelp ?? string.Empty;
+        var wasActive = _runtimeWasActive;
+        _runtimeWasActive = state.IsActive;
+
+        ActiveCommandPrompt = state.IsActive ? state.Prompt : "Selection";
+        ActiveCommandHelp = state.IsActive ? state.ParameterHelp ?? string.Empty : string.Empty;
         RefreshCanvasCompletions(state);
         if (!string.IsNullOrWhiteSpace(state.LastMessage))
         {
@@ -918,7 +953,23 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
         if (!state.IsActive)
         {
-            ClearTransientInteractionVisuals();
+            DynamicInput = null;
+            if (wasActive)
+            {
+                ClearTransientInteractionVisuals();
+            }
+            else
+            {
+                RefreshActiveVisualHelpers(ToolVisualHints, state);
+            }
+
+            return;
+        }
+
+        if (!DynamicInputEnabled)
+        {
+            DynamicInput = null;
+            RefreshActiveVisualHelpers(ToolVisualHints, state);
             return;
         }
 
@@ -931,18 +982,31 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
     private void RefreshCanvasCompletions(CadPromptState state)
     {
-        if (state.Completions.Count == 0)
+        if (!state.IsActive || state.Completions.Count == 0)
         {
             CanvasCompletions = Array.Empty<CadCommandCompletionItemViewModel>();
             this.RaisePropertyChanged(nameof(HasCanvasCompletions));
             return;
         }
 
-        var count = Math.Min(8, state.Completions.Count);
-        var completions = new CadCommandCompletionItemViewModel[count];
-        for (var index = 0; index < count; index++)
+        var completions = new List<CadCommandCompletionItemViewModel>(8);
+        for (var index = 0; index < state.Completions.Count && completions.Count < 8; index++)
         {
-            completions[index] = new CadCommandCompletionItemViewModel(state.Completions[index]);
+            var item = state.Completions[index];
+            if (string.Equals(item.Kind, "Command", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.Kind, "Alias", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            completions.Add(new CadCommandCompletionItemViewModel(item));
+        }
+
+        if (completions.Count == 0)
+        {
+            CanvasCompletions = Array.Empty<CadCommandCompletionItemViewModel>();
+            this.RaisePropertyChanged(nameof(HasCanvasCompletions));
+            return;
         }
 
         CanvasCompletions = completions;
@@ -1556,22 +1620,13 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             case "SnapIntersection":
             case "SnapApparentIntersection":
             {
-                var d = 4f;
                 target.Add(new RenderOverlayPrimitive(
-                    Kind: RenderOverlayPrimitiveKind.Line,
-                    Start: hint.Anchor + new System.Numerics.Vector2(-d, -d),
-                    End: hint.Anchor + new System.Numerics.Vector2(d, d),
+                    Kind: RenderOverlayPrimitiveKind.CrossMarker,
+                    Start: hint.Anchor,
+                    End: hint.Anchor,
                     Color: color,
-                    StrokeWidth: 1.2f,
-                    MarkerRadius: 0f,
-                    Priority: 89));
-                target.Add(new RenderOverlayPrimitive(
-                    Kind: RenderOverlayPrimitiveKind.Line,
-                    Start: hint.Anchor + new System.Numerics.Vector2(-d, d),
-                    End: hint.Anchor + new System.Numerics.Vector2(d, -d),
-                    Color: color,
-                    StrokeWidth: 1.2f,
-                    MarkerRadius: 0f,
+                    StrokeWidth: 1.4f,
+                    MarkerRadius: 4.8f,
                     Priority: 89));
                 AppendLabel(target, hint.Anchor, hint.Text, priority: 95, isRemote);
                 return;
@@ -1836,7 +1891,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
         target.Add(new RenderOverlayPrimitive(
             Kind: RenderOverlayPrimitiveKind.Text,
-            Start: anchor + new System.Numerics.Vector2(6f, -6f),
+            Start: new System.Numerics.Vector2(6f, -6f),
             End: anchor,
             Color: RenderColor.FromRgb(247, 247, 247),
             StrokeWidth: 1f,

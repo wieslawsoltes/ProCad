@@ -37,6 +37,99 @@ public sealed class CadRenderInteractiveEditingTests
             document.Entities.OfType<Line>().Any() &&
             viewModel.Scene is not null &&
             viewModel.Scene.Layers.SelectMany(static layer => layer.Primitives).OfType<RenderLine>().Any());
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task Interaction_LineCommand_CanBeRestartedAfterCommitAndDrawSecondEntity()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(document);
+
+        runtime.BeginCommand("LINE");
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(10f, 0f)).ToTask();
+        await WaitUntilAsync(() => document.Entities.OfType<Line>().Count() == 1);
+        Assert.False(runtime.State.IsActive);
+
+        runtime.BeginCommand("LINE");
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 5f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(10f, 5f)).ToTask();
+        await WaitUntilAsync(() => document.Entities.OfType<Line>().Count() == 2);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task Interaction_StartCommandLineToolPath_AllowsSequentialLineCreation()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(document);
+
+        await viewModel.StartCommand.Execute("LINE").ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(8f, 0f)).ToTask();
+        await WaitUntilAsync(() => document.Entities.OfType<Line>().Count() == 1);
+        Assert.False(runtime.State.IsActive);
+
+        await viewModel.StartCommand.Execute("LINE").ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 4f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(8f, 4f)).ToTask();
+        await WaitUntilAsync(() => document.Entities.OfType<Line>().Count() == 2);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task Interaction_PlineCommand_ContinuesUntilExplicitEnterAndCreatesAllSegments()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(
+            document,
+            additionalHandlers: [new PlineCadCommand()],
+            additionalAdapters: [new PlineInteractiveCommandAdapter()]);
+
+        runtime.BeginCommand("PLINE");
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(6f, 0f)).ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(6f, 4f)).ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("Enter")).ToTask();
+
+        await WaitUntilAsync(() =>
+        {
+            var polyline = document.Entities.OfType<LwPolyline>().FirstOrDefault();
+            return polyline is not null &&
+                   polyline.Vertices.Count == 3 &&
+                   !runtime.State.IsActive;
+        });
+    }
+
+    [Fact]
+    public async Task Interaction_SplineCommand_ContinuesUntilExplicitEnterAndCreatesAllFitPoints()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(
+            document,
+            additionalHandlers: [new SplineCadCommand()],
+            additionalAdapters: [new SplineInteractiveCommandAdapter()]);
+
+        runtime.BeginCommand("SPLINE");
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(4f, 2f)).ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(8f, 0f)).ToTask();
+        Assert.True(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreateKeyDown("Enter")).ToTask();
+
+        await WaitUntilAsync(() =>
+        {
+            var spline = document.Entities.OfType<Spline>().FirstOrDefault();
+            return spline is not null &&
+                   spline.FitPoints.Count >= 3 &&
+                   !runtime.State.IsActive;
+        });
     }
 
     [Fact]
@@ -171,6 +264,48 @@ public sealed class CadRenderInteractiveEditingTests
     }
 
     [Fact]
+    public async Task Interaction_SelectionClick_ShowsGripAdornersOnFirstPick()
+    {
+        var document = new CadDocument();
+        document.Entities.Add(new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0)
+        });
+
+        var (viewModel, _, _) = CreateSystem(document);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+
+        await WaitUntilAsync(() =>
+            viewModel.OverlayScene.Primitives.Any(static primitive =>
+                primitive.Kind == RenderOverlayPrimitiveKind.SquareMarker &&
+                primitive.FillColor is not null));
+    }
+
+    [Fact]
+    public async Task Interaction_SelectedEntityGeometryMutation_RefreshesGripAdornersWithoutPointerMove()
+    {
+        var document = new CadDocument();
+        var line = new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(10, 0, 0)
+        };
+        document.Entities.Add(line);
+
+        var (viewModel, session, _, sessionHost) = CreateSystemWithHost(document);
+        await viewModel.InteractionCommand.Execute(CreatePointerDown(0f, 0f)).ToTask();
+
+        await WaitUntilAsync(() => TryGetGripMarkerMaxX(viewModel, out var maxXBefore) && maxXBefore >= 9.5f);
+
+        line.StartPoint = new XYZ(5, 0, 0);
+        line.EndPoint = new XYZ(15, 0, 0);
+        sessionHost.NotifySessionChanged(session);
+
+        await WaitUntilAsync(() => TryGetGripMarkerMaxX(viewModel, out var maxXAfter) && maxXAfter >= 14.5f);
+    }
+
+    [Fact]
     public async Task Interaction_LineCommand_PointerMoveShowsDashedRubberBandOverlay()
     {
         var document = new CadDocument();
@@ -287,6 +422,29 @@ public sealed class CadRenderInteractiveEditingTests
             viewModel.OverlayScene.Primitives.Count == 0 &&
             viewModel.ToolVisualHints.Count == 0 &&
             viewModel.DynamicInput is null);
+        Assert.False(runtime.State.IsActive);
+    }
+
+    [Fact]
+    public async Task Interaction_IdleSelectionMode_DoesNotShowCommandHelpOnCanvas()
+    {
+        var document = new CadDocument();
+        var (viewModel, _, runtime) = CreateSystem(document);
+
+        Assert.False(runtime.State.IsActive);
+        await viewModel.InteractionCommand.Execute(CreatePointerMove(1f, 1f)).ToTask();
+
+        await WaitUntilAsync(() => viewModel.DynamicInput is null);
+        Assert.True(string.IsNullOrWhiteSpace(viewModel.ActiveCommandHelp));
+        Assert.DoesNotContain(
+            viewModel.ToolVisualHints,
+            static hint => string.Equals(hint.Kind, "Prompt", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(
+            viewModel.OverlayScene.Primitives,
+            static primitive =>
+                primitive.Kind == RenderOverlayPrimitiveKind.Text &&
+                primitive.Text is not null &&
+                primitive.Text.Contains("Type a command", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -648,11 +806,18 @@ public sealed class CadRenderInteractiveEditingTests
     public async Task Interaction_TypedAlias_EnterStartsInteractiveLineWorkflow()
     {
         var document = new CadDocument();
-        var (viewModel, _, _) = CreateSystem(document);
+        var (viewModel, _, runtime) = CreateSystem(document);
 
         await viewModel.InteractionCommand.Execute(CreateTextInput("L")).ToTask();
         await viewModel.InteractionCommand.Execute(CreateKeyDown("Enter")).ToTask();
+        Assert.True(
+            runtime.State.IsActive &&
+            string.Equals(runtime.State.ActiveCommand, "LINE", StringComparison.OrdinalIgnoreCase),
+            $"Expected LINE command to be active after Enter; actual active='{runtime.State.ActiveCommand ?? "<null>"}', isActive={runtime.State.IsActive}.");
         await viewModel.InteractionCommand.Execute(CreatePointerDown(1f, 1f)).ToTask();
+        Assert.True(
+            runtime.State.IsActive,
+            "Expected command to remain active after first point pick.");
         await viewModel.InteractionCommand.Execute(CreatePointerDown(6f, 1f)).ToTask();
 
         await WaitUntilAsync(() => document.Entities.OfType<Line>().Any());
@@ -1118,6 +1283,26 @@ public sealed class CadRenderInteractiveEditingTests
         IReadOnlyList<CadShortcutBinding>? shortcutBindings = null,
         CadShortcutProfile shortcutProfile = CadShortcutProfile.AutoCadLike)
     {
+        var (viewModel, session, runtime, _) = CreateSystemWithHost(
+            document,
+            additionalHandlers,
+            additionalAdapters,
+            shortcutBindings,
+            shortcutProfile);
+        return (viewModel, session, runtime);
+    }
+
+    private static (
+        CadRenderViewModel ViewModel,
+        ICadEditorSession Session,
+        ICadCommandRuntime Runtime,
+        CadEditorSessionHostService SessionHost) CreateSystemWithHost(
+        CadDocument document,
+        IReadOnlyList<ICadCommandHandler>? additionalHandlers = null,
+        IReadOnlyList<ICadInteractiveCommandAdapter>? additionalAdapters = null,
+        IReadOnlyList<CadShortcutBinding>? shortcutBindings = null,
+        CadShortcutProfile shortcutProfile = CadShortcutProfile.AutoCadLike)
+    {
         var sceneBuilder = CreateSceneBuilder();
         var settings = new CadRenderSceneSettings();
         var initialScene = sceneBuilder.Build(document, settings);
@@ -1161,7 +1346,7 @@ public sealed class CadRenderInteractiveEditingTests
             statsFileName: null);
 
         var session = sessionHost.GetOrCreate(document);
-        return (viewModel, session, runtime);
+        return (viewModel, session, runtime, sessionHost);
     }
 
     private static readonly string[] ToolPanelCommands =
@@ -1349,6 +1534,25 @@ public sealed class CadRenderInteractiveEditingTests
         }
 
         Assert.True(condition(), "Timed out while waiting for interactive create/render pipeline.");
+    }
+
+    private static bool TryGetGripMarkerMaxX(CadRenderViewModel viewModel, out float maxX)
+    {
+        maxX = float.NegativeInfinity;
+        var found = false;
+        foreach (var primitive in viewModel.OverlayScene.Primitives)
+        {
+            if (primitive.Kind != RenderOverlayPrimitiveKind.SquareMarker ||
+                primitive.FillColor is null)
+            {
+                continue;
+            }
+
+            maxX = found ? MathF.Max(maxX, primitive.Start.X) : primitive.Start.X;
+            found = true;
+        }
+
+        return found;
     }
 
     private sealed class KeywordPromptRenderTestCommand : ICadDescribedCommandHandler

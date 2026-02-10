@@ -30,10 +30,13 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
     public IReadOnlyList<CadCommandCompletionItemViewModel> Completions => _completions;
 
     [Reactive]
-    public partial string ActiveCommand { get; set; } = "Command";
+    public partial string ActiveCommand { get; set; } = "Selection";
 
     [Reactive]
-    public partial string ParameterHelp { get; set; } = "Use the tool panel or command line to start drawing commands.";
+    public partial bool IsCommandActive { get; set; }
+
+    [Reactive]
+    public partial string ParameterHelp { get; set; } = string.Empty;
 
     [Reactive]
     public partial string StatusMessage { get; set; } = string.Empty;
@@ -134,9 +137,12 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
 
     private void OnSnapshotChanged(object? sender, CadEditorContextSnapshot snapshot)
     {
-        ActiveCommand = snapshot.Prompt;
+        IsCommandActive = snapshot.IsCommandActive;
+        ActiveCommand = snapshot.IsCommandActive
+            ? ResolveActiveCommandDisplay(snapshot.Prompt, snapshot.ActiveCommand)
+            : "Selection";
         CanStartTools = snapshot.CanStartCommands;
-        ParameterHelp = snapshot.ParameterHelp ?? string.Empty;
+        ParameterHelp = snapshot.IsCommandActive ? snapshot.ParameterHelp ?? string.Empty : string.Empty;
         if (!string.IsNullOrWhiteSpace(snapshot.LastMessage))
         {
             SetStatusMessage(snapshot.LastMessage);
@@ -150,17 +156,28 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
 
     private void ApplyPromptState(CadPromptState state)
     {
-        ActiveCommand = state.Prompt;
-        ParameterHelp = state.ParameterHelp ?? string.Empty;
+        IsCommandActive = state.IsActive;
+        ActiveCommand = state.IsActive
+            ? ResolveActiveCommandDisplay(state.Prompt, state.ActiveCommand)
+            : "Selection";
+        ParameterHelp = state.IsActive ? state.ParameterHelp ?? string.Empty : string.Empty;
         if (!string.IsNullOrWhiteSpace(state.LastMessage))
         {
             SetStatusMessage(state.LastMessage);
         }
 
         _completions.Clear();
-        foreach (var completion in state.Completions)
+        if (state.IsActive)
         {
-            _completions.Add(new CadCommandCompletionItemViewModel(completion));
+            foreach (var completion in state.Completions)
+            {
+                if (IsCommandCompletionKind(completion.Kind))
+                {
+                    continue;
+                }
+
+                _completions.Add(new CadCommandCompletionItemViewModel(completion));
+            }
         }
 
         this.RaisePropertyChanged(nameof(HasCompletions));
@@ -244,7 +261,8 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
 
         if (_commandRuntime is null)
         {
-            ActiveCommand = "Command";
+            ActiveCommand = "Selection";
+            IsCommandActive = false;
             ParameterHelp = "Open a drawing to start commands.";
             SetStatusMessage(string.Empty);
             _completions.Clear();
@@ -269,6 +287,18 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
         }
 
         ApplyPromptState(_commandRuntime.State);
+    }
+
+    private static string ResolveActiveCommandDisplay(string prompt, string? activeCommand)
+    {
+        if (!string.IsNullOrWhiteSpace(activeCommand))
+        {
+            return activeCommand!.ToUpperInvariant();
+        }
+
+        return string.IsNullOrWhiteSpace(prompt)
+            ? "Command"
+            : prompt.ToUpperInvariant();
     }
 
     public void Dispose()

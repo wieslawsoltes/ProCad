@@ -21,13 +21,15 @@
                        FontWeight="SemiBold" />
             <Button DockPanel.Dock="Right"
                     Content="Esc"
-                    Command="{CompiledBinding CancelCommand}" />
+                    Command="{CompiledBinding CancelCommand}"
+                    IsVisible="{CompiledBinding IsCommandActive}" />
           </DockPanel>
           <TextBlock Grid.Row="1"
                      Text="{CompiledBinding ParameterHelp}"
                      TextWrapping="Wrap"
                      FontSize="11"
-                     Opacity="0.88" />
+                     Opacity="0.88"
+                     IsVisible="{CompiledBinding IsCommandActive}" />
           <TextBlock Grid.Row="2"
                      Text="{CompiledBinding StatusMessage}"
                      FontSize="11"

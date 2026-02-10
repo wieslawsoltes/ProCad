@@ -141,6 +141,33 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         _toolManager.HandleInput(CadToolInput.ClearHover(), BuildToolContext());
     }
 
+    public CadToolVisualSnapshot BuildCurrentVisualSnapshot(ICadEditorSession? session)
+    {
+        _currentSession = session;
+        UpdateSelectionAnnotationFromService(session);
+        var anchor = ResolveCurrentAnchor(session);
+        if (_lastPointerWorldPoint.HasValue)
+        {
+            UpdateGripFeedback(session, anchor, tolerance: 2f);
+        }
+        else
+        {
+            RebuildGripSet(session);
+            _hotGrip = null;
+        }
+
+        if (_commandRuntime.State.IsActive)
+        {
+            return BuildSnapshotWithInteractivePreview(
+                session,
+                anchor,
+                handled: false,
+                status: null);
+        }
+
+        return BuildSnapshot(anchor, handled: false, status: null);
+    }
+
     public async ValueTask<CadToolVisualSnapshot> RouteAsync(
         CadInteractionEvent interactionEvent,
         CadInteractionContext context,
@@ -1219,7 +1246,17 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                 return repeat.Result?.Message ?? repeat.State.LastMessage ?? "Command is empty.";
             }
 
-            return _commandRuntime.State.LastMessage ?? _commandRuntime.State.ParameterHelp ?? "Specify next point or option.";
+            var commitResolution = await SubmitInteractiveAsync(
+                    new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+                    session,
+                    commit: true,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            return commitResolution.Result?.Message ??
+                   commitResolution.State.LastMessage ??
+                   commitResolution.State.ParameterHelp ??
+                   "Command finished.";
         }
 
         var runtimeState = _commandRuntime.State;
@@ -1661,7 +1698,8 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                 Text: $"Input: {_keyboardInputBuffer}"));
         }
 
-        if (!string.IsNullOrWhiteSpace(state.ParameterHelp))
+        if (state.IsActive &&
+            !string.IsNullOrWhiteSpace(state.ParameterHelp))
         {
             hints.Add(new CadToolVisualHint(
                 Kind: "Prompt",
@@ -2572,18 +2610,20 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         }
 
         RenderBounds? bounds = null;
-        if (_annotationService.TryGetBounds(selectedEntity, out var annotationBounds))
+        var useSceneGeometry = true;
+        if (session is not null &&
+            session.EntityIndex.TryGetId(selectedEntity, out var entityId) &&
+            TryResolveEntityBounds(session, entityId, out var resolvedBounds))
+        {
+            bounds = resolvedBounds;
+            useSceneGeometry = false;
+        }
+        else if (_annotationService.TryGetBounds(selectedEntity, out var annotationBounds))
         {
             bounds = annotationBounds;
         }
-        else if (session is not null &&
-                 session.EntityIndex.TryGetId(selectedEntity, out var entityId) &&
-                 TryResolveEntityBounds(session, entityId, out var resolvedBounds))
-        {
-            bounds = resolvedBounds;
-        }
 
-        _annotationService.UpdateSelection(selectedEntity, bounds, primitive: null);
+        _annotationService.UpdateSelection(selectedEntity, bounds, primitive: null, useSceneGeometry);
     }
 
     private static bool TryResolveEntityBounds(
@@ -3189,6 +3229,24 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
             : null;
     }
 
+    private Vector2 ResolveCurrentAnchor(ICadEditorSession? session)
+    {
+        if (_lastPointerWorldPoint.HasValue)
+        {
+            return _lastPointerWorldPoint.Value;
+        }
+
+        if (TryGetSelectionBounds(session, out var selectionBounds) &&
+            !selectionBounds.IsEmpty)
+        {
+            return new Vector2(
+                (selectionBounds.MinX + selectionBounds.MaxX) * 0.5f,
+                (selectionBounds.MinY + selectionBounds.MaxY) * 0.5f);
+        }
+
+        return Vector2.Zero;
+    }
+
     private bool TryGetSelectionBounds(ICadEditorSession? session, out RenderBounds bounds)
     {
         bounds = RenderBounds.Empty;
@@ -3230,9 +3288,30 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     {
         if (session is not null)
         {
+            var yieldedFromUiSelection = false;
+            var seen = new HashSet<Entity>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+            foreach (var item in _selectionService.SelectedObjects)
+            {
+                if (item is not Entity entity ||
+                    !TryResolveSessionEntity(session, entity, out var canonicalEntity) ||
+                    !seen.Add(canonicalEntity))
+                {
+                    continue;
+                }
+
+                yieldedFromUiSelection = true;
+                yield return canonicalEntity;
+            }
+
+            if (yieldedFromUiSelection)
+            {
+                yield break;
+            }
+
             foreach (var item in session.SelectionSet.Items)
             {
-                if (item is Entity entity)
+                if (item is Entity entity &&
+                    seen.Add(entity))
                 {
                     yield return entity;
                 }

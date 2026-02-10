@@ -38,6 +38,24 @@ public sealed class CadSelectionAnnotationServiceTests
         Assert.True(service.HoverAnnotation.HasValue);
     }
 
+    [Fact]
+    public void UpdateSelection_UseSceneGeometryFalse_PrefersFallbackBoundsAndSkipsSceneGeometry()
+    {
+        var (scene, entity, primitive) = CreateScene();
+        var service = new CadSelectionAnnotationService();
+        service.UpdateScene(scene);
+        var fallback = new RenderBounds(new Vector2(20f, 10f), new Vector2(30f, 18f));
+
+        service.UpdateSelection(entity, fallback, primitive: null, useSceneGeometry: false);
+
+        Assert.True(service.SelectionAnnotation.HasValue);
+        var annotation = service.SelectionAnnotation!.Value;
+        Assert.Equal(fallback.Min, annotation.Bounds.Min);
+        Assert.Equal(fallback.Max, annotation.Bounds.Max);
+        Assert.False(annotation.HasGeometry);
+        Assert.NotEqual(primitive.Bounds.Min, annotation.Bounds.Min);
+    }
+
     private static (RenderScene scene, Entity entity, RenderLine primitive) CreateScene()
     {
         var entity = new Line();

@@ -158,6 +158,12 @@ public sealed class CadEditorInteractionController : IDisposable
         return visual;
     }
 
+    public CadToolVisualSnapshot RefreshVisualSnapshot()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _interactionRouter.BuildCurrentVisualSnapshot(ResolveSession());
+    }
+
     public void Dispose()
     {
         if (_disposed)

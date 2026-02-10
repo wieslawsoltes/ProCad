@@ -1,6 +1,7 @@
 using ACadInspector.Core;
 using ACadInspector.Editing.Commands;
 using ACadInspector.Editing.Controllers;
+using ACadInspector.Editing.Interaction;
 using ACadInspector.Editing.Prompt;
 using ACadInspector.Editing.Sessions;
 using ACadInspector.Services;
@@ -74,6 +75,55 @@ public sealed class CadEditorToolPanelViewModelTests
         Assert.True(runtime.State.IsActive);
         Assert.Equal("KWTEST", runtime.State.ActiveCommand);
         Assert.Equal("KWTEST", viewModel.ActiveCommand);
+    }
+
+    [Fact]
+    public void IdleRuntimePreview_DoesNotSurfaceCommandCompletionsInToolPanel()
+    {
+        var document = new CadDocument();
+        var documentContext = new CadDocumentContextService();
+        documentContext.ActiveDocument = new CadDocumentViewModel(
+            document,
+            CadFileFormat.Dxf,
+            path: null,
+            displayName: "test.dxf",
+            render: null!);
+
+        var selectionService = new CadSelectionService();
+        var sessionHost = new CadEditorSessionHostService(
+            new CadEditorSessionFactory(),
+            documentContext,
+            selectionService);
+        var registry = new CadCommandRegistry();
+        registry.Register(new LineCadCommand());
+        var controllerFactory = new CadEditorControllerFactory(registry);
+        var controllerHost = new CadEditorControllerHostService(sessionHost, controllerFactory, documentContext);
+        var adapterRegistry = new CadInteractiveCommandAdapterRegistry(Array.Empty<ICadInteractiveCommandAdapter>());
+
+        var toolPanel = new CadEditorToolPanelViewModel(controllerHost, documentContext);
+        using var commandLine = new CadCommandLineViewModel(
+            controllerHost,
+            documentContext,
+            sessionHost,
+            adapterRegistry,
+            collaborationWorkspace: null);
+
+        commandLine.Input = "L";
+        commandLine.Input = string.Empty;
+
+        Assert.False(toolPanel.HasCompletions);
+        Assert.Empty(toolPanel.Completions);
+    }
+
+    [Fact]
+    public void IdleRuntimeState_ShowsSelectionAndHidesPromptHelp()
+    {
+        var (_, viewModel, runtime) = CreateHarness(registerKeywordCommand: false);
+
+        Assert.False(runtime.State.IsActive);
+        Assert.False(viewModel.IsCommandActive);
+        Assert.Equal("Selection", viewModel.ActiveCommand);
+        Assert.True(string.IsNullOrWhiteSpace(viewModel.ParameterHelp));
     }
 
     private static (CadDocumentContextService Context, CadEditorToolPanelViewModel ViewModel, ICadCommandRuntime Runtime) CreateHarness(bool registerKeywordCommand)

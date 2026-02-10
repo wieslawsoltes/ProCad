@@ -10,7 +10,8 @@ public enum RenderOverlayPrimitiveKind
     FilledRectangle,
     Text,
     SquareMarker,
-    DiamondMarker
+    DiamondMarker,
+    CrossMarker
 }
 
 public enum RenderOverlayStrokeStyle
