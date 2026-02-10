@@ -287,6 +287,7 @@ public sealed class UiSmokeTests
         services.AddCadInspectorIO();
 
         services.AddSingleton<FastPathDiagnosticsService>();
+        services.AddSingleton<IAppLogService, AppLogService>();
         services.AddSingleton<ICadPropertyValidator, CadDefaultPropertyValidator>();
         services.AddSingleton<ICadPropertyValidator, CadFiniteNumberValidator>();
         services.AddSingleton<ICadPropertyEditPipeline, CadPropertyEditPipeline>();
@@ -519,6 +520,7 @@ public sealed class UiSmokeTests
         services.AddSingleton<CadCommandLineViewModel>();
         services.AddSingleton<CadEditorToolPanelViewModel>();
         services.AddSingleton<CadCollaborationToolViewModel>();
+        services.AddSingleton<CadLogOutputToolViewModel>();
         services.AddSingleton<WorkspaceDockFactory>();
         services.AddSingleton<WorkspaceViewModelFactory>();
         services.AddSingleton<CadCompareViewModelFactory>();

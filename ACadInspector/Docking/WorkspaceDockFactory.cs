@@ -32,6 +32,7 @@ public sealed class WorkspaceDockFactory : Factory
     private readonly CadCommandLineViewModel _commandLine;
     private readonly CadEditorToolPanelViewModel _editorToolPanel;
     private readonly CadCollaborationToolViewModel _collaborationTool;
+    private readonly CadLogOutputToolViewModel _logOutputTool;
     private readonly CadSelectionService _selectionService;
     private readonly CadDocumentContextService _documentContext;
     private readonly CadEditorSessionHostService _sessionHost;
@@ -61,6 +62,7 @@ public sealed class WorkspaceDockFactory : Factory
         CadCommandLineViewModel commandLine,
         CadEditorToolPanelViewModel editorToolPanel,
         CadCollaborationToolViewModel collaborationTool,
+        CadLogOutputToolViewModel logOutputTool,
         CadSelectionService selectionService,
         CadDocumentContextService documentContext,
         CadEditorSessionHostService sessionHost,
@@ -89,6 +91,7 @@ public sealed class WorkspaceDockFactory : Factory
         _commandLine = commandLine;
         _editorToolPanel = editorToolPanel;
         _collaborationTool = collaborationTool;
+        _logOutputTool = logOutputTool;
         _selectionService = selectionService;
         _documentContext = documentContext;
         _sessionHost = sessionHost;
@@ -174,6 +177,9 @@ public sealed class WorkspaceDockFactory : Factory
         _collaborationTool.Id = "Collaboration";
         _collaborationTool.Title = "Collaboration";
 
+        _logOutputTool.Id = "LogOutput";
+        _logOutputTool.Title = "Log Output";
+
         var leftTools = CreateToolDock();
         leftTools.Id = "LeftTools";
         leftTools.Title = "Document Tree";
@@ -208,6 +214,7 @@ public sealed class WorkspaceDockFactory : Factory
         rightBottomTools.VisibleDockables = CreateList<IDockable>(
             _commandLine,
             _collaborationTool,
+            _logOutputTool,
             _dxfSemantics,
             _dxfRaw,
             _dwgSemantics,

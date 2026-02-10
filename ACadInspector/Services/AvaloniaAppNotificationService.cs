@@ -27,7 +27,7 @@ public sealed class AvaloniaAppNotificationService : IAppNotificationService
         var manager = GetManager();
         if (manager is null)
         {
-            AppLog.Write($"Notification skipped (manager unavailable): [{type}] {title}: {message}");
+            AppLog.Warn($"Notification skipped (manager unavailable): [{type}] {title}: {message}", category: nameof(AvaloniaAppNotificationService));
             return;
         }
 

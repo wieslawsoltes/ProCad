@@ -148,7 +148,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Write($"Create new document failed: {ex}");
+            AppLog.Error("Create new document failed.", exception: ex);
             _notificationService.ShowError("New Drawing Failed", $"Could not create a new drawing: {ex.Message}");
         }
     }
@@ -166,7 +166,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Write($"Open file picker failed: {ex}");
+            AppLog.Error("Open file picker failed.", exception: ex);
             _notificationService.ShowError("Open Failed", $"Could not open file picker: {ex.Message}");
             return;
         }
@@ -209,7 +209,7 @@ public sealed class WorkspaceViewModel : ViewModelBase, IRoutableViewModel
             {
                 failedCount++;
                 firstFailureMessage ??= $"{result.FileName}: {ex.Message}";
-                AppLog.Write($"Open failed for '{result.FileName}': {ex}");
+                AppLog.Error($"Open failed for '{result.FileName}'.", exception: ex);
             }
         }
 

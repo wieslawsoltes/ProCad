@@ -50,18 +50,19 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             Console.Error.WriteLine($"Unhandled exception: {args.ExceptionObject}");
-            AppLog.Write($"Unhandled exception: {args.ExceptionObject}");
+            AppLog.Error("Unhandled exception.", exception: args.ExceptionObject as Exception);
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             Console.Error.WriteLine($"Unobserved task exception: {args.Exception}");
-            AppLog.Write($"Unobserved task exception: {args.Exception}");
+            AppLog.Error("Unobserved task exception.", exception: args.Exception);
         };
 
         try
         {
             AppLog.Write("ConfigureServices start.");
             _services = ConfigureServices();
+            AppLog.Configure(_services.GetRequiredService<IAppLogService>());
             AppLog.Write("ConfigureServices done.");
             AppLog.Write("ConfigureReactiveUi start.");
             ConfigureReactiveUi();
@@ -72,7 +73,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Startup failure: {ex}");
-            AppLog.Write($"Startup failure: {ex}");
+            AppLog.Critical("Startup failure.", exception: ex);
             throw;
         }
 
@@ -139,7 +140,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            AppLog.Write($"DisposeWorkspaceScopedServices failed: {ex}");
+            AppLog.Error("DisposeWorkspaceScopedServices failed.", exception: ex);
         }
 
         if (_services is IDisposable disposable)
@@ -155,6 +156,7 @@ public partial class App : Application
         services.AddCadInspectorIO();
 
         services.AddSingleton<FastPathDiagnosticsService>();
+        services.AddSingleton<IAppLogService, AppLogService>();
         services.AddSingleton<ICadPropertyValidator, CadDefaultPropertyValidator>();
         services.AddSingleton<ICadPropertyValidator, CadFiniteNumberValidator>();
         services.AddSingleton<ICadPropertyEditPipeline, CadPropertyEditPipeline>();
@@ -414,6 +416,7 @@ public partial class App : Application
         services.AddSingleton<CadCommandLineViewModel>();
         services.AddSingleton<CadEditorToolPanelViewModel>();
         services.AddSingleton<CadCollaborationToolViewModel>();
+        services.AddSingleton<CadLogOutputToolViewModel>();
         services.AddSingleton<WorkspaceDockFactory>();
         services.AddSingleton<WorkspaceViewModelFactory>();
         services.AddSingleton<CadCompareViewModelFactory>();

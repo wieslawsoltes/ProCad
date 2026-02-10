@@ -46,6 +46,9 @@
         <DataTemplate DataType="{x:Type vm:CadCollaborationToolViewModel}" x:DataType="vm:CadCollaborationToolViewModel">
             <views:CadCollaborationToolView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CadLogOutputToolViewModel}" x:DataType="vm:CadLogOutputToolViewModel">
+            <views:CadLogOutputToolView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:CadCompareViewModel}" x:DataType="vm:CadCompareViewModel">
             <views:CadCompareView />
         </DataTemplate>

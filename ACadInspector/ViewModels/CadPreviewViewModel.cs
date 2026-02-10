@@ -64,7 +64,7 @@ public sealed partial class CadPreviewViewModel : CadToolViewModelBase
         }
         catch (Exception ex)
         {
-            AppLog.Write($"Preview update failed: {ex}");
+            AppLog.Error("Preview update failed.", exception: ex);
             ClearPreview("Preview not available");
             _notificationService.ShowWarning("Preview Unavailable", ex.Message, TimeSpan.FromSeconds(8));
         }
