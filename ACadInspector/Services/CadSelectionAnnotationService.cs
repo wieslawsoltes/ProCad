@@ -138,6 +138,21 @@ public sealed partial class CadSelectionAnnotationService : ReactiveObject
         return false;
     }
 
+    public bool TryGetGeometry(Entity entity, out IReadOnlyList<IRenderPrimitive> geometry)
+    {
+        if (_entityGeometry is not null &&
+            _entityGeometry.TryGetValue(entity, out var list) &&
+            list.Count > 0 &&
+            list.Count <= MaxAnnotationPrimitives)
+        {
+            geometry = list;
+            return true;
+        }
+
+        geometry = Array.Empty<IRenderPrimitive>();
+        return false;
+    }
+
     private RenderAnnotation? BuildAnnotation(
         RenderAnnotationKind kind,
         Entity? entity,

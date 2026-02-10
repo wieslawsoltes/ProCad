@@ -810,61 +810,165 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
             {
                 var fromInsert = text.InsertPoint;
                 var fromAlignment = text.AlignmentPoint;
-                var toInsert = ToXyz(targetPoint, fromInsert.Z);
-                var translation = new XYZ(
-                    toInsert.X - fromInsert.X,
-                    toInsert.Y - fromInsert.Y,
-                    toInsert.Z - fromInsert.Z);
-                var toAlignment = Translate(fromAlignment, translation);
+                var fromHeight = Math.Max(text.Height, 1e-6d);
+                var fromRotation = text.Rotation;
+                var toInsert = fromInsert;
+                var toAlignment = fromAlignment;
+                var toHeight = fromHeight;
+                var toRotation = fromRotation;
+                switch (binding.Role)
+                {
+                    case "Insert":
+                    {
+                        toInsert = ToXyz(targetPoint, fromInsert.Z);
+                        var translation = new XYZ(
+                            toInsert.X - fromInsert.X,
+                            toInsert.Y - fromInsert.Y,
+                            toInsert.Z - fromInsert.Z);
+                        toAlignment = Translate(fromAlignment, translation);
+                        status = "Moved text.";
+                        break;
+                    }
+                    case "Alignment":
+                        toAlignment = ToXyz(targetPoint, fromAlignment.Z);
+                        status = "Adjusted text alignment.";
+                        break;
+                    case "BaselineEnd":
+                    {
+                        var insert = ToVector2(fromInsert);
+                        var directionDelta = targetPoint - insert;
+                        if (directionDelta.LengthSquared() <= 1e-8f)
+                        {
+                            status = "Text rotation handle requires a non-zero direction.";
+                            return false;
+                        }
+
+                        var direction = Vector2.Normalize(directionDelta);
+                        toRotation = NormalizeAngle(MathF.Atan2(direction.Y, direction.X));
+                        var alignmentVector = ToVector2(fromAlignment) - insert;
+                        if (alignmentVector.LengthSquared() > 1e-8f)
+                        {
+                            var alignmentDistance = alignmentVector.Length();
+                            toAlignment = ToXyz(insert + direction * alignmentDistance, fromAlignment.Z);
+                        }
+
+                        status = "Adjusted text rotation.";
+                        break;
+                    }
+                    case "Height":
+                    {
+                        var insert = ToVector2(fromInsert);
+                        var direction = ResolveTextDirectionVector(text);
+                        var normal = new Vector2(-direction.Y, direction.X);
+                        var projectedHeight = Math.Abs(Vector2.Dot(targetPoint - insert, normal));
+                        toHeight = Math.Max(projectedHeight, 1e-3f);
+                        status = "Adjusted text height.";
+                        break;
+                    }
+                    default:
+                        return false;
+                }
+
                 forward.Add(CadOperationPayloadCodec.TransformText(
                     binding.EntityId,
                     fromInsert,
                     fromAlignment,
-                    text.Height,
-                    text.Rotation,
+                    fromHeight,
+                    fromRotation,
                     toInsert,
                     toAlignment,
-                    text.Height,
-                    text.Rotation));
+                    toHeight,
+                    toRotation));
                 inverse.Add(CadOperationPayloadCodec.TransformText(
                     binding.EntityId,
                     toInsert,
                     toAlignment,
-                    text.Height,
-                    text.Rotation,
+                    toHeight,
+                    toRotation,
                     fromInsert,
                     fromAlignment,
-                    text.Height,
-                    text.Rotation));
-                status = "Moved text.";
+                    fromHeight,
+                    fromRotation));
                 break;
             }
             case MText mtext:
             {
                 var fromInsert = mtext.InsertPoint;
                 var fromTextDirection = NormalizeDirection(mtext.AlignmentPoint);
-                var toInsert = ToXyz(targetPoint, fromInsert.Z);
+                if (fromTextDirection.X == 0.0 && fromTextDirection.Y == 0.0 && fromTextDirection.Z == 0.0)
+                {
+                    fromTextDirection = new XYZ(1.0, 0.0, 0.0);
+                }
+
+                var fromHeight = Math.Max(mtext.Height, 1e-6d);
+                var fromRectangleWidth = Math.Max(mtext.RectangleWidth, 1e-6d);
+                var toInsert = fromInsert;
+                var toTextDirection = fromTextDirection;
+                var toHeight = fromHeight;
+                var toRectangleWidth = fromRectangleWidth;
+                var insert = ToVector2(fromInsert);
+                var direction = NormalizeOrFallback(
+                    new Vector2((float)fromTextDirection.X, (float)fromTextDirection.Y),
+                    Vector2.UnitX);
+                switch (binding.Role)
+                {
+                    case "Insert":
+                        toInsert = ToXyz(targetPoint, fromInsert.Z);
+                        status = "Moved mtext.";
+                        break;
+                    case "Direction":
+                    {
+                        var directionDelta = targetPoint - insert;
+                        if (directionDelta.LengthSquared() <= 1e-8f)
+                        {
+                            status = "MText direction handle requires a non-zero direction.";
+                            return false;
+                        }
+
+                        var normalizedDirection = Vector2.Normalize(directionDelta);
+                        toTextDirection = new XYZ(normalizedDirection.X, normalizedDirection.Y, fromTextDirection.Z);
+                        status = "Adjusted mtext direction.";
+                        break;
+                    }
+                    case "Width":
+                    {
+                        var projectedWidth = Math.Abs(Vector2.Dot(targetPoint - insert, direction));
+                        toRectangleWidth = Math.Max(projectedWidth, 1e-3f);
+                        status = "Adjusted mtext width.";
+                        break;
+                    }
+                    case "Height":
+                    {
+                        var normal = new Vector2(-direction.Y, direction.X);
+                        var projectedHeight = Math.Abs(Vector2.Dot(targetPoint - insert, normal));
+                        toHeight = Math.Max(projectedHeight, 1e-3f);
+                        status = "Adjusted mtext height.";
+                        break;
+                    }
+                    default:
+                        return false;
+                }
+
                 forward.Add(CadOperationPayloadCodec.TransformMText(
                     binding.EntityId,
                     fromInsert,
                     fromTextDirection,
-                    mtext.Height,
-                    mtext.RectangleWidth,
+                    fromHeight,
+                    fromRectangleWidth,
                     toInsert,
-                    fromTextDirection,
-                    mtext.Height,
-                    mtext.RectangleWidth));
+                    toTextDirection,
+                    toHeight,
+                    toRectangleWidth));
                 inverse.Add(CadOperationPayloadCodec.TransformMText(
                     binding.EntityId,
                     toInsert,
-                    fromTextDirection,
-                    mtext.Height,
-                    mtext.RectangleWidth,
+                    toTextDirection,
+                    toHeight,
+                    toRectangleWidth,
                     fromInsert,
                     fromTextDirection,
-                    mtext.Height,
-                    mtext.RectangleWidth));
-                status = "Moved mtext.";
+                    fromHeight,
+                    fromRectangleWidth));
                 break;
             }
             default:
@@ -3465,11 +3569,105 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                 AddGripSeed(session, entity, ToVector2(point.Location), "Node", "Node", 0, target);
                 break;
             case TextEntity text:
-                AddGripSeed(session, entity, ToVector2(text.InsertPoint), "Text", "Insert", 0, target);
+            {
+                if (TryResolvePrimaryRenderText(session, entity, out var renderedText))
+                {
+                    var renderedInsert = ResolveRenderTextBaselineStart(renderedText);
+                    var baselineEnd = ResolveRenderTextBaselineEnd(renderedText);
+                    var heightPoint = ResolveRenderTextHeightHandle(renderedText);
+                    var renderedAlignment = ResolveRenderTextCenter(renderedText);
+                    AddGripSeed(session, entity, renderedInsert, "Text", "Insert", 0, target);
+                    AddGripSeed(session, entity, renderedAlignment, "Text", "Alignment", 1, target);
+                    AddGripSeed(session, entity, baselineEnd, "Text", "BaselineEnd", 2, target);
+                    AddGripSeed(session, entity, heightPoint, "Text", "Height", 3, target);
+                    break;
+                }
+
+                var direction = ResolveTextDirectionVector(text);
+                var normal = new Vector2(-direction.Y, direction.X);
+                var insert = ToVector2(text.InsertPoint);
+                var alignment = ToVector2(text.AlignmentPoint);
+                var textHeight = MathF.Max((float)text.Height, 0.1f);
+                var baselineLength = EstimateTextWidth(text.Value, textHeight, (float)text.WidthFactor);
+                if (TryResolveEntityRenderBounds(session, entity, out var renderBounds))
+                {
+                    insert = ResolveBoundedAnchor(renderBounds, insert);
+                    baselineLength = MathF.Max(
+                        ResolveProjectedExtent(renderBounds, insert, direction),
+                        MathF.Max(renderBounds.Size.X, renderBounds.Size.Y) * 0.45f);
+                    var resolvedHeight = MathF.Max(
+                        ResolveProjectedExtent(renderBounds, insert, normal),
+                        MathF.Max(renderBounds.Size.Y, renderBounds.Size.X * 0.25f) * 0.5f);
+                    textHeight = MathF.Max(resolvedHeight, 0.1f);
+                    alignment = ResolveAlignmentGripPosition(renderBounds, insert, alignment, normal, textHeight);
+                }
+                else
+                {
+                    alignment = ResolveTextAlignmentGripPosition(text, insert, direction, normal, baselineLength, textHeight);
+                }
+
+                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target);
+                AddGripSeed(session, entity, alignment, "Text", "Alignment", 1, target);
+                AddGripSeed(session, entity, insert + direction * baselineLength, "Text", "BaselineEnd", 2, target);
+                AddGripSeed(session, entity, insert + direction * baselineLength + normal * textHeight, "Text", "Height", 3, target);
                 break;
+            }
             case MText mtext:
-                AddGripSeed(session, entity, ToVector2(mtext.InsertPoint), "Text", "Insert", 0, target);
+            {
+                var direction = ResolveMTextDirectionVector(mtext);
+                var insert = ToVector2(mtext.InsertPoint);
+                var textHeight = MathF.Max((float)mtext.Height, 0.1f);
+                var width = ResolveMTextGripWidth(mtext, textHeight);
+                var height = ResolveMTextGripHeight(mtext, textHeight);
+                if (TryResolveEntityRenderGeometry(session, entity, out var geometry))
+                {
+                    if (TryResolvePrimaryRenderText(geometry, out var primaryText))
+                    {
+                        var baselineStart = ResolveRenderTextBaselineStart(primaryText);
+                        var baselineEnd = ResolveRenderTextBaselineEnd(primaryText);
+                        var renderDirection = baselineEnd - baselineStart;
+                        if (renderDirection.LengthSquared() > 1e-6f)
+                        {
+                            direction = NormalizeOrFallback(renderDirection, direction);
+                        }
+
+                        insert = baselineStart;
+                    }
+
+                    if (TryResolveRenderTextBounds(geometry, out var renderBounds))
+                    {
+                        insert = ResolveBoundedAnchor(renderBounds, insert);
+                        var renderNormal = new Vector2(-direction.Y, direction.X);
+                        width = MathF.Max(
+                            ResolveProjectedExtent(renderBounds, insert, direction),
+                            MathF.Max(renderBounds.Size.X, renderBounds.Size.Y) * 0.5f);
+                        height = MathF.Max(
+                            ResolveProjectedExtent(renderBounds, insert, renderNormal),
+                            MathF.Max(renderBounds.Size.Y, renderBounds.Size.X * 0.25f) * 0.5f);
+                        textHeight = MathF.Max(height, textHeight);
+                    }
+                }
+                else if (TryResolveEntityRenderBounds(session, entity, out var renderBounds))
+                {
+                    insert = ResolveBoundedAnchor(renderBounds, insert);
+                    var renderNormal = new Vector2(-direction.Y, direction.X);
+                    width = MathF.Max(
+                        ResolveProjectedExtent(renderBounds, insert, direction),
+                        MathF.Max(renderBounds.Size.X, renderBounds.Size.Y) * 0.5f);
+                    height = MathF.Max(
+                        ResolveProjectedExtent(renderBounds, insert, renderNormal),
+                        MathF.Max(renderBounds.Size.Y, renderBounds.Size.X * 0.25f) * 0.5f);
+                    textHeight = MathF.Max(height, textHeight);
+                }
+
+                var normal = new Vector2(-direction.Y, direction.X);
+                var directionHandleDistance = MathF.Max(width * 0.5f, textHeight * 1.5f);
+                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target);
+                AddGripSeed(session, entity, insert + direction * directionHandleDistance, "Text", "Direction", 1, target);
+                AddGripSeed(session, entity, insert + direction * width, "Text", "Width", 2, target);
+                AddGripSeed(session, entity, insert + direction * width + normal * height, "Text", "Height", 3, target);
                 break;
+            }
         }
     }
 
@@ -3549,6 +3747,359 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     private static XYZ Translate(XYZ value, XYZ delta)
     {
         return new XYZ(value.X + delta.X, value.Y + delta.Y, value.Z + delta.Z);
+    }
+
+    private static Vector2 ResolveTextDirectionVector(TextEntity text)
+    {
+        return NormalizeOrFallback(
+            new Vector2(MathF.Cos((float)text.Rotation), MathF.Sin((float)text.Rotation)),
+            Vector2.UnitX);
+    }
+
+    private static Vector2 ResolveMTextDirectionVector(MText mtext)
+    {
+        var direction = new Vector2((float)mtext.AlignmentPoint.X, (float)mtext.AlignmentPoint.Y);
+        if (direction.LengthSquared() <= 1e-8f)
+        {
+            direction = new Vector2(MathF.Cos((float)mtext.Rotation), MathF.Sin((float)mtext.Rotation));
+        }
+
+        return NormalizeOrFallback(direction, Vector2.UnitX);
+    }
+
+    private static Vector2 ResolveTextAlignmentGripPosition(
+        TextEntity text,
+        Vector2 insert,
+        Vector2 direction,
+        Vector2 normal,
+        float baselineLength,
+        float height)
+    {
+        var alignment = ToVector2(text.AlignmentPoint);
+        if (Vector2.DistanceSquared(alignment, insert) > 1e-8f)
+        {
+            return alignment;
+        }
+
+        var offset = MathF.Max(baselineLength * 0.35f, height * 0.75f);
+        return insert + (normal * offset) - (direction * (height * 0.25f));
+    }
+
+    private bool TryResolveEntityRenderGeometry(
+        ICadEditorSession? session,
+        Entity entity,
+        out IReadOnlyList<IRenderPrimitive> geometry)
+    {
+        if (_annotationService.TryGetGeometry(entity, out geometry) && geometry.Count > 0)
+        {
+            return true;
+        }
+
+        if (session is null || entity.Handle == 0)
+        {
+            geometry = Array.Empty<IRenderPrimitive>();
+            return false;
+        }
+
+        if (session.EntityIndex.TryGetByHandle(entity.Handle, out var canonicalEntity, out _) &&
+            !ReferenceEquals(canonicalEntity, entity) &&
+            _annotationService.TryGetGeometry(canonicalEntity, out geometry) &&
+            geometry.Count > 0)
+        {
+            return true;
+        }
+
+        geometry = Array.Empty<IRenderPrimitive>();
+        return false;
+    }
+
+    private bool TryResolvePrimaryRenderText(ICadEditorSession? session, Entity entity, out RenderText renderText)
+    {
+        if (TryResolveEntityRenderGeometry(session, entity, out var geometry))
+        {
+            return TryResolvePrimaryRenderText(geometry, out renderText);
+        }
+
+        renderText = null!;
+        return false;
+    }
+
+    private static bool TryResolvePrimaryRenderText(
+        IReadOnlyList<IRenderPrimitive> geometry,
+        out RenderText renderText)
+    {
+        RenderText? best = null;
+        var bestArea = float.NegativeInfinity;
+        for (var index = 0; index < geometry.Count; index++)
+        {
+            if (geometry[index] is not RenderText candidate)
+            {
+                continue;
+            }
+
+            var area = candidate.Bounds.Area;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                best = candidate;
+            }
+        }
+
+        if (best is null)
+        {
+            renderText = null!;
+            return false;
+        }
+
+        renderText = best;
+        return true;
+    }
+
+    private static bool TryResolveRenderTextBounds(
+        IReadOnlyList<IRenderPrimitive> geometry,
+        out RenderBounds bounds)
+    {
+        bounds = RenderBounds.Empty;
+        var found = false;
+        for (var index = 0; index < geometry.Count; index++)
+        {
+            if (geometry[index] is not RenderText candidate || candidate.Bounds.IsEmpty)
+            {
+                continue;
+            }
+
+            bounds = found ? bounds.Expand(candidate.Bounds) : candidate.Bounds;
+            found = true;
+        }
+
+        return found;
+    }
+
+    private static Vector2 ResolveRenderTextBaselineStart(RenderText text)
+    {
+        var localBaselineStart = new Vector2(text.Offset.X, text.Offset.Y + text.LayoutHeight);
+        return ResolveRenderTextPoint(text, localBaselineStart);
+    }
+
+    private static Vector2 ResolveRenderTextBaselineEnd(RenderText text)
+    {
+        var localBaselineEnd = new Vector2(text.Offset.X + text.LayoutWidth, text.Offset.Y + text.LayoutHeight);
+        return ResolveRenderTextPoint(text, localBaselineEnd);
+    }
+
+    private static Vector2 ResolveRenderTextHeightHandle(RenderText text)
+    {
+        var localTopRight = new Vector2(text.Offset.X + text.LayoutWidth, text.Offset.Y);
+        return ResolveRenderTextPoint(text, localTopRight);
+    }
+
+    private static Vector2 ResolveRenderTextCenter(RenderText text)
+    {
+        var localCenter = new Vector2(
+            text.Offset.X + text.LayoutWidth * 0.5f,
+            text.Offset.Y + text.LayoutHeight * 0.5f);
+        return ResolveRenderTextPoint(text, localCenter);
+    }
+
+    private static Vector2 ResolveRenderTextPoint(RenderText text, Vector2 localPoint)
+    {
+        var scaleX = text.WidthFactor * (text.MirrorX ? -1f : 1f);
+        var scaleY = text.MirrorY ? 1f : -1f;
+        var transformed = new Vector2(localPoint.X * scaleX, localPoint.Y * scaleY);
+        if (MathF.Abs(text.ObliqueAngle) > 0.0001f)
+        {
+            transformed = new Vector2(
+                transformed.X + transformed.Y * MathF.Tan(text.ObliqueAngle),
+                transformed.Y);
+        }
+
+        var sin = MathF.Sin(text.Rotation);
+        var cos = MathF.Cos(text.Rotation);
+        var rotated = new Vector2(
+            transformed.X * cos - transformed.Y * sin,
+            transformed.X * sin + transformed.Y * cos);
+        return text.Anchor + rotated;
+    }
+
+    private bool TryResolveEntityRenderBounds(ICadEditorSession? session, Entity entity, out RenderBounds bounds)
+    {
+        if (_annotationService.TryGetBounds(entity, out bounds) && !bounds.IsEmpty)
+        {
+            return true;
+        }
+
+        if (session is null || entity.Handle == 0)
+        {
+            bounds = default;
+            return false;
+        }
+
+        if (session.EntityIndex.TryGetByHandle(entity.Handle, out var canonicalEntity, out _) &&
+            !ReferenceEquals(canonicalEntity, entity) &&
+            _annotationService.TryGetBounds(canonicalEntity, out bounds) &&
+            !bounds.IsEmpty)
+        {
+            return true;
+        }
+
+        bounds = default;
+        return false;
+    }
+
+    private static Vector2 ResolveBoundedAnchor(RenderBounds bounds, Vector2 preferred)
+    {
+        if (bounds.Contains(preferred))
+        {
+            return preferred;
+        }
+
+        return new Vector2(
+            Math.Clamp(preferred.X, bounds.MinX, bounds.MaxX),
+            Math.Clamp(preferred.Y, bounds.MinY, bounds.MaxY));
+    }
+
+    private static Vector2 ResolveAlignmentGripPosition(
+        RenderBounds bounds,
+        Vector2 insert,
+        Vector2 preferredAlignment,
+        Vector2 normal,
+        float fallbackDistance)
+    {
+        var threshold = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y) * 0.5f, 0.5f);
+        var clampedAlignment = ResolveBoundedAnchor(bounds, preferredAlignment);
+        if (Vector2.DistanceSquared(clampedAlignment, insert) > 1e-6f &&
+            Vector2.Distance(clampedAlignment, preferredAlignment) <= threshold)
+        {
+            return clampedAlignment;
+        }
+
+        Span<Vector2> corners = stackalloc Vector2[4];
+        GetBoundsCorners(bounds, corners);
+        var farthest = corners[0];
+        var farthestDistance = Vector2.DistanceSquared(farthest, insert);
+        for (var index = 1; index < corners.Length; index++)
+        {
+            var corner = corners[index];
+            var distance = Vector2.DistanceSquared(corner, insert);
+            if (distance > farthestDistance)
+            {
+                farthest = corner;
+                farthestDistance = distance;
+            }
+        }
+
+        if (farthestDistance > 1e-6f)
+        {
+            return farthest;
+        }
+
+        return insert + normal * MathF.Max(fallbackDistance, 0.5f);
+    }
+
+    private static float ResolveProjectedExtent(RenderBounds bounds, Vector2 origin, Vector2 axis)
+    {
+        var direction = NormalizeOrFallback(axis, Vector2.UnitX);
+        Span<Vector2> corners = stackalloc Vector2[4];
+        GetBoundsCorners(bounds, corners);
+        var maxProjection = 0f;
+        for (var index = 0; index < corners.Length; index++)
+        {
+            var projection = Vector2.Dot(corners[index] - origin, direction);
+            if (projection > maxProjection)
+            {
+                maxProjection = projection;
+            }
+        }
+
+        if (maxProjection > 1e-4f)
+        {
+            return maxProjection;
+        }
+
+        var size = bounds.Size;
+        return MathF.Max(MathF.Max(size.X, size.Y) * 0.5f, 0.5f);
+    }
+
+    private static float ResolveMTextGripWidth(MText mtext, float height)
+    {
+        if (mtext.RectangleWidth > 1e-4d)
+        {
+            return (float)mtext.RectangleWidth;
+        }
+
+        var estimated = EstimateTextWidth(mtext.PlainText, height, 1f);
+        return MathF.Max(estimated, height * 2f);
+    }
+
+    private static float ResolveMTextGripHeight(MText mtext, float height)
+    {
+        if (mtext.RectangleHeight > 1e-4d)
+        {
+            return (float)mtext.RectangleHeight;
+        }
+
+        var lineCount = CountTextLines(mtext.Value);
+        return MathF.Max(height * MathF.Max(1f, lineCount * 1.2f), height);
+    }
+
+    private static float EstimateTextWidth(string? text, float height, float widthFactor)
+    {
+        var safeHeight = MathF.Max(height, 0.1f);
+        var safeWidthFactor = MathF.Max(widthFactor, 0.25f);
+        var glyphCount = Math.Max(1, text?.Length ?? 0);
+        var averageGlyphWidth = safeHeight * safeWidthFactor * 0.6f;
+        return MathF.Max(averageGlyphWidth * glyphCount, safeHeight * 1.5f);
+    }
+
+    private static int CountTextLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 1;
+        }
+
+        var lines = 1;
+        for (var index = 0; index < text.Length; index++)
+        {
+            var value = text[index];
+            if (value == '\n')
+            {
+                lines++;
+                continue;
+            }
+
+            if (value == '\r')
+            {
+                lines++;
+                if (index + 1 < text.Length && text[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            if (value == '\\' &&
+                index + 1 < text.Length &&
+                (text[index + 1] == 'P' || text[index + 1] == 'p'))
+            {
+                lines++;
+                index++;
+            }
+        }
+
+        return Math.Max(lines, 1);
+    }
+
+    private static Vector2 NormalizeOrFallback(Vector2 value, Vector2 fallback)
+    {
+        var lengthSquared = value.LengthSquared();
+        if (lengthSquared <= 1e-8f)
+        {
+            return fallback;
+        }
+
+        return value / MathF.Sqrt(lengthSquared);
     }
 
     private static IReadOnlyList<XYZ> ToPolylineVertices(LwPolyline polyline)

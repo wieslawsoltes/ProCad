@@ -10,6 +10,7 @@ using ACadInspector.Editing.Commands;
 using ACadInspector.Editing.Constraints;
 using ACadInspector.Editing.Interaction;
 using ACadInspector.Editing.Prompt;
+using ACadInspector.Editing.Selection;
 using ACadInspector.Editing.Sessions;
 using ACadInspector.Rendering;
 using ACadInspector.Services;
@@ -303,6 +304,109 @@ public sealed class CadRenderInteractiveEditingTests
         sessionHost.NotifySessionChanged(session);
 
         await WaitUntilAsync(() => TryGetGripMarkerMaxX(viewModel, out var maxXAfter) && maxXAfter >= 14.5f);
+    }
+
+    [Fact]
+    public async Task Interaction_TextSelection_ShowsDistinctTextGripAdorners()
+    {
+        var document = new CadDocument();
+        var text = new TextEntity
+        {
+            InsertPoint = new XYZ(4, 3, 0),
+            AlignmentPoint = new XYZ(4, 3, 0),
+            Height = 1.5,
+            Rotation = 0.0,
+            Value = "TextGrip"
+        };
+        document.Entities.Add(text);
+
+        var (viewModel, session, _, sessionHost) = CreateSystemWithHost(document);
+        session.SetSelection([text], CadSelectionMode.Replace);
+        sessionHost.NotifySessionChanged(session);
+
+        await WaitUntilAsync(() => CountUniqueGripMarkerPositions(viewModel) >= 3);
+    }
+
+    [Fact]
+    public async Task Interaction_MTextSelection_ShowsDistinctTextGripAdorners()
+    {
+        var document = new CadDocument();
+        var mtext = new MText
+        {
+            InsertPoint = new XYZ(2, 2, 0),
+            AlignmentPoint = XYZ.AxisX,
+            Height = 1.0,
+            RectangleWidth = 6.0,
+            Value = "MText Grip"
+        };
+        document.Entities.Add(mtext);
+
+        var (viewModel, session, _, sessionHost) = CreateSystemWithHost(document);
+        session.SetSelection([mtext], CadSelectionMode.Replace);
+        sessionHost.NotifySessionChanged(session);
+
+        await WaitUntilAsync(() => CountUniqueGripMarkerPositions(viewModel) >= 3);
+    }
+
+    [Fact]
+    public async Task Interaction_TextSelection_GripMarkersStayNearSelectionBounds()
+    {
+        var document = new CadDocument();
+        var text = new TextEntity
+        {
+            InsertPoint = new XYZ(6, 3, 0),
+            AlignmentPoint = new XYZ(6, 3, 0),
+            Height = 2.0,
+            Rotation = 0.25,
+            Value = "TextGripBounds"
+        };
+        document.Entities.Add(text);
+
+        var (viewModel, session, _, sessionHost) = CreateSystemWithHost(document);
+        session.SetSelection([text], CadSelectionMode.Replace);
+        sessionHost.NotifySessionChanged(session);
+
+        await WaitUntilAsync(() =>
+            CountUniqueGripMarkerPositions(viewModel) >= 3 &&
+            TryGetSceneTextBounds(viewModel, out _));
+        Assert.True(TryGetSceneTextBounds(viewModel, out var textBounds));
+        var margin = MathF.Max(MathF.Max(textBounds.Size.X, textBounds.Size.Y) * 0.35f, 1.5f);
+        var expanded = textBounds.Inflate(margin);
+        var grips = GetGripMarkers(viewModel);
+        Assert.NotEmpty(grips);
+        Assert.All(grips, grip => Assert.True(
+            expanded.Contains(grip),
+            $"Grip marker {grip} should remain near rendered text bounds {textBounds.Min}..{textBounds.Max}."));
+    }
+
+    [Fact]
+    public async Task Interaction_TextSelection_HasGripNearTopRightCorner()
+    {
+        var document = new CadDocument();
+        var text = new TextEntity
+        {
+            InsertPoint = new XYZ(3, 2, 0),
+            AlignmentPoint = new XYZ(3, 2, 0),
+            Height = 1.8,
+            Rotation = 0.0,
+            Value = "TopRightGrip"
+        };
+        document.Entities.Add(text);
+
+        var (viewModel, session, _, sessionHost) = CreateSystemWithHost(document);
+        session.SetSelection([text], CadSelectionMode.Replace);
+        sessionHost.NotifySessionChanged(session);
+
+        await WaitUntilAsync(() =>
+            CountUniqueGripMarkerPositions(viewModel) >= 3 &&
+            TryGetSceneTextBounds(viewModel, out _));
+        Assert.True(TryGetSceneTextBounds(viewModel, out var textBounds));
+        var topRight = new Vector2(textBounds.MaxX, textBounds.MaxY);
+        var tolerance = MathF.Max(MathF.Max(textBounds.Size.X, textBounds.Size.Y) * 0.3f, 1.25f);
+
+        Assert.Contains(
+            GetGripMarkers(viewModel),
+            grip => Vector2.Distance(grip, topRight) <= tolerance);
     }
 
     [Fact]
@@ -1553,6 +1657,56 @@ public sealed class CadRenderInteractiveEditingTests
         }
 
         return found;
+    }
+
+    private static int CountUniqueGripMarkerPositions(CadRenderViewModel viewModel)
+    {
+        var unique = new HashSet<(int X, int Y)>();
+        foreach (var marker in GetGripMarkers(viewModel))
+        {
+            unique.Add((
+                X: (int)MathF.Round(marker.X * 1_000f),
+                Y: (int)MathF.Round(marker.Y * 1_000f)));
+        }
+
+        return unique.Count;
+    }
+
+    private static IReadOnlyList<Vector2> GetGripMarkers(CadRenderViewModel viewModel)
+    {
+        var markers = new List<Vector2>();
+        foreach (var primitive in viewModel.OverlayScene.Primitives)
+        {
+            if (primitive.Kind != RenderOverlayPrimitiveKind.SquareMarker || primitive.FillColor is null)
+            {
+                continue;
+            }
+
+            markers.Add(primitive.Start);
+        }
+
+        return markers;
+    }
+
+    private static bool TryGetSceneTextBounds(CadRenderViewModel viewModel, out RenderBounds bounds)
+    {
+        bounds = RenderBounds.Empty;
+        if (viewModel.Scene is null)
+        {
+            return false;
+        }
+
+        foreach (var primitive in viewModel.Scene.Layers.SelectMany(static layer => layer.Primitives))
+        {
+            if (primitive is not RenderText renderText)
+            {
+                continue;
+            }
+
+            bounds = bounds.IsEmpty ? renderText.Bounds : bounds.Expand(renderText.Bounds);
+        }
+
+        return !bounds.IsEmpty;
     }
 
     private sealed class KeywordPromptRenderTestCommand : ICadDescribedCommandHandler

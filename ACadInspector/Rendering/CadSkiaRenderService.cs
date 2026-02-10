@@ -367,22 +367,12 @@ public sealed class CadSkiaRenderService
                             };
                             canvas.DrawRoundRect(rect, textCorner, textCorner, background);
 
-                            canvas.Save();
-                            canvas.Translate(0f, baselineY);
-                            canvas.Scale(1f, -1f);
-                            canvas.Translate(0f, -baselineY);
-                            canvas.DrawText(primitive.Text, textPosition.X, baselineY, paint);
-                            canvas.Restore();
+                            DrawUprightWorldText(canvas, primitive.Text, textPosition.X, baselineY, paint);
                             break;
                         }
 
                         var textBaselineY = textPosition.Y;
-                        canvas.Save();
-                        canvas.Translate(0f, textBaselineY);
-                        canvas.Scale(1f, -1f);
-                        canvas.Translate(0f, -textBaselineY);
-                        canvas.DrawText(primitive.Text, textPosition.X, textBaselineY, paint);
-                        canvas.Restore();
+                        DrawUprightWorldText(canvas, primitive.Text, textPosition.X, textBaselineY, paint);
                     }
                     break;
             }
@@ -532,11 +522,21 @@ public sealed class CadSkiaRenderService
             anchor.Y + (padding * 0.4f));
         canvas.DrawRoundRect(rect, corner, corner, background);
         var baselineY = rect.Bottom - padding;
+        DrawUprightWorldText(canvas, content, rect.Left + padding, baselineY, textPaint);
+    }
+
+    private static void DrawUprightWorldText(SKCanvas canvas, string text, float x, float baselineY, SKPaint paint)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
         canvas.Save();
         canvas.Translate(0f, baselineY);
         canvas.Scale(1f, -1f);
         canvas.Translate(0f, -baselineY);
-        canvas.DrawText(content, rect.Left + padding, baselineY, textPaint);
+        canvas.DrawText(text, x, baselineY, paint);
         canvas.Restore();
     }
 
@@ -2732,12 +2732,7 @@ public sealed class CadSkiaRenderService
         }
 
         var baselineY = rect.Bottom - padding - metrics.Descent;
-        canvas.Save();
-        canvas.Translate(0f, baselineY);
-        canvas.Scale(1f, -1f);
-        canvas.Translate(0f, -baselineY);
-        canvas.DrawText(label, rect.Left + padding, baselineY, textPaint);
-        canvas.Restore();
+        DrawUprightWorldText(canvas, label, rect.Left + padding, baselineY, textPaint);
     }
 
     private void DrawAnnotationGeometry(
