@@ -138,6 +138,26 @@ public sealed class RenderMissingEntityTests
     }
 
     [Fact]
+    public void BuildScene_HidesOle2FrameWhenOleFrameVisibilityIsHidden()
+    {
+        var document = new CadDocument();
+        document.Entities.Add(new Ole2Frame
+        {
+            UpperLeftCorner = new XYZ(0, 2, 0),
+            LowerRightCorner = new XYZ(4, 0, 0),
+            SourceApplication = "OLE"
+        });
+
+        var scene = CreateSceneBuilder().Build(document, new CadRenderSceneSettings
+        {
+            OleFrameVisibility = RenderFrameVisibility.Hidden
+        });
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToArray();
+
+        Assert.Empty(primitives);
+    }
+
+    [Fact]
     public void BuildScene_RendersToleranceWithText()
     {
         var document = new CadDocument();

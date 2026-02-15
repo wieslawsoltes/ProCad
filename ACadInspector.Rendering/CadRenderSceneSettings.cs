@@ -151,6 +151,16 @@ public sealed class CadRenderSceneSettings
     public RenderFrameVisibility UnderlayFrameVisibility { get; init; } = RenderFrameVisibility.DisplayAndPlot;
 
     /// <summary>
+    /// Gets the frame visibility for raster images (IMAGEFRAME).
+    /// </summary>
+    public RenderFrameVisibility ImageFrameVisibility { get; init; } = RenderFrameVisibility.DisplayAndPlot;
+
+    /// <summary>
+    /// Gets the frame visibility for OLE objects (OLEFRAME).
+    /// </summary>
+    public RenderFrameVisibility OleFrameVisibility { get; init; } = RenderFrameVisibility.DisplayAndPlot;
+
+    /// <summary>
     /// Gets a value indicating whether paper space linetype scaling is applied.
     /// </summary>
     public bool IsPaperSpace { get; init; }
@@ -247,6 +257,8 @@ public sealed class CadRenderSceneSettings
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
+            ImageFrameVisibility = ImageFrameVisibility,
+            OleFrameVisibility = OleFrameVisibility,
             IsPaperSpace = IsPaperSpace,
             LayoutName = LayoutName,
             PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
@@ -306,6 +318,8 @@ public sealed class CadRenderSceneSettings
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
+            ImageFrameVisibility = ImageFrameVisibility,
+            OleFrameVisibility = OleFrameVisibility,
             IsPaperSpace = IsPaperSpace,
             LayoutName = LayoutName,
             PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
@@ -370,6 +384,8 @@ public sealed class CadRenderSceneSettings
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
+            ImageFrameVisibility = ImageFrameVisibility,
+            OleFrameVisibility = OleFrameVisibility,
             IsPaperSpace = IsPaperSpace,
             LayoutName = LayoutName,
             PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
@@ -429,6 +445,8 @@ public sealed class CadRenderSceneSettings
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
+            ImageFrameVisibility = ImageFrameVisibility,
+            OleFrameVisibility = OleFrameVisibility,
             IsPaperSpace = IsPaperSpace,
             LayoutName = LayoutName,
             PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,
@@ -488,6 +506,8 @@ public sealed class CadRenderSceneSettings
             XClipFrameVisibility = XClipFrameVisibility,
             WipeoutFrameVisibility = WipeoutFrameVisibility,
             UnderlayFrameVisibility = UnderlayFrameVisibility,
+            ImageFrameVisibility = ImageFrameVisibility,
+            OleFrameVisibility = OleFrameVisibility,
             IsPaperSpace = IsPaperSpace,
             LayoutName = LayoutName,
             PaperSpaceLineTypeScalingOverride = PaperSpaceLineTypeScalingOverride,

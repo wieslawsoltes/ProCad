@@ -10,18 +10,30 @@ namespace ACadInspector.Rendering;
 
 public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
 {
+    private enum UnderlayClipMode
+    {
+        None,
+        Inside,
+        Outside
+    }
+
     public bool CanHandle(Entity entity) => entity is PdfUnderlay;
 
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var underlay = (PdfUnderlay)entity;
-        if (!underlay.Flags.HasFlag(UnderlayDisplayFlags.ShowUnderlay))
+        var shouldRenderUnderlay = underlay.Flags.HasFlag(UnderlayDisplayFlags.ShowUnderlay);
+        var shouldRenderFrame = !shouldRenderUnderlay || context.Settings.UnderlayFrameVisibility.ShouldDisplay();
+        if (!shouldRenderUnderlay && !shouldRenderFrame)
         {
             return;
         }
 
-        var vertices = ResolveBoundaryVertices(underlay);
-        var bounds = ResolveBounds(vertices);
+        var clipVertices = ResolveClipBoundaryVertices(underlay);
+        var clippingEnabled = underlay.Flags.HasFlag(UnderlayDisplayFlags.ClippingOn) && clipVertices.Count >= 3;
+        var clipMode = ResolveClipMode(underlay, clippingEnabled);
+        var imageVertices = ResolveImageBoundaryVertices();
+        var bounds = ResolveBounds(imageVertices);
         if (bounds.Size.X <= 0 || bounds.Size.Y <= 0)
         {
             return;
@@ -37,50 +49,81 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var sourcePath = ResolvePath(underlay.Definition, context.Settings.SupportPaths);
-        var label = ResolveLabel(underlay.Definition);
-        var color = ResolveUnderlayColor(underlay, context);
-        var frameColor = new RenderColor(color.R, color.G, color.B, 255);
-        var opacity = ResolveOpacity(color, underlay.Fade);
-
-        var renderImage = new RenderImage(
-            sourcePath,
-            label,
-            origin,
-            uVector,
-            vVector,
-            new Vector2(bounds.Size.X, bounds.Size.Y),
-            frameColor,
-            opacity);
-
         var builder = context.GetLayerBuilder(underlay);
-        var loops = BuildClipLoops(underlay, transform, vertices, axis);
-        if (underlay.Flags.HasFlag(UnderlayDisplayFlags.ClippingOn) && vertices.Count >= 3)
+        var imageLoops = BuildLoops(underlay, transform, imageVertices, axis);
+        if (clippingEnabled)
         {
-            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }, RenderLoopFillMode.NonZero));
+            var clipLoops = BuildLoops(underlay, transform, clipVertices, axis);
+            if (shouldRenderUnderlay)
+            {
+                var sourcePath = ResolvePath(underlay.Definition, context.Settings.SupportPaths);
+                var label = ResolveLabel(underlay.Definition);
+                var color = ResolveUnderlayColor(underlay, context);
+                var frameColor = new RenderColor(color.R, color.G, color.B, 255);
+                var opacity = ResolveOpacity(color, underlay.Fade);
+                var renderImage = new RenderImage(
+                    sourcePath,
+                    label,
+                    origin,
+                    uVector,
+                    vVector,
+                    new Vector2(bounds.Size.X, bounds.Size.Y),
+                    frameColor,
+                    opacity);
+
+                if (clipMode == UnderlayClipMode.Outside &&
+                    imageLoops.Count > 0 &&
+                    clipLoops.Count > 0)
+                {
+                    builder.Add(new RenderClipGroup(
+                        [imageLoops[0], clipLoops[0]],
+                        new IRenderPrimitive[] { renderImage },
+                        RenderLoopFillMode.EvenOdd));
+                }
+                else
+                {
+                    builder.Add(new RenderClipGroup(clipLoops, new IRenderPrimitive[] { renderImage }, RenderLoopFillMode.NonZero));
+                }
+            }
+
+            if (shouldRenderFrame)
+            {
+                AppendFrame(builder, clipLoops, underlay, context);
+            }
         }
         else
         {
-            builder.Add(renderImage);
-        }
+            if (shouldRenderUnderlay)
+            {
+                var sourcePath = ResolvePath(underlay.Definition, context.Settings.SupportPaths);
+                var label = ResolveLabel(underlay.Definition);
+                var color = ResolveUnderlayColor(underlay, context);
+                var frameColor = new RenderColor(color.R, color.G, color.B, 255);
+                var opacity = ResolveOpacity(color, underlay.Fade);
+                var renderImage = new RenderImage(
+                    sourcePath,
+                    label,
+                    origin,
+                    uVector,
+                    vVector,
+                    new Vector2(bounds.Size.X, bounds.Size.Y),
+                    frameColor,
+                    opacity);
+                builder.Add(renderImage);
+            }
 
-        if (context.Settings.UnderlayFrameVisibility.ShouldDisplay())
-        {
-            AppendFrame(builder, loops, underlay, context);
+            if (shouldRenderFrame)
+            {
+                AppendFrame(builder, imageLoops, underlay, context);
+            }
         }
     }
 
-    private static List<XY> ResolveBoundaryVertices(PdfUnderlay underlay)
+    private static List<XY> ResolveClipBoundaryVertices(PdfUnderlay underlay)
     {
         if (underlay.ClipBoundaryVertices.Count == 0)
         {
-            return new List<XY>
-            {
-                new XY(0, 0),
-                new XY(1, 0),
-                new XY(1, 1),
-                new XY(0, 1)
-            };
+            return ResolveDefaultBoundaryVertices();
         }
 
         if (underlay.ClipBoundaryVertices.Count >= 2 && underlay.ClipBoundaryVertices.Count < 3)
@@ -103,6 +146,45 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
         return new List<XY>(underlay.ClipBoundaryVertices);
     }
 
+    private static List<XY> ResolveImageBoundaryVertices()
+    {
+        // AutoCAD keeps underlay image extents independent from clipping boundaries.
+        // Clipping limits visibility, but does not remap/re-scale the image contents.
+        return ResolveDefaultBoundaryVertices();
+    }
+
+    private static UnderlayClipMode ResolveClipMode(PdfUnderlay underlay, bool clippingEnabled)
+    {
+        if (!clippingEnabled)
+        {
+            return UnderlayClipMode.None;
+        }
+
+        if (underlay.Flags.HasFlag(UnderlayDisplayFlags.ClipInsideMode))
+        {
+            return UnderlayClipMode.Inside;
+        }
+
+        // When no explicit clip boundary exists, avoid inverting the entire underlay.
+        if (underlay.ClipBoundaryVertices.Count == 0)
+        {
+            return UnderlayClipMode.Inside;
+        }
+
+        return UnderlayClipMode.Outside;
+    }
+
+    private static List<XY> ResolveDefaultBoundaryVertices()
+    {
+        return new List<XY>
+        {
+            new XY(0, 0),
+            new XY(1, 0),
+            new XY(1, 1),
+            new XY(0, 1)
+        };
+    }
+
     private static RenderBounds ResolveBounds(IReadOnlyList<XY> vertices)
     {
         var bounds = RenderBounds.Empty;
@@ -119,8 +201,17 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
         var rotation = underlay.Rotation;
         var cos = Math.Cos(rotation);
         var sin = Math.Sin(rotation);
-        var u = new XYZ(cos * underlay.XScale, sin * underlay.XScale, 0);
-        var v = new XYZ(-sin * underlay.YScale, cos * underlay.YScale, 0);
+        var localU = new XYZ(cos * underlay.XScale, sin * underlay.XScale, 0);
+        var localV = new XYZ(-sin * underlay.YScale, cos * underlay.YScale, 0);
+        var normal = RenderTransformUtils.NormalizeNormal(underlay.Normal);
+        if (normal.Equals(XYZ.AxisZ))
+        {
+            return (localU, localV);
+        }
+
+        var ocs = new Transform(Matrix4.GetArbitraryAxis(normal));
+        var u = ocs.ApplyTransform(localU);
+        var v = ocs.ApplyTransform(localV);
         return (u, v);
     }
 
@@ -131,7 +222,7 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
         return end - start;
     }
 
-    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildClipLoops(
+    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildLoops(
         PdfUnderlay underlay,
         Transform transform,
         IReadOnlyList<XY> vertices,
@@ -182,12 +273,58 @@ public sealed class PdfUnderlayRenderHandler : IRenderEntityHandler
 
     private static RenderColor ResolveUnderlayColor(PdfUnderlay underlay, RenderBuildContext context)
     {
-        if (underlay.Flags.HasFlag(UnderlayDisplayFlags.Monochrome))
+        var color = underlay.Flags.HasFlag(UnderlayDisplayFlags.Monochrome)
+            ? context.Settings.FallbackColor
+            : context.ResolveEntityColor(underlay);
+        color = ApplyUnderlayContrast(color, underlay.Contrast);
+
+        if (underlay.Flags.HasFlag(UnderlayDisplayFlags.AdjustForBackground))
         {
-            return context.Settings.FallbackColor;
+            color = ApplyBackgroundContrastCompensation(color, context.Settings);
         }
 
-        return context.ResolveEntityColor(underlay);
+        return color;
+    }
+
+    private static RenderColor ApplyUnderlayContrast(RenderColor color, byte contrast)
+    {
+        var mappedContrast = Math.Clamp(contrast * 0.5f, 0f, 50f);
+        return RenderStyleUtils.ApplyBrightnessContrast(color, brightness: 50f, contrast: mappedContrast);
+    }
+
+    private static RenderColor ApplyBackgroundContrastCompensation(RenderColor color, CadRenderSceneSettings settings)
+    {
+        var background = settings.Background;
+        var delta = MathF.Abs(ComputeLuminance(color) - ComputeLuminance(background));
+        if (delta >= 0.35f)
+        {
+            return color;
+        }
+
+        var target = ResolveHighContrastColor(background, color.A);
+        var amount = (0.35f - delta) / 0.35f;
+        return Lerp(color, target, amount);
+    }
+
+    private static float ComputeLuminance(RenderColor color)
+    {
+        return (0.2126f * color.R + 0.7152f * color.G + 0.0722f * color.B) / 255f;
+    }
+
+    private static RenderColor ResolveHighContrastColor(RenderColor background, byte alpha)
+    {
+        return ComputeLuminance(background) < 0.5f
+            ? new RenderColor(255, 255, 255, alpha)
+            : new RenderColor(0, 0, 0, alpha);
+    }
+
+    private static RenderColor Lerp(RenderColor source, RenderColor target, float amount)
+    {
+        amount = Math.Clamp(amount, 0f, 1f);
+        var r = (byte)Math.Clamp((int)Math.Round(source.R + (target.R - source.R) * amount), 0, 255);
+        var g = (byte)Math.Clamp((int)Math.Round(source.G + (target.G - source.G) * amount), 0, 255);
+        var b = (byte)Math.Clamp((int)Math.Round(source.B + (target.B - source.B) * amount), 0, 255);
+        return new RenderColor(r, g, b, source.A);
     }
 
     private static float ResolveOpacity(RenderColor color, byte fade)

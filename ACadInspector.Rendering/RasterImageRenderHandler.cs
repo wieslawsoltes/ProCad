@@ -14,13 +14,16 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var image = (RasterImage)entity;
-        if (!image.ShowImage)
+        var shouldRenderImage = image.ShowImage;
+        var shouldRenderFrame = !image.ShowImage || context.Settings.ImageFrameVisibility.ShouldDisplay();
+        if (!shouldRenderImage && !shouldRenderFrame)
         {
             return;
         }
 
         var size = ResolveImageSize(image);
-        if (size.X <= 0 || size.Y <= 0)
+        var hasImageExtent = size.X > 0 && size.Y > 0;
+        if (!hasImageExtent && (!shouldRenderFrame || image.ClipBoundaryVertices.Count == 0))
         {
             return;
         }
@@ -33,32 +36,47 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
             return;
         }
 
-        var sourcePath = ResolvePath(image.Definition?.FileName, context.Settings.SupportPaths);
-        var label = string.IsNullOrWhiteSpace(sourcePath) ? null : Path.GetFileName(sourcePath);
-        var color = context.ResolveEntityColor(image);
-        var frameColor = new RenderColor(color.R, color.G, color.B, 255);
-        var opacity = ResolveOpacity(color, image.Fade);
-
-        var renderImage = new RenderImage(
-            sourcePath,
-            label,
-            origin,
-            uVector,
-            vVector,
-            new Vector2((float)size.X, (float)size.Y),
-            frameColor,
-            opacity);
-
         var builder = context.GetLayerBuilder(image);
-        var loops = BuildClipLoops(image, transform, size);
-        if (loops.Count > 0)
+        if (shouldRenderImage && hasImageExtent)
         {
-            builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }, RenderLoopFillMode.NonZero));
+            var sourcePath = ResolvePath(image.Definition?.FileName, context.Settings.SupportPaths);
+            var label = string.IsNullOrWhiteSpace(sourcePath) ? null : Path.GetFileName(sourcePath);
+            var color = ResolveImageColor(image, context);
+            var tintColor = new RenderColor(color.R, color.G, color.B, 255);
+            var opacity = ResolveOpacity(color, image.Fade);
+
+            var renderImage = new RenderImage(
+                sourcePath,
+                label,
+                origin,
+                uVector,
+                vVector,
+                new Vector2((float)size.X, (float)size.Y),
+                tintColor,
+                opacity);
+
+            var (loops, fillMode) = BuildClipLoops(image, transform, size);
+            if (loops.Count > 0)
+            {
+                builder.Add(new RenderClipGroup(loops, new IRenderPrimitive[] { renderImage }, fillMode));
+            }
+            else
+            {
+                builder.Add(renderImage);
+            }
         }
-        else
+
+        if (shouldRenderFrame)
         {
-            builder.Add(renderImage);
+            var frameLoops = BuildFrameLoops(image, transform, size);
+            AppendFrame(builder, frameLoops, image, context);
         }
+    }
+
+    private static RenderColor ResolveImageColor(RasterImage image, RenderBuildContext context)
+    {
+        var color = context.ResolveEntityColor(image);
+        return RenderStyleUtils.ApplyBrightnessContrast(color, image.Brightness, image.Contrast);
     }
 
     private static XY ResolveImageSize(RasterImage image)
@@ -79,22 +97,101 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
         return end - start;
     }
 
-    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildClipLoops(
+    private static (IReadOnlyList<IReadOnlyList<Vector2>> Loops, RenderLoopFillMode FillMode) BuildClipLoops(
         RasterImage image,
         Transform transform,
         XY size)
     {
         if (!image.ClippingState || !image.Flags.HasFlag(ImageDisplayFlags.UseClippingBoundary))
         {
-            return Array.Empty<IReadOnlyList<Vector2>>();
+            return (Array.Empty<IReadOnlyList<Vector2>>(), RenderLoopFillMode.NonZero);
         }
 
+        var hasExplicitClipBoundary = image.ClipBoundaryVertices.Count > 0;
         var vertices = ResolveBoundaryVertices(image, size);
+        if (vertices.Count < 3)
+        {
+            return (Array.Empty<IReadOnlyList<Vector2>>(), RenderLoopFillMode.NonZero);
+        }
+
+        var clipLoop = TransformBoundaryVertices(image, transform, vertices);
+        if (image.ClipMode != ClipMode.Outside || !hasExplicitClipBoundary)
+        {
+            return (new[] { clipLoop }, RenderLoopFillMode.NonZero);
+        }
+
+        var outerVertices = BuildImageExtentVertices(size);
+        if (outerVertices.Count < 3)
+        {
+            return (new[] { clipLoop }, RenderLoopFillMode.NonZero);
+        }
+
+        var outerLoop = TransformBoundaryVertices(image, transform, outerVertices);
+        return (new IReadOnlyList<Vector2>[] { outerLoop, clipLoop }, RenderLoopFillMode.EvenOdd);
+    }
+
+    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildFrameLoops(
+        RasterImage image,
+        Transform transform,
+        XY size)
+    {
+        var vertices = ResolveFrameBoundaryVertices(image, size);
         if (vertices.Count < 3)
         {
             return Array.Empty<IReadOnlyList<Vector2>>();
         }
 
+        return new[] { TransformBoundaryVertices(image, transform, vertices) };
+    }
+
+    private static List<XY> ResolveFrameBoundaryVertices(RasterImage image, XY size)
+    {
+        if (image.ClippingState &&
+            image.Flags.HasFlag(ImageDisplayFlags.UseClippingBoundary))
+        {
+            return ResolveBoundaryVertices(image, size);
+        }
+
+        return BuildImageExtentVertices(size);
+    }
+
+    private static void AppendFrame(
+        RenderLayerBuilder builder,
+        IReadOnlyList<IReadOnlyList<Vector2>> loops,
+        RasterImage image,
+        RenderBuildContext context)
+    {
+        if (loops.Count == 0)
+        {
+            return;
+        }
+
+        var color = context.ResolveEntityColor(image);
+        var thickness = context.ResolveLineWeight(image);
+        var lineCap = context.ResolveLineCap(image);
+        var lineJoin = context.ResolveLineJoin(image);
+        foreach (var loop in loops)
+        {
+            if (loop is null || loop.Count < 2)
+            {
+                continue;
+            }
+
+            builder.Add(new RenderPolyline(
+                loop,
+                isClosed: true,
+                color,
+                thickness,
+                lineCap,
+                lineJoin));
+        }
+    }
+
+    private static List<Vector2> TransformBoundaryVertices(
+        RasterImage image,
+        Transform transform,
+        IReadOnlyList<XY> vertices)
+    {
         var loop = new List<Vector2>(vertices.Count);
         foreach (var vertex in vertices)
         {
@@ -102,7 +199,7 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
             loop.Add(RenderTransformUtils.Apply(transform, world));
         }
 
-        return new[] { loop };
+        return loop;
     }
 
     private static List<XY> ResolveBoundaryVertices(RasterImage image, XY size)
@@ -129,6 +226,11 @@ public sealed class RasterImageRenderHandler : IRenderEntityHandler
             return new List<XY>(image.ClipBoundaryVertices);
         }
 
+        return BuildImageExtentVertices(size);
+    }
+
+    private static List<XY> BuildImageExtentVertices(XY size)
+    {
         if (size.X <= 0 || size.Y <= 0)
         {
             return new List<XY>();

@@ -120,6 +120,84 @@ public sealed class RenderInsertTests
     }
 
     [Fact]
+    public void BuildScene_RendersInsertClipFrameWhenDisplayBoundaryEnabled()
+    {
+        var document = new CadDocument();
+        var block = new BlockRecord("CLIP_FRAME_ON");
+        block.Entities.Add(new Line
+        {
+            StartPoint = new XYZ(-5, 0, 0),
+            EndPoint = new XYZ(5, 0, 0)
+        });
+        document.BlockRecords.Add(block);
+
+        var insert = new Insert(block)
+        {
+            InsertPoint = new XYZ(0, 0, 0)
+        };
+
+        var filter = new SpatialFilter
+        {
+            Origin = XYZ.Zero,
+            InsertTransform = Matrix4.Identity,
+            DisplayBoundary = true
+        };
+        filter.BoundaryPoints.Add(new XY(0, 0));
+        filter.BoundaryPoints.Add(new XY(2, 2));
+        insert.SpatialFilter = filter;
+        document.Entities.Add(insert);
+
+        var scene = CreateSceneBuilder(NullRenderXRefResolver.Instance)
+            .Build(document, new CadRenderSceneSettings
+            {
+                XClipFrameVisibility = RenderFrameVisibility.DisplayAndPlot
+            });
+
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToArray();
+        Assert.Contains(primitives, primitive => primitive is RenderClipGroup);
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline polyline && polyline.IsClosed);
+    }
+
+    [Fact]
+    public void BuildScene_DoesNotRenderInsertClipFrameWhenDisplayBoundaryDisabled()
+    {
+        var document = new CadDocument();
+        var block = new BlockRecord("CLIP_FRAME_OFF");
+        block.Entities.Add(new Line
+        {
+            StartPoint = new XYZ(-5, 0, 0),
+            EndPoint = new XYZ(5, 0, 0)
+        });
+        document.BlockRecords.Add(block);
+
+        var insert = new Insert(block)
+        {
+            InsertPoint = new XYZ(0, 0, 0)
+        };
+
+        var filter = new SpatialFilter
+        {
+            Origin = XYZ.Zero,
+            InsertTransform = Matrix4.Identity,
+            DisplayBoundary = false
+        };
+        filter.BoundaryPoints.Add(new XY(0, 0));
+        filter.BoundaryPoints.Add(new XY(2, 2));
+        insert.SpatialFilter = filter;
+        document.Entities.Add(insert);
+
+        var scene = CreateSceneBuilder(NullRenderXRefResolver.Instance)
+            .Build(document, new CadRenderSceneSettings
+            {
+                XClipFrameVisibility = RenderFrameVisibility.DisplayAndPlot
+            });
+
+        var primitives = scene.Layers.SelectMany(layer => layer.Primitives).ToArray();
+        Assert.Contains(primitives, primitive => primitive is RenderClipGroup);
+        Assert.DoesNotContain(primitives, primitive => primitive is RenderPolyline);
+    }
+
+    [Fact]
     public void BuildScene_UsesOcsInsertPointForNonDefaultNormal()
     {
         var document = new CadDocument();

@@ -1266,6 +1266,8 @@ public sealed class CadRenderSceneBuilder : ICadRenderSceneBuilder
             XClipFrameVisibility = settings.XClipFrameVisibility,
             WipeoutFrameVisibility = settings.WipeoutFrameVisibility,
             UnderlayFrameVisibility = settings.UnderlayFrameVisibility,
+            ImageFrameVisibility = settings.ImageFrameVisibility,
+            OleFrameVisibility = settings.OleFrameVisibility,
             IsPaperSpace = settings.IsPaperSpace,
             LayoutName = settings.LayoutName,
             PaperSpaceLineTypeScalingOverride = paperSpaceScaling ?? settings.PaperSpaceLineTypeScalingOverride,

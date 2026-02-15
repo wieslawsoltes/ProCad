@@ -12,6 +12,11 @@ public sealed class Ole2FrameRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var frame = (Ole2Frame)entity;
+        if (!context.Settings.OleFrameVisibility.ShouldDisplay())
+        {
+            return;
+        }
+
         var builder = context.GetLayerBuilder(frame);
         var color = context.ResolveEntityColor(frame);
         var thickness = context.ResolveLineWeight(frame);

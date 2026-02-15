@@ -43,4 +43,104 @@ public sealed class CadRenderSettingsBuilderTests
             }
         }
     }
+
+    [Fact]
+    public void Build_ResolvesImageFrameVisibilityFromDictionaryVariable()
+    {
+        var document = new CadDocument();
+        document.DictionaryVariables.AddOrUpdateVariable("IMAGEFRAME", "2");
+        var baseSettings = new CadRenderSceneSettings
+        {
+            ImageFrameVisibility = RenderFrameVisibility.Hidden
+        };
+
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            documentPath: null,
+            baseSettings,
+            CadRenderLayoutSelection.ModelSpace);
+
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.ImageFrameVisibility);
+    }
+
+    [Fact]
+    public void Build_UsesDisplayAndPlotImageFrameVisibilityByDefault()
+    {
+        var document = new CadDocument();
+
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            documentPath: null,
+            new CadRenderSceneSettings(),
+            CadRenderLayoutSelection.ModelSpace);
+
+        Assert.Equal(RenderFrameVisibility.DisplayAndPlot, settings.ImageFrameVisibility);
+    }
+
+    [Fact]
+    public void Build_ResolvesOleFrameVisibilityFromDictionaryVariable()
+    {
+        var document = new CadDocument();
+        document.DictionaryVariables.AddOrUpdateVariable("OLEFRAME", "0");
+
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            documentPath: null,
+            new CadRenderSceneSettings(),
+            CadRenderLayoutSelection.ModelSpace);
+
+        Assert.Equal(RenderFrameVisibility.Hidden, settings.OleFrameVisibility);
+    }
+
+    [Fact]
+    public void Build_GlobalFrameVisibilityOverridesIndividualFrameVariables()
+    {
+        var document = new CadDocument();
+        document.DictionaryVariables.AddOrUpdateVariable("FRAME", "2");
+        document.DictionaryVariables.AddOrUpdateVariable("XCLIPFRAME", "0");
+        document.DictionaryVariables.AddOrUpdateVariable(DictionaryVariable.WipeoutFrame, "0");
+        document.DictionaryVariables.AddOrUpdateVariable("PDFFRAME", "0");
+        document.DictionaryVariables.AddOrUpdateVariable("IMAGEFRAME", "0");
+
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            documentPath: null,
+            new CadRenderSceneSettings(),
+            CadRenderLayoutSelection.ModelSpace);
+
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.XClipFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.WipeoutFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.UnderlayFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.ImageFrameVisibility);
+    }
+
+    [Fact]
+    public void Build_MixedGlobalFrameStateFallsBackToIndividualFrameVariables()
+    {
+        var document = new CadDocument();
+        document.DictionaryVariables.AddOrUpdateVariable("FRAME", "3");
+        document.DictionaryVariables.AddOrUpdateVariable("XCLIPFRAME", "0");
+        document.DictionaryVariables.AddOrUpdateVariable(DictionaryVariable.WipeoutFrame, "1");
+        document.DictionaryVariables.AddOrUpdateVariable("PDFFRAME", "2");
+        document.DictionaryVariables.AddOrUpdateVariable("IMAGEFRAME", "1");
+
+        var baseSettings = new CadRenderSceneSettings
+        {
+            XClipFrameVisibility = RenderFrameVisibility.DisplayAndPlot,
+            WipeoutFrameVisibility = RenderFrameVisibility.Hidden,
+            UnderlayFrameVisibility = RenderFrameVisibility.Hidden,
+            ImageFrameVisibility = RenderFrameVisibility.Hidden
+        };
+
+        var settings = CadRenderSettingsBuilder.Build(
+            document,
+            documentPath: null,
+            baseSettings,
+            CadRenderLayoutSelection.ModelSpace);
+
+        Assert.Equal(RenderFrameVisibility.Hidden, settings.XClipFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayAndPlot, settings.WipeoutFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayNotPlot, settings.UnderlayFrameVisibility);
+        Assert.Equal(RenderFrameVisibility.DisplayAndPlot, settings.ImageFrameVisibility);
+    }
 }

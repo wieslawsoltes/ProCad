@@ -66,9 +66,16 @@ public static class CadRenderSettingsBuilder
 
         var shadeEdge = header?.ShadeEdge ?? baseSettings.ShadeEdge;
         var shadeDiffuse = header?.ShadeDiffuseToAmbientPercentage ?? baseSettings.ShadeDiffuseToAmbientPercentage;
-        var xclipFrameVisibility = ResolveXClipFrameVisibility(document, header, baseSettings.XClipFrameVisibility);
-        var wipeoutFrameVisibility = ResolveWipeoutFrameVisibility(document, baseSettings.WipeoutFrameVisibility);
-        var underlayFrameVisibility = ResolveUnderlayFrameVisibility(document, header, baseSettings.UnderlayFrameVisibility);
+        var globalFrameVisibility = ResolveGlobalFrameVisibility(document);
+        var xclipFrameVisibility = globalFrameVisibility ??
+            ResolveXClipFrameVisibility(document, header, baseSettings.XClipFrameVisibility);
+        var wipeoutFrameVisibility = globalFrameVisibility ??
+            ResolveWipeoutFrameVisibility(document, baseSettings.WipeoutFrameVisibility);
+        var underlayFrameVisibility = globalFrameVisibility ??
+            ResolveUnderlayFrameVisibility(document, header, baseSettings.UnderlayFrameVisibility);
+        var imageFrameVisibility = globalFrameVisibility ??
+            ResolveImageFrameVisibility(document, baseSettings.ImageFrameVisibility);
+        var oleFrameVisibility = ResolveOleFrameVisibility(document, baseSettings.OleFrameVisibility);
         var layoutScaling = ResolvePaperSpaceLineTypeScaling(layout);
         var plotStyleTable = ResolvePlotStyleTable(document, documentPath, layout, selection, supportPaths);
 
@@ -118,6 +125,8 @@ public static class CadRenderSettingsBuilder
             XClipFrameVisibility = xclipFrameVisibility,
             WipeoutFrameVisibility = wipeoutFrameVisibility,
             UnderlayFrameVisibility = underlayFrameVisibility,
+            ImageFrameVisibility = imageFrameVisibility,
+            OleFrameVisibility = oleFrameVisibility,
             IsPaperSpace = isPaperSpace,
             LayoutName = selection.LayoutName,
             PaperSpaceLineTypeScalingOverride = layoutScaling,
@@ -250,6 +259,18 @@ public static class CadRenderSettingsBuilder
         };
     }
 
+    private static RenderFrameVisibility? ResolveGlobalFrameVisibility(CadDocument document)
+    {
+        if (document.DictionaryVariables is null)
+        {
+            return null;
+        }
+
+        return TryParseFrameVisibility(document.DictionaryVariables.GetValue("FRAME"), out var value)
+            ? value
+            : null;
+    }
+
     private static RenderFrameVisibility ResolveWipeoutFrameVisibility(
         CadDocument document,
         RenderFrameVisibility fallback)
@@ -303,6 +324,34 @@ public static class CadRenderSettingsBuilder
         }
 
         return fallback;
+    }
+
+    private static RenderFrameVisibility ResolveImageFrameVisibility(
+        CadDocument document,
+        RenderFrameVisibility fallback)
+    {
+        if (document.DictionaryVariables is null)
+        {
+            return fallback;
+        }
+
+        return TryParseFrameVisibility(document.DictionaryVariables.GetValue("IMAGEFRAME"), out var value)
+            ? value
+            : fallback;
+    }
+
+    private static RenderFrameVisibility ResolveOleFrameVisibility(
+        CadDocument document,
+        RenderFrameVisibility fallback)
+    {
+        if (document.DictionaryVariables is null)
+        {
+            return fallback;
+        }
+
+        return TryParseFrameVisibility(document.DictionaryVariables.GetValue("OLEFRAME"), out var value)
+            ? value
+            : fallback;
     }
 
     private static RenderPlotStyleTable? ResolvePlotStyleTable(

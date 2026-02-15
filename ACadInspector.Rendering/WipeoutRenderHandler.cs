@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using ACadSharp.Entities;
 using CSMath;
 
@@ -12,10 +13,13 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
     public void Append(Entity entity, Transform transform, RenderBuildContext context)
     {
         var wipeout = (Wipeout)entity;
-        if (wipeout.ClipMode == ClipMode.Outside)
+        var shouldRenderMask = wipeout.ShowImage;
+        var shouldRenderFrame = !wipeout.ShowImage || context.Settings.WipeoutFrameVisibility.ShouldDisplay();
+        if (!shouldRenderMask && !shouldRenderFrame)
         {
-            // TODO: Support inverted wipeout clipping (clip outside boundary). Currently rendered as inside only.
+            return;
         }
+
         var loops = BuildWipeoutLoop(wipeout, transform);
         if (loops.Count == 0)
         {
@@ -23,10 +27,21 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
         }
 
         var builder = context.GetLayerBuilder(wipeout);
-        var fillColor = context.Settings.Background;
-        builder.Add(new RenderFill(loops[0], fillColor));
+        if (shouldRenderMask)
+        {
+            var fillColor = context.Settings.Background;
+            if (wipeout.ClipMode == ClipMode.Outside)
+            {
+                var fillLoops = BuildOutsideFillLoops(context, loops[0]);
+                builder.Add(new RenderHatchFill(fillLoops, fillColor, gradient: null, RenderLoopFillMode.EvenOdd));
+            }
+            else
+            {
+                builder.Add(new RenderFill(loops[0], fillColor));
+            }
+        }
 
-        if (context.Settings.WipeoutFrameVisibility.ShouldDisplay())
+        if (shouldRenderFrame)
         {
             var frameColor = context.ResolveEntityColor(wipeout);
             var thickness = context.ResolveLineWeight(wipeout);
@@ -42,17 +57,17 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
         }
     }
 
-    private static IReadOnlyList<IReadOnlyList<System.Numerics.Vector2>> BuildWipeoutLoop(
+    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildWipeoutLoop(
         Wipeout wipeout,
         Transform transform)
     {
         var vertices = ResolveBoundaryVertices(wipeout);
         if (vertices.Count < 3)
         {
-            return Array.Empty<IReadOnlyList<System.Numerics.Vector2>>();
+            return Array.Empty<IReadOnlyList<Vector2>>();
         }
 
-        var loop = new List<System.Numerics.Vector2>(vertices.Count);
+        var loop = new List<Vector2>(vertices.Count);
         foreach (var vertex in vertices)
         {
             var world = ResolveWorldPoint(wipeout, vertex);
@@ -60,6 +75,30 @@ public sealed class WipeoutRenderHandler : IRenderEntityHandler
         }
 
         return new[] { loop };
+    }
+
+    private static IReadOnlyList<IReadOnlyList<Vector2>> BuildOutsideFillLoops(RenderBuildContext context, IReadOnlyList<Vector2> wipeoutLoop)
+    {
+        var clipBounds = RenderBounds.Empty;
+        foreach (var point in wipeoutLoop)
+        {
+            clipBounds = clipBounds.Expand(point);
+        }
+
+        var viewBounds = RenderViewBoundsResolver.Resolve(context.Document, context.Settings).Expand(clipBounds);
+        var size = viewBounds.Size;
+        var padding = MathF.Max(MathF.Max(size.X, size.Y) * 0.1f, 1f);
+        var outer = viewBounds.Inflate(padding);
+
+        var outerLoop = new List<Vector2>(4)
+        {
+            new Vector2(outer.MinX, outer.MinY),
+            new Vector2(outer.MaxX, outer.MinY),
+            new Vector2(outer.MaxX, outer.MaxY),
+            new Vector2(outer.MinX, outer.MaxY)
+        };
+
+        return new IReadOnlyList<Vector2>[] { outerLoop, wipeoutLoop };
     }
 
     private static List<XY> ResolveBoundaryVertices(Wipeout wipeout)

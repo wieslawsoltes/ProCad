@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.Objects;
@@ -366,7 +367,11 @@ public sealed class TableRenderHandler : IRenderEntityHandler
         {
             if (content.ContentType == TableEntity.TableCellContentType.Block)
             {
-                // TODO: Render block content inside table cells.
+                var blockLabel = ResolveContentText(content);
+                if (!string.IsNullOrWhiteSpace(blockLabel))
+                {
+                    lines.Add(blockLabel);
+                }
                 continue;
             }
 
@@ -551,7 +556,7 @@ public sealed class TableRenderHandler : IRenderEntityHandler
         var block = ResolveCellBlock(table, content);
         if (block is null)
         {
-            // TODO: ACadSharp does not currently hydrate table cell block handles into the cell content.
+            // If neither resolved block reference nor block name is present, fall back to text rendering.
             return false;
         }
 
@@ -578,19 +583,119 @@ public sealed class TableRenderHandler : IRenderEntityHandler
             return record;
         }
 
-        var name = content.Value?.Text ?? content.Value?.FormattedValue;
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return null;
-        }
-
         var document = table.Document;
         if (document is null)
         {
             return null;
         }
 
-        return document.BlockRecords.TryGetValue(name, out var block) ? block : null;
+        var valueType = content.Value?.ValueType;
+        var preferHandle = valueType == TableEntity.CellValueType.Handle;
+        if (TryResolveBlockByHandleValue(document, content.Value?.Value, preferHandle, out var blockByValue))
+        {
+            return blockByValue;
+        }
+
+        var name = content.Value?.Text ?? content.Value?.FormattedValue;
+        if (string.IsNullOrWhiteSpace(name) &&
+            content.Value?.Value is string valueName)
+        {
+            name = valueName;
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        if (document.BlockRecords.TryGetValue(name, out var blockByName))
+        {
+            return blockByName;
+        }
+
+        return TryParseHandleToken(name, out var handle)
+            ? document.GetCadObject<BlockRecord>(handle)
+            : null;
+    }
+
+    private static bool TryResolveBlockByHandleValue(
+        CadDocument document,
+        object? value,
+        bool preferHandle,
+        out BlockRecord? block)
+    {
+        block = null;
+        if (value is null)
+        {
+            return false;
+        }
+
+        switch (value)
+        {
+            case ulong handle:
+                block = document.GetCadObject<BlockRecord>(handle);
+                return block is not null;
+            case long signedHandle when signedHandle > 0:
+                block = document.GetCadObject<BlockRecord>((ulong)signedHandle);
+                return block is not null;
+            case int intHandle when intHandle > 0:
+                block = document.GetCadObject<BlockRecord>((ulong)intHandle);
+                return block is not null;
+            case string token:
+                var candidate = token.Trim();
+                if (preferHandle)
+                {
+                    if (!TryParseHandleToken(candidate, out var preferredHandle))
+                    {
+                        return false;
+                    }
+
+                    block = document.GetCadObject<BlockRecord>(preferredHandle);
+                    return block is not null;
+                }
+
+                if (document.BlockRecords.TryGetValue(candidate, out var blockByName))
+                {
+                    block = blockByName;
+                    return true;
+                }
+
+                if (!TryParseHandleToken(candidate, out var parsedHandle))
+                {
+                    return false;
+                }
+
+                block = document.GetCadObject<BlockRecord>(parsedHandle);
+                return block is not null;
+            case IHandledCadObject handled when handled.Handle != 0:
+                block = handled as BlockRecord ?? document.GetCadObject<BlockRecord>(handled.Handle);
+                return block is not null;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryParseHandleToken(string token, out ulong handle)
+    {
+        handle = 0;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        var candidate = token.Trim();
+        if (candidate.StartsWith("H:", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate = candidate[2..];
+        }
+
+        if (candidate.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate = candidate[2..];
+        }
+
+        return ulong.TryParse(candidate, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out handle) ||
+               ulong.TryParse(candidate, NumberStyles.Integer, CultureInfo.InvariantCulture, out handle);
     }
 
     private static CellSpanInfo[,] BuildCellSpans(TableEntity table)

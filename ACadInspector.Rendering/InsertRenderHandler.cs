@@ -190,7 +190,7 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
         IReadOnlyList<IReadOnlyList<Vector2>> clipLoops,
         RenderBuildContext context)
     {
-        if (!context.Settings.XClipFrameVisibility.ShouldDisplay())
+        if (!ShouldDisplayClipFrame(insert, context.Settings))
         {
             return;
         }
@@ -221,6 +221,22 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
                 lineCap,
                 lineJoin));
         }
+    }
+
+    private static bool ShouldDisplayClipFrame(Insert insert, CadRenderSceneSettings settings)
+    {
+        if (!settings.XClipFrameVisibility.ShouldDisplay())
+        {
+            return false;
+        }
+
+        var filter = insert.SpatialFilter;
+        if (filter is not null && !filter.DisplayBoundary)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private bool TryResolveXRef(BlockRecord block, CadRenderSceneSettings settings, out RenderXRefInfo info)
@@ -333,6 +349,8 @@ public sealed class InsertRenderHandler : IRenderEntityHandler
             XClipFrameVisibility = settings.XClipFrameVisibility,
             WipeoutFrameVisibility = settings.WipeoutFrameVisibility,
             UnderlayFrameVisibility = settings.UnderlayFrameVisibility,
+            ImageFrameVisibility = settings.ImageFrameVisibility,
+            OleFrameVisibility = settings.OleFrameVisibility,
             IsPaperSpace = settings.IsPaperSpace,
             LayoutName = settings.LayoutName,
             PaperSpaceLineTypeScalingOverride = settings.PaperSpaceLineTypeScalingOverride,
