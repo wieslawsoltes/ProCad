@@ -28,18 +28,18 @@
                      Orientation="Horizontal"
                      ItemHeight="30"
                      ItemWidth="88">
-            <Button Content="Join"
+            <Button Classes="fluent-icon" Tag="{StaticResource PlugConnectedIconPath}" Content="Join"
                     IsEnabled="{CompiledBinding CanJoin}"
                     Command="{CompiledBinding JoinCommand}" />
-            <Button Content="Leave"
+            <Button Classes="fluent-icon" Tag="{StaticResource PlugDisconnectedIconPath}" Content="Leave"
                     IsEnabled="{CompiledBinding CanLeave}"
                     Command="{CompiledBinding LeaveCommand}" />
-            <Button Content="Share"
+            <Button Classes="fluent-icon" Tag="{StaticResource ShareIconPath}" Content="Share"
                     Command="{CompiledBinding ShareCommand}" />
-            <Button Content="Reconnect"
+            <Button Classes="fluent-icon" Tag="{StaticResource SyncIconPath}" Content="Reconnect"
                     IsEnabled="{CompiledBinding CanReconnect}"
                     Command="{CompiledBinding ReconnectCommand}" />
-            <Button Content="Resync"
+            <Button Classes="fluent-icon" Tag="{StaticResource SyncCircleIconPath}" Content="Resync"
                     Command="{CompiledBinding ResyncCommand}" />
           </WrapPanel>
           <TextBlock Grid.Row="2"
@@ -95,7 +95,7 @@
             </StackPanel>
           </Grid>
           <Button Grid.Row="8"
-                  Content="Apply Settings"
+                  Classes="fluent-icon" Tag="{StaticResource SettingsIconPath}" Content="Apply Settings"
                   HorizontalAlignment="Left"
                   Command="{CompiledBinding ApplySettingsCommand}" />
         </Grid>
@@ -178,7 +178,7 @@
                   <TextBlock Grid.Column="2"
                              Text="{CompiledBinding Policy}" />
                   <Button Grid.Column="3"
-                          Content="Reapply"
+                          Classes="fluent-icon" Tag="{StaticResource RepeatIconPath}" Content="Reapply"
                           IsEnabled="{CompiledBinding CanReapply}"
                           Command="{CompiledBinding $parent[vm:CadCollaborationToolViewModel].ReapplyConflictCommand}"
                           CommandParameter="{CompiledBinding ConflictId}" />

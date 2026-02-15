@@ -17,7 +17,7 @@
                  FontSize="20"
                  FontWeight="SemiBold" />
       <Button Grid.Column="1"
-              Content="Refresh"
+              Classes="fluent-icon" Tag="{StaticResource SyncIconPath}" Content="Refresh"
               Command="{CompiledBinding RefreshCommand}" />
     </Grid>
 
@@ -37,9 +37,9 @@
                    FontWeight="SemiBold" />
         <StackPanel Orientation="Horizontal"
                     Spacing="6">
-          <Button Content="Load"
+          <Button Classes="fluent-icon" Tag="{StaticResource OpenFolderIconPath}" Content="Load"
                   Command="{CompiledBinding LoadLeftCommand}" />
-          <Button Content="Use Active"
+          <Button Classes="fluent-icon" Tag="{StaticResource CheckmarkCircleIconPath}" Content="Use Active"
                   Command="{CompiledBinding UseActiveAsLeftCommand}" />
         </StackPanel>
         <TextBlock Text="{CompiledBinding Left.DisplayName}"
@@ -61,9 +61,9 @@
                    FontWeight="SemiBold" />
         <StackPanel Orientation="Horizontal"
                     Spacing="6">
-          <Button Content="Load"
+          <Button Classes="fluent-icon" Tag="{StaticResource OpenFolderIconPath}" Content="Load"
                   Command="{CompiledBinding LoadRightCommand}" />
-          <Button Content="Use Active"
+          <Button Classes="fluent-icon" Tag="{StaticResource CheckmarkCircleIconPath}" Content="Use Active"
                   Command="{CompiledBinding UseActiveAsRightCommand}" />
         </StackPanel>
         <TextBlock Text="{CompiledBinding Right.DisplayName}"
@@ -92,7 +92,7 @@
         <TextBox Width="200"
                  Watermark="Search..."
                  Text="{CompiledBinding SummarySearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSummarySearchCommand}" />
         <TextBlock Text="Filter"
                    Margin="12,0,0,0"
@@ -100,7 +100,7 @@
         <TextBox Width="200"
                  Watermark="Filter..."
                  Text="{CompiledBinding SummaryFilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSummaryFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="2"
@@ -137,12 +137,12 @@
               <TextBox Width="180"
                        Watermark="Search..."
                        Text="{CompiledBinding ObjectSearchText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearObjectSearchCommand}" />
               <TextBox Width="180"
                        Watermark="Filter..."
                        Text="{CompiledBinding ObjectFilterText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearObjectFilterCommand}" />
             </StackPanel>
             <StackPanel Grid.Row="1"
@@ -152,12 +152,12 @@
               <TextBox Width="180"
                        Watermark="Search..."
                        Text="{CompiledBinding PropertySearchText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearPropertySearchCommand}" />
               <TextBox Width="180"
                        Watermark="Filter..."
                        Text="{CompiledBinding PropertyFilterText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearPropertyFilterCommand}" />
             </StackPanel>
 
@@ -202,12 +202,12 @@
               <TextBox Width="220"
                        Watermark="Search..."
                        Text="{CompiledBinding DxfTextSearchText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearDxfTextSearchCommand}" />
               <TextBox Width="220"
                        Watermark="Filter..."
                        Text="{CompiledBinding DxfTextFilterText, UpdateSourceTrigger=PropertyChanged}" />
-              <Button Content="Clear"
+              <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                       Command="{CompiledBinding ClearDxfTextFilterCommand}" />
             </StackPanel>
             <DataGrid Grid.Row="2"

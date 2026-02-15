@@ -19,23 +19,23 @@
         <TextBlock Text="Log Output"
                    FontWeight="SemiBold"
                    VerticalAlignment="Center" />
-        <Button Content="Copy Selected"
+        <Button Classes="fluent-icon" Tag="{StaticResource CopyIconPath}" Content="Copy Selected"
                 ToolTip.Tip="Copy selected rows using ProDataGrid clipboard export.">
           <i:Interaction.Behaviors>
             <behaviors:DataGridCopySelectionBehavior GridName="LogGrid" />
           </i:Interaction.Behaviors>
         </Button>
-        <Button Content="Clear Log"
+        <Button Classes="fluent-icon" Tag="{StaticResource BroomIconPath}" Content="Clear Log"
                 Command="{CompiledBinding ClearLogCommand}" />
         <TextBox Width="180"
                  Watermark="Search..."
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
         <TextBox Width="180"
                  Watermark="Filter..."
                  Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearFilterCommand}" />
       </StackPanel>
       <Grid Grid.Row="1"

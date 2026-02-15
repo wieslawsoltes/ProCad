@@ -15,13 +15,13 @@
             RowSpacing="8">
         <StackPanel Orientation="Horizontal"
                     Spacing="8">
-          <Button Content="Run"
+          <Button Classes="fluent-icon" Tag="{StaticResource PlayIconPath}" Content="Run"
                   Command="{CompiledBinding RunCommand}" />
-          <Button Content="Cancel"
+          <Button Classes="fluent-icon" Tag="{StaticResource DismissCircleIconPath}" Content="Cancel"
                   Command="{CompiledBinding CancelCommand}" />
-          <Button Content="Clear Output"
+          <Button Classes="fluent-icon" Tag="{StaticResource BroomIconPath}" Content="Clear Output"
                   Command="{CompiledBinding ClearOutputCommand}" />
-          <Button Content="Reset Template"
+          <Button Classes="fluent-icon" Tag="{StaticResource ResetViewIconPath}" Content="Reset Template"
                   Command="{CompiledBinding ResetTemplateCommand}" />
           <TextBlock Text="{CompiledBinding StatusMessage}"
                      VerticalAlignment="Center"
@@ -67,13 +67,13 @@
             RowSpacing="8">
         <StackPanel Orientation="Horizontal"
                     Spacing="8">
-          <Button Content="Run"
+          <Button Classes="fluent-icon" Tag="{StaticResource PlayIconPath}" Content="Run"
                   Command="{CompiledBinding RunCommandScriptCommand}" />
-          <Button Content="Cancel"
+          <Button Classes="fluent-icon" Tag="{StaticResource DismissCircleIconPath}" Content="Cancel"
                   Command="{CompiledBinding CancelCommandScriptCommand}" />
-          <Button Content="Clear Output"
+          <Button Classes="fluent-icon" Tag="{StaticResource BroomIconPath}" Content="Clear Output"
                   Command="{CompiledBinding ClearCommandOutputCommand}" />
-          <Button Content="Reset Template"
+          <Button Classes="fluent-icon" Tag="{StaticResource ResetViewIconPath}" Content="Reset Template"
                   Command="{CompiledBinding ResetCommandTemplateCommand}" />
           <CheckBox Content="Continue On Error"
                     IsChecked="{CompiledBinding ContinueOnCommandError, Mode=TwoWay}"
@@ -90,25 +90,25 @@
                 BorderBrush="{DynamicResource ThemeBorderLowBrush}">
           <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto"
                 ColumnSpacing="8">
-            <Button Content="Record"
+            <Button Classes="fluent-icon" Tag="{StaticResource RecordIconPath}" Content="Record"
                     Command="{CompiledBinding StartRecordingCommand}" />
             <Button Grid.Column="1"
-                    Content="Pause"
+                    Classes="fluent-icon" Tag="{StaticResource PauseIconPath}" Content="Pause"
                     Command="{CompiledBinding PauseRecordingCommand}" />
             <Button Grid.Column="2"
-                    Content="Resume"
+                    Classes="fluent-icon" Tag="{StaticResource PlayIconPath}" Content="Resume"
                     Command="{CompiledBinding ResumeRecordingCommand}" />
             <Button Grid.Column="3"
-                    Content="Stop"
+                    Classes="fluent-icon" Tag="{StaticResource StopIconPath}" Content="Stop"
                     Command="{CompiledBinding StopRecordingCommand}" />
             <Button Grid.Column="4"
-                    Content="Clear"
+                    Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearRecordingCommand}" />
             <Button Grid.Column="5"
-                    Content="Load Recording"
+                    Classes="fluent-icon" Tag="{StaticResource OpenFolderIconPath}" Content="Load Recording"
                     Command="{CompiledBinding LoadRecordingCommand}" />
             <Button Grid.Column="6"
-                    Content="Save Recording"
+                    Classes="fluent-icon" Tag="{StaticResource SaveIconPath}" Content="Save Recording"
                     Command="{CompiledBinding SaveRecordingCommand}" />
             <TextBox Grid.Column="7"
                      Text="{CompiledBinding RecordingSavePath, Mode=TwoWay}"
@@ -158,7 +158,7 @@
                      Text="{CompiledBinding MacroName, Mode=TwoWay}"
                      Watermark="Macro name" />
             <Button Grid.Column="6"
-                    Content="Save Macro"
+                    Classes="fluent-icon" Tag="{StaticResource SaveIconPath}" Content="Save Macro"
                     Command="{CompiledBinding SaveMacroCommand}" />
             <ComboBox Grid.Column="7"
                       Width="200"
@@ -171,10 +171,10 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
             <Button Grid.Column="9"
-                    Content="Apply Macro"
+                    Classes="fluent-icon" Tag="{StaticResource CheckmarkIconPath}" Content="Apply Macro"
                     Command="{CompiledBinding ApplyMacroCommand}" />
             <Button Grid.Column="10"
-                    Content="Delete Macro"
+                    Classes="fluent-icon" Tag="{StaticResource DeleteIconPath}" Content="Delete Macro"
                     Command="{CompiledBinding DeleteMacroCommand}" />
           </Grid>
         </Border>

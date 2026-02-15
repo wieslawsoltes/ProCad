@@ -16,17 +16,17 @@
     <StackPanel Grid.Row="1"
                 Orientation="Horizontal"
                 Spacing="8">
-      <Button Content="Add Files"
+      <Button Classes="fluent-icon" Tag="{StaticResource DocumentListIconPath}" Content="Add Files"
               Command="{CompiledBinding AddFilesCommand}" />
-      <Button Content="Add Folder"
+      <Button Classes="fluent-icon" Tag="{StaticResource FolderAddIconPath}" Content="Add Folder"
               Command="{CompiledBinding AddFolderCommand}" />
-      <Button Content="Start"
+      <Button Classes="fluent-icon" Tag="{StaticResource PlayIconPath}" Content="Start"
               Command="{CompiledBinding StartCommand}" />
-      <Button Content="Cancel"
+      <Button Classes="fluent-icon" Tag="{StaticResource DismissCircleIconPath}" Content="Cancel"
               Command="{CompiledBinding CancelCommand}" />
-      <Button Content="Remove"
+      <Button Classes="fluent-icon" Tag="{StaticResource DeleteIconPath}" Content="Remove"
               Command="{CompiledBinding RemoveSelectedCommand}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearCommand}" />
     </StackPanel>
 
@@ -55,16 +55,16 @@
                Watermark="type:Line layer:0 name:MyBlock"
                VerticalContentAlignment="Center" />
       <Button Grid.Column="2"
-              Content="Search"
+              Classes="fluent-icon" Tag="{StaticResource SearchIconPath}" Content="Search"
               Command="{CompiledBinding RunSearchCommand}" />
       <Button Grid.Column="3"
-              Content="Clear Results"
+              Classes="fluent-icon" Tag="{StaticResource BroomIconPath}" Content="Clear Results"
               Command="{CompiledBinding ClearResultsCommand}" />
       <Button Grid.Column="4"
-              Content="Export CSV"
+              Classes="fluent-icon" Tag="{StaticResource ExportIconPath}" Content="Export CSV"
               Command="{CompiledBinding ExportCsvCommand}" />
       <Button Grid.Column="5"
-              Content="Export JSON"
+              Classes="fluent-icon" Tag="{StaticResource ExportIconPath}" Content="Export JSON"
               Command="{CompiledBinding ExportJsonCommand}" />
     </Grid>
 
@@ -78,10 +78,10 @@
                  VerticalAlignment="Center"
                  Foreground="{DynamicResource ThemeForegroundLowBrush}" />
       <Button Grid.Column="2"
-              Content="Run Script"
+              Classes="fluent-icon" Tag="{StaticResource CodeIconPath}" Content="Run Script"
               Command="{CompiledBinding RunScriptCommand}" />
       <Button Grid.Column="3"
-              Content="Clear Script Results"
+              Classes="fluent-icon" Tag="{StaticResource BroomIconPath}" Content="Clear Script Results"
               Command="{CompiledBinding ClearScriptResultsCommand}" />
     </Grid>
 
@@ -100,7 +100,7 @@
             <TextBox Width="200"
                      Watermark="Search..."
                      Text="{CompiledBinding ItemsSearchText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearItemsSearchCommand}" />
             <TextBlock Text="Filter"
                        Margin="12,0,0,0"
@@ -108,7 +108,7 @@
             <TextBox Width="200"
                      Watermark="Filter..."
                      Text="{CompiledBinding ItemsFilterText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearItemsFilterCommand}" />
           </StackPanel>
           <DataGrid Grid.Row="2"
@@ -140,7 +140,7 @@
             <TextBox Width="200"
                      Watermark="Search..."
                      Text="{CompiledBinding ResultsSearchText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearResultsSearchCommand}" />
             <TextBlock Text="Filter"
                        Margin="12,0,0,0"
@@ -148,7 +148,7 @@
             <TextBox Width="200"
                      Watermark="Filter..."
                      Text="{CompiledBinding ResultsFilterText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearResultsFilterCommand}" />
           </StackPanel>
           <DataGrid Grid.Row="2"
@@ -179,7 +179,7 @@
             <TextBox Width="200"
                      Watermark="Search..."
                      Text="{CompiledBinding ScriptResultsSearchText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearScriptResultsSearchCommand}" />
             <TextBlock Text="Filter"
                        Margin="12,0,0,0"
@@ -187,7 +187,7 @@
             <TextBox Width="200"
                      Watermark="Filter..."
                      Text="{CompiledBinding ScriptResultsFilterText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Content="Clear"
+            <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                     Command="{CompiledBinding ClearScriptResultsFilterCommand}" />
           </StackPanel>
           <DataGrid Grid.Row="2"

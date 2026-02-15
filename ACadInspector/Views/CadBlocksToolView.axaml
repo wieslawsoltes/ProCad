@@ -22,26 +22,26 @@
         <TextBox Width="160"
                  Watermark="Search..."
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
         <TextBox Width="160"
                  Watermark="Filter..."
                  Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearFilterCommand}" />
-        <Button Content="Insert"
+        <Button Classes="fluent-icon" Tag="{StaticResource InsertIconPath}" Content="Insert"
                 Command="{CompiledBinding InsertBlockCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
-        <Button Content="Open"
+        <Button Classes="fluent-icon" Tag="{StaticResource OpenFolderIconPath}" Content="Open"
                 Command="{CompiledBinding OpenBlockCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
-        <Button Content="Reload XRef"
+        <Button Classes="fluent-icon" Tag="{StaticResource SyncIconPath}" Content="Reload XRef"
                 Command="{CompiledBinding ReloadXRefCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
-        <Button Content="Bind XRef"
+        <Button Classes="fluent-icon" Tag="{StaticResource LinkIconPath}" Content="Bind XRef"
                 Command="{CompiledBinding BindXRefCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
-        <Button Content="Detach XRef"
+        <Button Classes="fluent-icon" Tag="{StaticResource LinkDismissIconPath}" Content="Detach XRef"
                 Command="{CompiledBinding DetachXRefCommand}"
                 CommandParameter="{CompiledBinding SelectedBlock}" />
       </StackPanel>
@@ -63,20 +63,45 @@
           <ContextMenu>
             <MenuItem Header="Edit Block"
                       Command="{CompiledBinding OpenBlockCommand}"
-                      CommandParameter="{CompiledBinding SelectedBlock}" />
+                      CommandParameter="{CompiledBinding SelectedBlock}">
+              <MenuItem.Icon>
+                <PathIcon Classes="fluent-glyph"
+                          Data="{StaticResource EditIconPath}" />
+              </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="Insert Block"
                       Command="{CompiledBinding InsertBlockCommand}"
-                      CommandParameter="{CompiledBinding SelectedBlock}" />
+                      CommandParameter="{CompiledBinding SelectedBlock}">
+              <MenuItem.Icon>
+                <PathIcon Classes="fluent-glyph"
+                          Data="{StaticResource InsertIconPath}" />
+              </MenuItem.Icon>
+            </MenuItem>
             <Separator />
             <MenuItem Header="Reload XRef"
                       Command="{CompiledBinding ReloadXRefCommand}"
-                      CommandParameter="{CompiledBinding SelectedBlock}" />
+                      CommandParameter="{CompiledBinding SelectedBlock}">
+              <MenuItem.Icon>
+                <PathIcon Classes="fluent-glyph"
+                          Data="{StaticResource SyncIconPath}" />
+              </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="Bind XRef"
                       Command="{CompiledBinding BindXRefCommand}"
-                      CommandParameter="{CompiledBinding SelectedBlock}" />
+                      CommandParameter="{CompiledBinding SelectedBlock}">
+              <MenuItem.Icon>
+                <PathIcon Classes="fluent-glyph"
+                          Data="{StaticResource LinkIconPath}" />
+              </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="Detach XRef"
                       Command="{CompiledBinding DetachXRefCommand}"
-                      CommandParameter="{CompiledBinding SelectedBlock}" />
+                      CommandParameter="{CompiledBinding SelectedBlock}">
+              <MenuItem.Icon>
+                <PathIcon Classes="fluent-glyph"
+                          Data="{StaticResource LinkDismissIconPath}" />
+              </MenuItem.Icon>
+            </MenuItem>
           </ContextMenu>
         </DataGrid.ContextMenu>
         <i:Interaction.Behaviors>
