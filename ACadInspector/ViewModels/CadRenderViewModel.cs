@@ -999,7 +999,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
                 continue;
             }
 
-            completions.Add(new CadCommandCompletionItemViewModel(item));
+            completions.Add(new CadCommandCompletionItemViewModel(item, ApplyCanvasCompletionCommand));
         }
 
         if (completions.Count == 0)

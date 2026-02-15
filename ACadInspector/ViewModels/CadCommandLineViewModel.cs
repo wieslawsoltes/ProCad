@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Windows.Input;
 using ACadInspector.Editing.Controllers;
 using ACadInspector.Editing.Interaction;
 using ACadInspector.Editing.Commands;
@@ -420,16 +421,18 @@ public sealed partial class CadCommandLineViewModel : CadToolViewModelBase, IDis
 
 public sealed class CadCommandCompletionItemViewModel
 {
-    public CadCommandCompletionItemViewModel(CadCommandCompletionItem item)
+    public CadCommandCompletionItemViewModel(CadCommandCompletionItem item, ICommand? applyCommand = null)
     {
         Value = item.Value;
         DisplayText = item.DisplayText;
         Kind = item.Kind;
         Description = item.Description;
+        ApplyCommand = applyCommand;
     }
 
     public string Value { get; }
     public string DisplayText { get; }
     public string Kind { get; }
     public string Description { get; }
+    public ICommand? ApplyCommand { get; }
 }

@@ -82,7 +82,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:CadCommandCompletionItemViewModel">
                     <Button Content="{CompiledBinding DisplayText}"
-                            Command="{CompiledBinding $parent[vm:CadRenderViewModel].ApplyCanvasCompletionCommand}"
+                            Command="{CompiledBinding ApplyCommand}"
                             CommandParameter="{CompiledBinding .}"
                             Padding="6,1"
                             MinHeight="20" />
