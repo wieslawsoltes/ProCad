@@ -1,0 +1,44 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="StackPanel.fluent-icon-content">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="6" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="PathIcon.fluent-glyph">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.fluent-icon-label">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.fluent-icon">
+    <Setter Property="ContentTemplate">
+      <DataTemplate x:DataType="x:String">
+        <StackPanel Classes="fluent-icon-content">
+          <PathIcon Classes="fluent-glyph"
+                    Data="{CompiledBinding $parent[Button].Tag}" />
+          <TextBlock Classes="fluent-icon-label"
+                     Text="{CompiledBinding .}" />
+        </StackPanel>
+      </DataTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="ToggleButton.fluent-icon">
+    <Setter Property="ContentTemplate">
+      <DataTemplate x:DataType="x:String">
+        <StackPanel Classes="fluent-icon-content">
+          <PathIcon Classes="fluent-glyph"
+                    Data="{CompiledBinding $parent[ToggleButton].Tag}" />
+          <TextBlock Classes="fluent-icon-label"
+                     Text="{CompiledBinding .}" />
+        </StackPanel>
+      </DataTemplate>
+    </Setter>
+  </Style>
+</Styles>

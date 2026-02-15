@@ -11,6 +11,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://Dock.Avalonia.Themes.Fluent/Presets/Ide/VsCodeLight.axaml" />
+                <ResourceInclude Source="avares://ACadInspector/Resources/FluentIcons.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
@@ -20,6 +21,7 @@
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.v2.xaml" />
         <DockFluentTheme />
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+        <StyleInclude Source="avares://ACadInspector/Resources/IconStyles.axaml" />
         <Style Selector="DataGrid">
             <Setter Property="behaviors:DataGridFastPath.IsEnabled" Value="True" />
             <Setter Property="behaviors:DataGridFastPathDiagnostics.UseDataContext" Value="True" />
