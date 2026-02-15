@@ -1449,7 +1449,7 @@ public abstract class CadSelectionCommitInteractiveCommandAdapter :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        if (!CadInteractiveAdapterSelectionHelpers.TryGetSelectionHandles(session, MinimumSelectionCount, out _, out var error))
+        if (!CadInteractiveAdapterSelectionHelpers.TryGetSelectionHandles(session, MinimumSelectionCount, out var handles, out var error))
         {
             return new CadPromptResolution(
                 Handled: true,
@@ -1457,9 +1457,17 @@ public abstract class CadSelectionCommitInteractiveCommandAdapter :
                 State: runtime.State);
         }
 
+        var commandText = BuildCommandText(handles);
         return await runtime
-            .SubmitAsync(CommandName, session, cancellationToken)
+            .SubmitAsync(commandText, session, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    protected virtual string BuildCommandText(IReadOnlyList<string> handles)
+    {
+        return handles.Count == 0
+            ? CommandName
+            : $"{CommandName} {string.Join(' ', handles)}";
     }
 
     public bool TryBuildPreview(
@@ -1537,6 +1545,13 @@ public sealed class HatchInteractiveCommandAdapter : CadSelectionCommitInteracti
         : base("HATCH")
     {
     }
+
+    protected override string BuildCommandText(IReadOnlyList<string> handles)
+    {
+        return handles.Count == 0
+            ? CommandName
+            : $"{CommandName} SOLID {string.Join(' ', handles)}";
+    }
 }
 
 public sealed class CopyClipInteractiveCommandAdapter : CadSelectionCommitInteractiveCommandAdapter
@@ -1610,7 +1625,7 @@ public sealed class FilletInteractiveCommandAdapter :
                 .ConfigureAwait(false);
         }
 
-        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedLines(session, picked, 2, out var lines, out var error))
+        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedFilletChamferTargets(session, picked, 2, out var targets, out var error))
         {
             return new CadPromptResolution(
                 Handled: true,
@@ -1621,7 +1636,7 @@ public sealed class FilletInteractiveCommandAdapter :
         var activeRadius = GetRadius(session);
         var commandText = string.Create(
             CultureInfo.InvariantCulture,
-            $"FILLET {activeRadius:0.###} {lines[0].Handle:X} {lines[1].Handle:X}");
+            $"FILLET {activeRadius:0.###} {targets[0].Handle:X} {targets[1].Handle:X}");
         var resolution = await runtime
             .SubmitAsync(commandText, session, cancellationToken)
             .ConfigureAwait(false);
@@ -1640,7 +1655,7 @@ public sealed class FilletInteractiveCommandAdapter :
         preview = new CadInteractiveCommandPreview(
             CommandName: CommandName,
             Prompt: fallbackPrompt,
-            Status: $"Select first/second line near intersection (R={radius:0.###})",
+            Status: $"Select first/second line or open polyline near intersection (R={radius:0.###})",
             Hints:
             [
                 new CadToolVisualHint("Prompt", cursorPoint, null, $"Radius {radius:0.###}")
@@ -1727,7 +1742,7 @@ public sealed class ChamferInteractiveCommandAdapter :
                 .ConfigureAwait(false);
         }
 
-        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedLines(session, picked, 2, out var lines, out var error))
+        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedFilletChamferTargets(session, picked, 2, out var targets, out var error))
         {
             return new CadPromptResolution(
                 Handled: true,
@@ -1738,7 +1753,7 @@ public sealed class ChamferInteractiveCommandAdapter :
         var state = GetOrCreateState(session);
         var commandText = string.Create(
             CultureInfo.InvariantCulture,
-            $"CHAMFER {state.FirstDistance:0.###} {state.SecondDistance:0.###} {lines[0].Handle:X} {lines[1].Handle:X}");
+            $"CHAMFER {state.FirstDistance:0.###} {state.SecondDistance:0.###} {targets[0].Handle:X} {targets[1].Handle:X}");
         var resolution = await runtime
             .SubmitAsync(commandText, session, cancellationToken)
             .ConfigureAwait(false);
@@ -1757,7 +1772,7 @@ public sealed class ChamferInteractiveCommandAdapter :
         preview = new CadInteractiveCommandPreview(
             CommandName: CommandName,
             Prompt: fallbackPrompt,
-            Status: $"Select two lines (D1={state.FirstDistance:0.###}, D2={state.SecondDistance:0.###})",
+            Status: $"Select two lines/open polylines (D1={state.FirstDistance:0.###}, D2={state.SecondDistance:0.###})",
             Hints:
             [
                 new CadToolVisualHint("Prompt", cursorPoint, null, $"D1 {state.FirstDistance:0.###}, D2 {state.SecondDistance:0.###}")
@@ -2623,6 +2638,15 @@ public sealed class BreakInteractiveCommandAdapter :
     ICadInteractiveCommandAdapter,
     ICadInteractiveCommandPreviewProvider
 {
+    private readonly Dictionary<Guid, BreakSessionState> _states = new();
+    private readonly object _sync = new();
+
+    private readonly record struct BreakSessionState(
+        ulong TargetHandle,
+        Vector2 SegmentStart,
+        Vector2 SegmentEnd,
+        XY FirstPoint);
+
     public string CommandName => "BREAK";
 
     public async ValueTask<CadPromptResolution> SubmitAsync(
@@ -2633,28 +2657,97 @@ public sealed class BreakInteractiveCommandAdapter :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        if (token.Type != CadPromptTokenType.Coordinate ||
-            !CadDeltaInteractiveCommandAdapter.TryParsePoint(token.Value, out var point))
+        var key = ResolveSessionKey(session);
+        if (token.Type == CadPromptTokenType.Coordinate &&
+            TryParseCoordinateToken(token.Value, out var point))
         {
+            BreakSessionState? pendingState = null;
+            lock (_sync)
+            {
+                if (_states.TryGetValue(key, out var existing))
+                {
+                    pendingState = existing;
+                }
+            }
+
+            if (pendingState is null)
+            {
+                if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedBreakTarget(session, point, out var firstTarget, out var firstError))
+                {
+                    return new CadPromptResolution(
+                        Handled: true,
+                        Result: CadCommandResult.Fail(firstError),
+                        State: runtime.State);
+                }
+
+                lock (_sync)
+                {
+                    _states[key] = new BreakSessionState(
+                        firstTarget.Entity.Handle,
+                        firstTarget.SegmentStart,
+                        firstTarget.SegmentEnd,
+                        firstTarget.ProjectedPointExact);
+                }
+
+                return new CadPromptResolution(
+                    Handled: true,
+                    Result: null,
+                    State: runtime.State);
+            }
+
+            if (!CadInteractiveAdapterSelectionHelpers.TryResolveBreakTargetByHandle(
+                    session,
+                    pendingState.Value.TargetHandle,
+                    point,
+                    out var secondTarget,
+                    out var secondError))
+            {
+                ResetPreview(session);
+                return new CadPromptResolution(
+                    Handled: true,
+                    Result: CadCommandResult.Fail(secondError),
+                    State: runtime.State);
+            }
+
+            var twoPointCommandText = string.Create(
+                CultureInfo.InvariantCulture,
+                $"BREAK {pendingState.Value.TargetHandle:X} {pendingState.Value.FirstPoint.X:R},{pendingState.Value.FirstPoint.Y:R} {secondTarget.ProjectedPointExact.X:R},{secondTarget.ProjectedPointExact.Y:R}");
+            ResetPreview(session);
             return await runtime
-                .SubmitTokenAsync(token, session, commit, cancellationToken)
+                .SubmitAsync(twoPointCommandText, session, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedLine(session, point, out var line, out var error))
+        if (commit)
         {
-            return new CadPromptResolution(
-                Handled: true,
-                Result: CadCommandResult.Fail(error),
-                State: runtime.State);
+            BreakSessionState pendingState;
+            var hasPendingState = false;
+            lock (_sync)
+            {
+                hasPendingState = _states.TryGetValue(key, out pendingState);
+            }
+
+            if (hasPendingState)
+            {
+                var onePointCommandText = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"BREAK {pendingState.TargetHandle:X} {pendingState.FirstPoint.X:R},{pendingState.FirstPoint.Y:R}");
+                ResetPreview(session);
+                return await runtime
+                    .SubmitAsync(onePointCommandText, session, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
 
-        var commandText = string.Create(
-            CultureInfo.InvariantCulture,
-            $"BREAK {line.Handle:X} {point.X:0.###},{point.Y:0.###}");
-        return await runtime
-            .SubmitAsync(commandText, session, cancellationToken)
+        var resolution = await runtime
+            .SubmitTokenAsync(token, session, commit, cancellationToken)
             .ConfigureAwait(false);
+        if (!resolution.State.IsActive)
+        {
+            ResetPreview(session);
+        }
+
+        return resolution;
     }
 
     public bool TryBuildPreview(
@@ -2664,44 +2757,104 @@ public sealed class BreakInteractiveCommandAdapter :
         string? fallbackStatus,
         out CadInteractiveCommandPreview preview)
     {
+        var key = ResolveSessionKey(session);
+        BreakSessionState? pendingState = null;
+        lock (_sync)
+        {
+            if (_states.TryGetValue(key, out var existing))
+            {
+                pendingState = existing;
+            }
+        }
+
+        if (pendingState is not null)
+        {
+            if (!CadInteractiveAdapterSelectionHelpers.TryResolveBreakTargetByHandle(
+                    session,
+                    pendingState.Value.TargetHandle,
+                    cursorPoint,
+                    out var secondTarget,
+                    out _))
+            {
+                preview = default!;
+                return false;
+            }
+
+            preview = new CadInteractiveCommandPreview(
+                CommandName: CommandName,
+                Prompt: fallbackPrompt,
+                Status: fallbackStatus ?? "Specify second break point or press Enter for single-point break.",
+                Hints:
+                [
+                    new CadToolVisualHint("RubberBand", pendingState.Value.SegmentStart, pendingState.Value.SegmentEnd, "Selected"),
+                    new CadToolVisualHint("PickPoint", ToVector2(pendingState.Value.FirstPoint), null, "First"),
+                    new CadToolVisualHint("PickPoint", secondTarget.ProjectedPoint, null, "Second"),
+                    new CadToolVisualHint("RubberBand", ToVector2(pendingState.Value.FirstPoint), secondTarget.ProjectedPoint, "Break span"),
+                    new CadToolVisualHint("HelperLine", secondTarget.ProjectedPoint, cursorPoint, "Second break point")
+                ]);
+            return true;
+        }
+
         preview = default!;
-        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedLine(session, cursorPoint, out var line, out _))
+        if (!CadInteractiveAdapterSelectionHelpers.TryResolveNearestSelectedBreakTarget(session, cursorPoint, out var firstTarget, out _))
         {
             return false;
         }
 
-        var start = new Vector2((float)line.StartPoint.X, (float)line.StartPoint.Y);
-        var end = new Vector2((float)line.EndPoint.X, (float)line.EndPoint.Y);
-        var projected = ProjectPointToSegment(cursorPoint, start, end);
         preview = new CadInteractiveCommandPreview(
             CommandName: CommandName,
             Prompt: fallbackPrompt,
-            Status: fallbackStatus ?? "Specify break point.",
+            Status: fallbackStatus ?? "Specify first break point.",
             Hints:
             [
-                new CadToolVisualHint("RubberBand", start, end, "Selected"),
-                new CadToolVisualHint("PickPoint", projected, null, "Break"),
-                new CadToolVisualHint("HelperLine", projected, cursorPoint, "Break point")
+                new CadToolVisualHint("RubberBand", firstTarget.SegmentStart, firstTarget.SegmentEnd, "Selected"),
+                new CadToolVisualHint("PickPoint", firstTarget.ProjectedPoint, null, "First"),
+                new CadToolVisualHint("HelperLine", firstTarget.ProjectedPoint, cursorPoint, "First break point")
             ]);
         return true;
     }
 
     public void ResetPreview(ICadEditorSession? session)
     {
+        var key = ResolveSessionKey(session);
+        lock (_sync)
+        {
+            _states.Remove(key);
+        }
     }
 
-    private static Vector2 ProjectPointToSegment(Vector2 point, Vector2 start, Vector2 end)
+    private static Guid ResolveSessionKey(ICadEditorSession? session)
     {
-        var axis = end - start;
-        var lengthSquared = axis.LengthSquared();
-        if (lengthSquared <= float.Epsilon)
+        return session?.SessionId.Value ?? Guid.Empty;
+    }
+
+    private static Vector2 ToVector2(XY point)
+    {
+        return new Vector2((float)point.X, (float)point.Y);
+    }
+
+    private static bool TryParseCoordinateToken(string value, out XY point)
+    {
+        point = default;
+        if (string.IsNullOrWhiteSpace(value))
         {
-            return start;
+            return false;
         }
 
-        var t = Vector2.Dot(point - start, axis) / lengthSquared;
-        t = Math.Clamp(t, 0f, 1f);
-        return start + axis * t;
+        var split = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (split.Length < 2)
+        {
+            return false;
+        }
+
+        if (!double.TryParse(split[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ||
+            !double.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
+        {
+            return false;
+        }
+
+        point = new XY(x, y);
+        return true;
     }
 }
 
@@ -2740,7 +2893,7 @@ public abstract class CadTrimExtendInteractiveCommandAdapter :
                 State: runtime.State);
         }
 
-        var commandText = $"{CommandName} {boundary.Handle:X} {target.Handle:X} {endpoint}";
+        var commandText = $"{CommandName} {boundary.Handle:X} {target.Entity.Handle:X} {endpoint}";
         return await runtime
             .SubmitAsync(commandText, session, cancellationToken)
             .ConfigureAwait(false);
@@ -2766,8 +2919,8 @@ public abstract class CadTrimExtendInteractiveCommandAdapter :
         }
 
         var targetPoint = string.Equals(endpoint, "START", StringComparison.OrdinalIgnoreCase)
-            ? new Vector2((float)target.StartPoint.X, (float)target.StartPoint.Y)
-            : new Vector2((float)target.EndPoint.X, (float)target.EndPoint.Y);
+            ? target.StartPoint
+            : target.EndPoint;
         var boundaryAnchor = CadInteractiveAdapterSelectionHelpers.TryResolveEntityAnchor(boundary, out var resolvedAnchor)
             ? resolvedAnchor
             : Vector2.Zero;
@@ -2807,68 +2960,204 @@ public sealed class ExtendInteractiveCommandAdapter : CadTrimExtendInteractiveCo
 
 internal static class CadInteractiveAdapterSelectionHelpers
 {
+    public readonly record struct CadBreakTarget(
+        Entity Entity,
+        Vector2 SegmentStart,
+        Vector2 SegmentEnd,
+        Vector2 ProjectedPoint,
+        XY ProjectedPointExact);
+
+    public readonly record struct CadTrimExtendTarget(
+        Entity Entity,
+        Vector2 StartPoint,
+        Vector2 EndPoint);
+
     public static bool TryResolveBoundaryAndTarget(
         ICadEditorSession? session,
         Vector2 point,
         out Entity boundary,
-        out Line target,
+        out CadTrimExtendTarget target,
         out string endpoint,
         out string error)
     {
         boundary = null!;
-        target = null!;
+        target = default;
         endpoint = "END";
-        error = "Select at least two entities (including one line) before using TRIM/EXTEND.";
+        error = "Select at least two entities (including one line or open polyline) before using TRIM/EXTEND.";
 
         if (!TryGetSelectedEntities(session, out var entities) || entities.Count < 2)
         {
             return false;
         }
 
-        var lines = entities.OfType<Line>().ToArray();
-        if (lines.Length == 0)
+        var validEntities = entities
+            .Where(entity => entity.Handle != 0)
+            .DistinctBy(entity => entity.Handle)
+            .ToArray();
+        if (validEntities.Length < 2)
         {
-            error = "TRIM/EXTEND requires a selected line target.";
+            error = "TRIM/EXTEND requires at least two selected entities with valid handles.";
             return false;
         }
 
-        var selectedTarget = lines
-            .OrderBy(line => DistanceSquaredToLine(point, line))
-            .First();
-        target = selectedTarget;
-        boundary = entities.FirstOrDefault(entity => !ReferenceEquals(entity, selectedTarget)) ?? entities.First();
+        var bestDistanceSquared = float.MaxValue;
+        var selectedTarget = (Entity?)null;
+        var selectedStart = Vector2.Zero;
+        var selectedEnd = Vector2.Zero;
 
-        var start = new Vector2((float)target.StartPoint.X, (float)target.StartPoint.Y);
-        var end = new Vector2((float)target.EndPoint.X, (float)target.EndPoint.Y);
-        endpoint = Vector2.DistanceSquared(point, start) <= Vector2.DistanceSquared(point, end)
+        foreach (var candidate in validEntities)
+        {
+            switch (candidate)
+            {
+                case Line line:
+                {
+                    var start = new Vector2((float)line.StartPoint.X, (float)line.StartPoint.Y);
+                    var end = new Vector2((float)line.EndPoint.X, (float)line.EndPoint.Y);
+                    var distanceSquared = DistanceSquaredToLine(point, line);
+                    if (distanceSquared < bestDistanceSquared)
+                    {
+                        bestDistanceSquared = distanceSquared;
+                        selectedTarget = line;
+                        selectedStart = start;
+                        selectedEnd = end;
+                    }
+
+                    break;
+                }
+                case LwPolyline polyline when !polyline.IsClosed && polyline.Vertices.Count >= 2:
+                {
+                    var start = new Vector2((float)polyline.Vertices[0].Location.X, (float)polyline.Vertices[0].Location.Y);
+                    var end = new Vector2(
+                        (float)polyline.Vertices[polyline.Vertices.Count - 1].Location.X,
+                        (float)polyline.Vertices[polyline.Vertices.Count - 1].Location.Y);
+                    var distanceSquared = DistanceSquaredToOpenPolyline(point, polyline);
+                    if (distanceSquared < bestDistanceSquared)
+                    {
+                        bestDistanceSquared = distanceSquared;
+                        selectedTarget = polyline;
+                        selectedStart = start;
+                        selectedEnd = end;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if (selectedTarget is null)
+        {
+            error = "TRIM/EXTEND requires a selected line or open polyline target.";
+            return false;
+        }
+
+        var selectedBoundary = validEntities
+            .Where(entity => !ReferenceEquals(entity, selectedTarget))
+            .OrderBy(entity => DistanceSquaredToEntity(point, entity))
+            .FirstOrDefault();
+        if (selectedBoundary is null)
+        {
+            error = "TRIM/EXTEND requires a distinct boundary entity.";
+            return false;
+        }
+
+        target = new CadTrimExtendTarget(selectedTarget, selectedStart, selectedEnd);
+        boundary = selectedBoundary;
+        endpoint = Vector2.DistanceSquared(point, selectedStart) <= Vector2.DistanceSquared(point, selectedEnd)
             ? "START"
             : "END";
         return true;
     }
 
-    public static bool TryResolveNearestSelectedLine(
+    public static bool TryResolveNearestSelectedBreakTarget(
         ICadEditorSession? session,
         Vector2 point,
-        out Line line,
+        out CadBreakTarget target,
         out string error)
     {
-        line = null!;
-        error = "BREAK requires a selected line target.";
+        return TryResolveNearestSelectedBreakTarget(
+            session,
+            new XY(point.X, point.Y),
+            out target,
+            out error);
+    }
+
+    public static bool TryResolveNearestSelectedBreakTarget(
+        ICadEditorSession? session,
+        XY point,
+        out CadBreakTarget target,
+        out string error)
+    {
+        target = default;
+        error = "BREAK requires a selected line or open polyline target.";
 
         if (!TryGetSelectedEntities(session, out var entities))
         {
             return false;
         }
 
-        var lines = entities.OfType<Line>().ToArray();
-        if (lines.Length == 0)
+        var bestDistanceSquared = double.MaxValue;
+        var hasCandidate = false;
+
+        foreach (var entity in entities)
         {
+            if (entity.Handle == 0 ||
+                !TryResolveBreakTarget(entity, point, out var candidate))
+            {
+                continue;
+            }
+
+            var distanceSquared = DistanceSquared(point, candidate.ProjectedPointExact);
+            if (distanceSquared >= bestDistanceSquared)
+            {
+                continue;
+            }
+
+            bestDistanceSquared = distanceSquared;
+            target = candidate;
+            hasCandidate = true;
+        }
+
+        return hasCandidate;
+    }
+
+    public static bool TryResolveBreakTargetByHandle(
+        ICadEditorSession? session,
+        ulong handle,
+        Vector2 point,
+        out CadBreakTarget target,
+        out string error)
+    {
+        return TryResolveBreakTargetByHandle(
+            session,
+            handle,
+            new XY(point.X, point.Y),
+            out target,
+            out error);
+    }
+
+    public static bool TryResolveBreakTargetByHandle(
+        ICadEditorSession? session,
+        ulong handle,
+        XY point,
+        out CadBreakTarget target,
+        out string error)
+    {
+        target = default;
+        error = $"BREAK target handle '{handle:X}' was not found.";
+
+        if (session is not CadDocumentSession documentSession)
+        {
+            error = "BREAK requires an active document session.";
             return false;
         }
 
-        line = lines
-            .OrderBy(candidate => DistanceSquaredToLine(point, candidate))
-            .First();
+        if (!documentSession.EntityIndex.TryGetByHandle(handle, out var entity, out _) ||
+            !TryResolveBreakTarget(entity, point, out target))
+        {
+            error = $"BREAK target handle '{handle:X}' must resolve to a LINE or open LWPOLYLINE.";
+            return false;
+        }
+
         return true;
     }
 
@@ -2933,6 +3222,39 @@ internal static class CadInteractiveAdapterSelectionHelpers
         }
 
         lines = selectedLines;
+        return true;
+    }
+
+    public static bool TryResolveNearestSelectedFilletChamferTargets(
+        ICadEditorSession? session,
+        Vector2 point,
+        int minimumCount,
+        out Entity[] targets,
+        out string error)
+    {
+        targets = Array.Empty<Entity>();
+        var requiredCount = Math.Max(1, minimumCount);
+        error = requiredCount <= 1
+            ? "Select a line or open polyline before running this command."
+            : $"Select at least {requiredCount} lines or open polylines before running this command.";
+        if (!TryGetSelectedEntities(session, out var entities))
+        {
+            return false;
+        }
+
+        var selectedTargets = entities
+            .Where(static entity => entity.Handle != 0 && IsFilletChamferTarget(entity))
+            .DistinctBy(static entity => entity.Handle)
+            .OrderBy(entity => DistanceSquaredToFilletChamferTarget(point, entity))
+            .Take(requiredCount)
+            .ToArray();
+
+        if (selectedTargets.Length < requiredCount)
+        {
+            return false;
+        }
+
+        targets = selectedTargets;
         return true;
     }
 
@@ -3098,17 +3420,128 @@ internal static class CadInteractiveAdapterSelectionHelpers
     {
         var start = new Vector2((float)line.StartPoint.X, (float)line.StartPoint.Y);
         var end = new Vector2((float)line.EndPoint.X, (float)line.EndPoint.Y);
+        var projection = ProjectPointToSegment(point, start, end);
+        return Vector2.DistanceSquared(point, projection);
+    }
+
+    private static float DistanceSquaredToOpenPolyline(Vector2 point, LwPolyline polyline)
+    {
+        if (polyline.Vertices.Count < 2)
+        {
+            return float.MaxValue;
+        }
+
+        var best = float.MaxValue;
+        for (var i = 0; i < polyline.Vertices.Count - 1; i++)
+        {
+            var start = new Vector2((float)polyline.Vertices[i].Location.X, (float)polyline.Vertices[i].Location.Y);
+            var end = new Vector2((float)polyline.Vertices[i + 1].Location.X, (float)polyline.Vertices[i + 1].Location.Y);
+            var projection = ProjectPointToSegment(point, start, end);
+            var distanceSquared = Vector2.DistanceSquared(point, projection);
+            if (distanceSquared < best)
+            {
+                best = distanceSquared;
+            }
+        }
+
+        return best;
+    }
+
+    private static bool TryResolveBreakTarget(Entity entity, XY point, out CadBreakTarget target)
+    {
+        target = default;
+
+        switch (entity)
+        {
+            case Line line:
+            {
+                var start = new XY(line.StartPoint.X, line.StartPoint.Y);
+                var end = new XY(line.EndPoint.X, line.EndPoint.Y);
+                var projected = ProjectPointToSegment(point, start, end);
+                target = new CadBreakTarget(
+                    line,
+                    new Vector2((float)start.X, (float)start.Y),
+                    new Vector2((float)end.X, (float)end.Y),
+                    new Vector2((float)projected.X, (float)projected.Y),
+                    projected);
+                return true;
+            }
+            case LwPolyline polyline when !polyline.IsClosed && polyline.Vertices.Count >= 2:
+            {
+                var bestDistanceSquared = double.MaxValue;
+                var hasCandidate = false;
+                var candidate = default(CadBreakTarget);
+                for (var i = 0; i < polyline.Vertices.Count - 1; i++)
+                {
+                    var start = new XY(
+                        polyline.Vertices[i].Location.X,
+                        polyline.Vertices[i].Location.Y);
+                    var end = new XY(
+                        polyline.Vertices[i + 1].Location.X,
+                        polyline.Vertices[i + 1].Location.Y);
+                    var projected = ProjectPointToSegment(point, start, end);
+                    var distanceSquared = DistanceSquared(point, projected);
+                    if (distanceSquared >= bestDistanceSquared)
+                    {
+                        continue;
+                    }
+
+                    bestDistanceSquared = distanceSquared;
+                    candidate = new CadBreakTarget(
+                        polyline,
+                        new Vector2((float)start.X, (float)start.Y),
+                        new Vector2((float)end.X, (float)end.Y),
+                        new Vector2((float)projected.X, (float)projected.Y),
+                        projected);
+                    hasCandidate = true;
+                }
+
+                if (hasCandidate)
+                {
+                    target = candidate;
+                }
+
+                return hasCandidate;
+            }
+            default:
+                return false;
+        }
+    }
+
+    private static XY ProjectPointToSegment(XY point, XY start, XY end)
+    {
+        var axisX = end.X - start.X;
+        var axisY = end.Y - start.Y;
+        var axisLengthSquared = (axisX * axisX) + (axisY * axisY);
+        if (axisLengthSquared <= double.Epsilon)
+        {
+            return start;
+        }
+
+        var t = ((point.X - start.X) * axisX + (point.Y - start.Y) * axisY) / axisLengthSquared;
+        t = Math.Clamp(t, 0.0, 1.0);
+        return new XY(start.X + axisX * t, start.Y + axisY * t);
+    }
+
+    private static Vector2 ProjectPointToSegment(Vector2 point, Vector2 start, Vector2 end)
+    {
         var axis = end - start;
         var axisLengthSquared = axis.LengthSquared();
         if (axisLengthSquared <= float.Epsilon)
         {
-            return Vector2.DistanceSquared(point, start);
+            return start;
         }
 
         var t = Vector2.Dot(point - start, axis) / axisLengthSquared;
         t = Math.Clamp(t, 0f, 1f);
-        var projection = start + axis * t;
-        return Vector2.DistanceSquared(point, projection);
+        return start + axis * t;
+    }
+
+    private static double DistanceSquared(XY first, XY second)
+    {
+        var dx = first.X - second.X;
+        var dy = first.Y - second.Y;
+        return (dx * dx) + (dy * dy);
     }
 
     private static float DistanceSquaredToEntity(Vector2 point, Entity entity)
@@ -3124,6 +3557,22 @@ internal static class CadInteractiveAdapterSelectionHelpers
             Ray ray => Vector2.DistanceSquared(point, new Vector2((float)ray.StartPoint.X, (float)ray.StartPoint.Y)),
             TextEntity text => Vector2.DistanceSquared(point, new Vector2((float)text.InsertPoint.X, (float)text.InsertPoint.Y)),
             MText mtext => Vector2.DistanceSquared(point, new Vector2((float)mtext.InsertPoint.X, (float)mtext.InsertPoint.Y)),
+            _ => float.MaxValue
+        };
+    }
+
+    private static bool IsFilletChamferTarget(Entity entity)
+    {
+        return entity is Line ||
+               entity is LwPolyline polyline && !polyline.IsClosed && polyline.Vertices.Count >= 2;
+    }
+
+    private static float DistanceSquaredToFilletChamferTarget(Vector2 point, Entity entity)
+    {
+        return entity switch
+        {
+            Line line => DistanceSquaredToLine(point, line),
+            LwPolyline polyline when !polyline.IsClosed => DistanceSquaredToOpenPolyline(point, polyline),
             _ => float.MaxValue
         };
     }

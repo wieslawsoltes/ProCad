@@ -1,5 +1,6 @@
 using ACadInspector.Editing.Operations;
 using ACadSharp.Entities;
+using CSMath;
 
 namespace ACadInspector.Editing.Commands;
 
@@ -32,31 +33,123 @@ public sealed class ExtendCadCommand : ICadCommandHandler
         }
 
         if (!session.EntityIndex.TryGetByHandle(targetHandle, out var target, out _) ||
-            target is not Line targetLine)
+            target is not Entity targetEntity)
         {
-            return ValueTask.FromResult(CadCommandResult.Fail($"Target handle '{targetHandle:X}' must resolve to a LINE."));
+            return ValueTask.FromResult(CadCommandResult.Fail($"Target handle '{targetHandle:X}' was not found."));
         }
 
-        if (!CadTrimExtendGeometry.TryComputeExtendedLine(targetLine, boundaryEntity, endpoint, out var newStart, out var newEnd, out var geometryError))
+        if (targetEntity is Line targetLine)
         {
-            return ValueTask.FromResult(CadCommandResult.Fail(geometryError!));
+            if (!CadTrimExtendGeometry.TryComputeExtendedLine(targetLine, boundaryEntity, endpoint, out var newStart, out var newEnd, out var geometryError))
+            {
+                return ValueTask.FromResult(CadCommandResult.Fail(geometryError!));
+            }
+
+            if (!session.EntityIndex.TryGetId(targetLine, out var targetId))
+            {
+                targetId = session.EntityIndex.Register(targetLine);
+            }
+
+            var forwardOperation = CadOperationPayloadCodec.TransformLine(targetId, targetLine.StartPoint, targetLine.EndPoint, newStart, newEnd);
+            var inverseOperation = CadOperationPayloadCodec.TransformLine(targetId, newStart, newEnd, targetLine.StartPoint, targetLine.EndPoint);
+
+            var actorId = session.SessionId.Value;
+            var forwardBatch = session.NextBatch(actorId, [forwardOperation]);
+            var inverseBatch = session.NextBatch(actorId, [inverseOperation]);
+
+            session.Apply(forwardBatch);
+            session.UndoRedo.Record(forwardBatch, inverseBatch);
+
+            return ValueTask.FromResult(CadCommandResult.Ok("Extend completed.", [forwardOperation]));
         }
 
-        if (!session.EntityIndex.TryGetId(targetLine, out var targetId))
+        if (targetEntity is not LwPolyline targetPolyline)
         {
-            targetId = session.EntityIndex.Register(targetLine);
+            return ValueTask.FromResult(CadCommandResult.Fail(
+                $"Target handle '{targetHandle:X}' must resolve to a LINE or open LWPOLYLINE."));
         }
 
-        var forwardOperation = CadOperationPayloadCodec.TransformLine(targetId, targetLine.StartPoint, targetLine.EndPoint, newStart, newEnd);
-        var inverseOperation = CadOperationPayloadCodec.TransformLine(targetId, newStart, newEnd, targetLine.StartPoint, targetLine.EndPoint);
+        if (targetPolyline.IsClosed)
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail("EXTEND target polyline must be open."));
+        }
 
-        var actorId = session.SessionId.Value;
-        var forwardBatch = session.NextBatch(actorId, [forwardOperation]);
-        var inverseBatch = session.NextBatch(actorId, [inverseOperation]);
+        if (!CadPolylineEditValidation.TryValidateLinearPolyline(targetPolyline, "EXTEND", out var unsupportedError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(unsupportedError!));
+        }
 
-        session.Apply(forwardBatch);
-        session.UndoRedo.Record(forwardBatch, inverseBatch);
+        var fromVertices = CadGeometryTransform.ToVertices(targetPolyline);
+        if (fromVertices.Count < 2)
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail("EXTEND target polyline must have at least two vertices."));
+        }
 
-        return ValueTask.FromResult(CadCommandResult.Ok("Extend completed.", [forwardOperation]));
+        if (!TryExtendPolylineEndpoint(fromVertices, boundaryEntity, endpoint, out var toVertices, out var polylineError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(polylineError!));
+        }
+
+        if (!session.EntityIndex.TryGetId(targetPolyline, out var polylineId))
+        {
+            polylineId = session.EntityIndex.Register(targetPolyline);
+        }
+
+        var forwardPolyline = CadOperationPayloadCodec.TransformLwPolyline(
+            polylineId,
+            fromVertices,
+            fromClosed: false,
+            toVertices,
+            toClosed: false);
+        var inversePolyline = CadOperationPayloadCodec.TransformLwPolyline(
+            polylineId,
+            toVertices,
+            fromClosed: false,
+            fromVertices,
+            toClosed: false);
+
+        var polylineActorId = session.SessionId.Value;
+        var polylineForwardBatch = session.NextBatch(polylineActorId, [forwardPolyline]);
+        var polylineInverseBatch = session.NextBatch(polylineActorId, [inversePolyline]);
+
+        session.Apply(polylineForwardBatch);
+        session.UndoRedo.Record(polylineForwardBatch, polylineInverseBatch);
+
+        return ValueTask.FromResult(CadCommandResult.Ok("Extend completed.", [forwardPolyline]));
+    }
+
+    private static bool TryExtendPolylineEndpoint(
+        IReadOnlyList<XYZ> fromVertices,
+        Entity boundaryEntity,
+        CadLineEndpoint endpoint,
+        out IReadOnlyList<XYZ> toVertices,
+        out string? error)
+    {
+        error = null;
+        toVertices = Array.Empty<XYZ>();
+
+        var vertices = fromVertices.ToArray();
+        var endpointIndex = endpoint == CadLineEndpoint.End ? vertices.Length - 1 : 0;
+        var anchorIndex = endpoint == CadLineEndpoint.End ? vertices.Length - 2 : 1;
+        var targetSegment = new Line
+        {
+            StartPoint = vertices[anchorIndex],
+            EndPoint = vertices[endpointIndex]
+        };
+
+        if (!CadTrimExtendGeometry.TryComputeExtendedLine(
+                targetSegment,
+                boundaryEntity,
+                endpoint: CadLineEndpoint.End,
+                out _,
+                out var extendedEndpoint,
+                out error))
+        {
+            return false;
+        }
+
+        vertices[endpointIndex] = extendedEndpoint;
+        toVertices = vertices;
+        return true;
     }
 }

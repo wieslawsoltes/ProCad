@@ -701,6 +701,122 @@ public sealed class CadGeometryCommandHandlersTests
     }
 
     [Fact]
+    public async Task Hatch_FromCircle_CreateUndo_Works()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("CIRCLE 0,0 3", session);
+        var circle = Assert.Single(session.Document.Entities.OfType<Circle>());
+
+        var hatch = await registry.ExecuteAsync($"HATCH {circle.Handle:X}", session);
+        Assert.True(hatch.Success, hatch.Message);
+        var created = Assert.Single(session.Document.Entities.OfType<Hatch>());
+        var loop = GetHatchLoopPoints(created);
+        Assert.True(loop.Count >= 12);
+        Assert.Contains(loop, point => Approximately(point.X, 3.0) && Approximately(point.Y, 0.0));
+
+        var undo = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undo.Success, undo.Message);
+        Assert.Empty(session.Document.Entities.OfType<Hatch>());
+    }
+
+    [Fact]
+    public async Task Hatch_FromCircleWithCustomNormal_PreservesNormal()
+    {
+        var (session, registry) = CreateHarness();
+        var circle = new Circle
+        {
+            Center = new XYZ(0.0, 0.0, 0.0),
+            Radius = 3.0,
+            Normal = new XYZ(0.0, 0.0, -2.0)
+        };
+        session.Document.Entities.Add(circle);
+        session.EntityIndex.Register(circle);
+
+        var hatch = await registry.ExecuteAsync($"HATCH {circle.Handle:X}", session);
+        Assert.True(hatch.Success, hatch.Message);
+        var created = Assert.Single(session.Document.Entities.OfType<Hatch>());
+        Assert.Equal(0.0, created.Normal.X, 6);
+        Assert.Equal(0.0, created.Normal.Y, 6);
+        Assert.Equal(-1.0, created.Normal.Z, 6);
+    }
+
+    [Fact]
+    public async Task Hatch_FromClosedPolylineWithCustomNormal_PreservesNormal()
+    {
+        var (session, registry) = CreateHarness();
+        var polyline = new LwPolyline(new[]
+        {
+            new XY(0.0, 0.0),
+            new XY(4.0, 0.0),
+            new XY(4.0, 3.0),
+            new XY(0.0, 3.0)
+        })
+        {
+            IsClosed = true,
+            Normal = new XYZ(0.0, 0.0, -1.0)
+        };
+        session.Document.Entities.Add(polyline);
+        session.EntityIndex.Register(polyline);
+
+        var hatch = await registry.ExecuteAsync($"HATCH {polyline.Handle:X}", session);
+        Assert.True(hatch.Success, hatch.Message);
+        var created = Assert.Single(session.Document.Entities.OfType<Hatch>());
+        Assert.Equal(0.0, created.Normal.X, 6);
+        Assert.Equal(0.0, created.Normal.Y, 6);
+        Assert.Equal(-1.0, created.Normal.Z, 6);
+    }
+
+    [Fact]
+    public async Task Hatch_FromClosedEllipse_CreatesSolidHatch()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("ELLIPSE 1,2 4,0 0.5", session);
+        var ellipse = Assert.Single(session.Document.Entities.OfType<Ellipse>());
+
+        var hatch = await registry.ExecuteAsync($"HATCH {ellipse.Handle:X}", session);
+        Assert.True(hatch.Success, hatch.Message);
+        var created = Assert.Single(session.Document.Entities.OfType<Hatch>());
+        var loop = GetHatchLoopPoints(created);
+        Assert.True(loop.Count >= 12);
+        Assert.All(loop, point => Assert.True(double.IsFinite(point.X) && double.IsFinite(point.Y)));
+    }
+
+    [Fact]
+    public async Task Hatch_FromClosedSpline_CreatesSolidHatch()
+    {
+        var (session, registry) = CreateHarness();
+        var spline = new Spline
+        {
+            IsClosed = true
+        };
+        spline.FitPoints.Add(new XYZ(0.0, 0.0, 0.0));
+        spline.FitPoints.Add(new XYZ(4.0, 0.0, 0.0));
+        spline.FitPoints.Add(new XYZ(4.0, 3.0, 0.0));
+        spline.FitPoints.Add(new XYZ(0.0, 3.0, 0.0));
+        session.Document.Entities.Add(spline);
+        session.EntityIndex.Register(spline);
+
+        var hatch = await registry.ExecuteAsync($"HATCH {spline.Handle:X}", session);
+        Assert.True(hatch.Success, hatch.Message);
+        var created = Assert.Single(session.Document.Entities.OfType<Hatch>());
+        var loop = GetHatchLoopPoints(created);
+        Assert.Equal(4, loop.Count);
+        Assert.Contains(loop, point => Approximately(point.X, 4.0) && Approximately(point.Y, 3.0));
+    }
+
+    [Fact]
+    public async Task Hatch_FromOpenSpline_Fails()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("SPLINE 0,0 4,0 4,3", session);
+        var spline = Assert.Single(session.Document.Entities.OfType<Spline>());
+
+        var hatch = await registry.ExecuteAsync($"HATCH {spline.Handle:X}", session);
+        Assert.False(hatch.Success);
+        Assert.Empty(session.Document.Entities.OfType<Hatch>());
+    }
+
+    [Fact]
     public async Task Hatch_MoveCopyEraseUndo_Works()
     {
         var (session, registry) = CreateHarness();
@@ -1932,6 +2048,132 @@ public sealed class CadGeometryCommandHandlersTests
     }
 
     [Fact]
+    public async Task Trim_OpenPolyline_End_Works()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE -5,2 15,2", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var trim = await registry.ExecuteAsync($"TRIM {boundary.Handle:X} {polyline.Handle:X} END", session);
+        Assert.True(trim.Success, trim.Message);
+
+        Assert.Equal(3, polyline.Vertices.Count);
+        Assert.Equal(10.0, polyline.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, polyline.Vertices[1].Location.Y, 6);
+        Assert.Equal(10.0, polyline.Vertices[2].Location.X, 6);
+        Assert.Equal(2.0, polyline.Vertices[2].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Extend_OpenPolyline_Start_Works()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 4,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE 0,-5 0,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var extend = await registry.ExecuteAsync($"EXTEND {boundary.Handle:X} {polyline.Handle:X} START", session);
+        Assert.True(extend.Success, extend.Message);
+
+        Assert.Equal(3, polyline.Vertices.Count);
+        Assert.Equal(0.0, polyline.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, polyline.Vertices[0].Location.Y, 6);
+        Assert.Equal(10.0, polyline.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, polyline.Vertices[1].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Trim_OpenPolylineWithArcSegment_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE -5,2 15,2", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var trim = await registry.ExecuteAsync($"TRIM {boundary.Handle:X} {polyline.Handle:X} END", session);
+        Assert.False(trim.Success);
+        Assert.Contains("arc segments", trim.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Equal(3, polyline.Vertices.Count);
+    }
+
+    [Fact]
+    public async Task Trim_OpenPolylineWithVariableWidth_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE -5,2 15,2", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].StartWidth = 0.25;
+        polyline.Vertices[0].EndWidth = 0.5;
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var trim = await registry.ExecuteAsync($"TRIM {boundary.Handle:X} {polyline.Handle:X} END", session);
+        Assert.False(trim.Success);
+        Assert.Contains("variable-width", trim.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.25, polyline.Vertices[0].StartWidth, 6);
+        Assert.Equal(0.5, polyline.Vertices[0].EndWidth, 6);
+    }
+
+    [Fact]
+    public async Task Extend_OpenPolylineWithNonWorldNormal_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 4,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE 0,-5 0,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Normal = new XYZ(0, 0, -1);
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var extend = await registry.ExecuteAsync($"EXTEND {boundary.Handle:X} {polyline.Handle:X} START", session);
+        Assert.False(extend.Success);
+        Assert.Contains("world-xy", extend.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1.0, polyline.Normal.Z, 6);
+    }
+
+    [Fact]
+    public async Task Trim_ClosedPolylineTarget_Fails()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("RECTANG 0,0 10,10", session);
+        await registry.ExecuteAsync("LINE -5,2 15,2", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var trim = await registry.ExecuteAsync($"TRIM {boundary.Handle:X} {polyline.Handle:X} END", session);
+        Assert.False(trim.Success);
+    }
+
+    [Fact]
+    public async Task Extend_OpenPolylineWithArcSegment_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 4,0 10,0 10,5", session);
+        await registry.ExecuteAsync("LINE 0,-5 0,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var extend = await registry.ExecuteAsync($"EXTEND {boundary.Handle:X} {polyline.Handle:X} START", session);
+        Assert.False(extend.Success);
+        Assert.Contains("arc segments", extend.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Equal(3, polyline.Vertices.Count);
+    }
+
+    [Fact]
     public async Task Trim_LineByEllipse_End_Works()
     {
         var (session, registry) = CreateHarness();
@@ -2037,6 +2279,250 @@ public sealed class CadGeometryCommandHandlersTests
     }
 
     [Fact]
+    public async Task Break_LineBetweenTwoPoints_RemovesMiddleSegment_AndUndoRestores()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 10,0", session);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {line.Handle:X} 7,0 3,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, lines.Length);
+        Assert.Contains(
+            lines,
+            candidate => Approximately(candidate.StartPoint.X, 0.0) &&
+                         Approximately(candidate.StartPoint.Y, 0.0) &&
+                         Approximately(candidate.EndPoint.X, 3.0) &&
+                         Approximately(candidate.EndPoint.Y, 0.0));
+        Assert.Contains(
+            lines,
+            candidate => Approximately(candidate.StartPoint.X, 7.0) &&
+                         Approximately(candidate.StartPoint.Y, 0.0) &&
+                         Approximately(candidate.EndPoint.X, 10.0) &&
+                         Approximately(candidate.EndPoint.Y, 0.0));
+
+        var undo = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undo.Success, undo.Message);
+        var restored = Assert.Single(session.Document.Entities.OfType<Line>());
+        Assert.Equal(0.0, restored.StartPoint.X, 6);
+        Assert.Equal(10.0, restored.EndPoint.X, 6);
+    }
+
+    [Fact]
+    public async Task Break_LineBetweenEndpointAndPoint_KeepsSingleSegment()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 10,0", session);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {line.Handle:X} 0,0 6,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var remaining = Assert.Single(session.Document.Entities.OfType<Line>());
+        Assert.Equal(6.0, remaining.StartPoint.X, 6);
+        Assert.Equal(10.0, remaining.EndPoint.X, 6);
+    }
+
+    [Fact]
+    public async Task Break_LineWithElevation_Using2DPoint_PreservesElevation()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0,5 10,0,5", session);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {line.Handle:X} 5,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, lines.Length);
+        Assert.All(
+            lines,
+            candidate =>
+            {
+                Assert.Equal(5.0, candidate.StartPoint.Z, 6);
+                Assert.Equal(5.0, candidate.EndPoint.Z, 6);
+            });
+    }
+
+    [Fact]
+    public async Task Break_LinePointOffLine_Fails()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 10,0", session);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {line.Handle:X} 5,2", session);
+        Assert.False(brk.Success);
+        var remaining = Assert.Single(session.Document.Entities.OfType<Line>());
+        Assert.Equal(0.0, remaining.StartPoint.X, 6);
+        Assert.Equal(10.0, remaining.EndPoint.X, 6);
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineAtPoint_SplitsIntoTwo_AndUndoRestores()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 5,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 2 &&
+                         Approximately(candidate.Vertices[0].Location.X, 0.0) &&
+                         Approximately(candidate.Vertices[0].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[1].Location.X, 5.0) &&
+                         Approximately(candidate.Vertices[1].Location.Y, 0.0));
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 3 &&
+                         Approximately(candidate.Vertices[0].Location.X, 5.0) &&
+                         Approximately(candidate.Vertices[0].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[1].Location.X, 10.0) &&
+                         Approximately(candidate.Vertices[1].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[2].Location.X, 10.0) &&
+                         Approximately(candidate.Vertices[2].Location.Y, 10.0));
+
+        var undo = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undo.Success);
+        var restored = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, restored.Vertices.Count);
+        Assert.Equal(0.0, restored.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, restored.Vertices[0].Location.Y, 6);
+        Assert.Equal(10.0, restored.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, restored.Vertices[1].Location.Y, 6);
+        Assert.Equal(10.0, restored.Vertices[2].Location.X, 6);
+        Assert.Equal(10.0, restored.Vertices[2].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineWithElevation_Using2DPoint_Works()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0,5 10,0,5 10,10,5", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 5,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+        Assert.All(polylines, candidate => Assert.Equal(5.0, candidate.Elevation, 6));
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 2 &&
+                         Approximately(candidate.Vertices[1].Location.X, 5.0) &&
+                         Approximately(candidate.Vertices[1].Location.Y, 0.0));
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineAtEndpoint_Fails()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 0,0", session);
+        Assert.False(brk.Success);
+        Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineWithArcSegment_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 5,0", session);
+        Assert.False(brk.Success);
+        Assert.Contains("arc segments", brk.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineWithVariableWidth_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].StartWidth = 0.25;
+        polyline.Vertices[0].EndWidth = 0.5;
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 5,0", session);
+        Assert.False(brk.Success);
+        Assert.Contains("variable-width", brk.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.25, polyline.Vertices[0].StartWidth, 6);
+        Assert.Equal(0.5, polyline.Vertices[0].EndWidth, 6);
+        Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineWithNonWorldNormal_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Normal = new XYZ(0.0, 0.0, -1.0);
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 5,0", session);
+        Assert.False(brk.Success);
+        Assert.Contains("world-xy", brk.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1.0, polyline.Normal.Z, 6);
+        Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineBetweenTwoPoints_RemovesMiddleSegment()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 2,0 7,0", session);
+        Assert.True(brk.Success, brk.Message);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 2 &&
+                         Approximately(candidate.Vertices[0].Location.X, 0.0) &&
+                         Approximately(candidate.Vertices[0].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[1].Location.X, 2.0) &&
+                         Approximately(candidate.Vertices[1].Location.Y, 0.0));
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 3 &&
+                         Approximately(candidate.Vertices[0].Location.X, 7.0) &&
+                         Approximately(candidate.Vertices[0].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[1].Location.X, 10.0) &&
+                         Approximately(candidate.Vertices[1].Location.Y, 0.0) &&
+                         Approximately(candidate.Vertices[2].Location.X, 10.0) &&
+                         Approximately(candidate.Vertices[2].Location.Y, 10.0));
+    }
+
+    [Fact]
+    public async Task Break_OpenPolylineBetweenEndpointPoints_DeletesPolyline()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,10", session);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+
+        var brk = await registry.ExecuteAsync($"BREAK {polyline.Handle:X} 0,0 10,10", session);
+        Assert.True(brk.Success, brk.Message);
+        Assert.Empty(session.Document.Entities.OfType<LwPolyline>());
+    }
+
+    [Fact]
     public async Task Join_TwoCollinearLines_MergesAndUndoRestores()
     {
         var (session, registry) = CreateHarness();
@@ -2061,6 +2547,133 @@ public sealed class CadGeometryCommandHandlersTests
     }
 
     [Fact]
+    public async Task Join_SeparateCommands_DoNotMergeUndoUnits()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 5,0", session);
+        await registry.ExecuteAsync("LINE 5,0 10,0", session);
+        await registry.ExecuteAsync("LINE 20,0 25,0", session);
+        await registry.ExecuteAsync("LINE 25,0 30,0", session);
+
+        var lines = session.Document.Entities
+            .OfType<Line>()
+            .OrderBy(static line => Math.Min(line.StartPoint.X, line.EndPoint.X))
+            .ToArray();
+        Assert.Equal(4, lines.Length);
+
+        var firstJoin = await registry.ExecuteAsync(
+            $"JOIN {lines[0].Handle:X} {lines[1].Handle:X}",
+            session);
+        Assert.True(firstJoin.Success, firstJoin.Message);
+
+        var secondJoin = await registry.ExecuteAsync(
+            $"JOIN {lines[2].Handle:X} {lines[3].Handle:X}",
+            session);
+        Assert.True(secondJoin.Success, secondJoin.Message);
+        Assert.Equal(2, session.Document.Entities.OfType<Line>().Count());
+
+        var undoSecondJoin = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undoSecondJoin.Success, undoSecondJoin.Message);
+        Assert.Equal(3, session.Document.Entities.OfType<Line>().Count());
+
+        var undoFirstJoin = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undoFirstJoin.Success, undoFirstJoin.Message);
+        Assert.Equal(4, session.Document.Entities.OfType<Line>().Count());
+    }
+
+    [Fact]
+    public async Task Join_ThreeCollinearLines_MergesAllAndUndoRestoresSingleStep()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 5,0", session);
+        await registry.ExecuteAsync("LINE 5,0 10,0", session);
+        await registry.ExecuteAsync("LINE 10,0 15,0", session);
+
+        var linesBefore = session.Document.Entities.OfType<Line>().OrderBy(static line => Math.Min(line.StartPoint.X, line.EndPoint.X)).ToArray();
+        Assert.Equal(3, linesBefore.Length);
+
+        var join = await registry.ExecuteAsync(
+            $"JOIN {linesBefore[0].Handle:X} {linesBefore[1].Handle:X} {linesBefore[2].Handle:X}",
+            session);
+        Assert.True(join.Success, join.Message);
+
+        var merged = Assert.Single(session.Document.Entities.OfType<Line>());
+        Assert.True(
+            (Math.Abs(merged.StartPoint.X - 0.0) < 1e-6 && Math.Abs(merged.EndPoint.X - 15.0) < 1e-6) ||
+            (Math.Abs(merged.StartPoint.X - 15.0) < 1e-6 && Math.Abs(merged.EndPoint.X - 0.0) < 1e-6));
+
+        var undo = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undo.Success, undo.Message);
+        Assert.Equal(3, session.Document.Entities.OfType<Line>().Count());
+    }
+
+    [Fact]
+    public async Task Join_MultiTargetWithIncompatibleEntity_JoinsCompatibleAndSkipsRemaining()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 0,0 5,0", session);
+        await registry.ExecuteAsync("LINE 5,0 10,0", session);
+        await registry.ExecuteAsync("LINE 100,0 110,0", session);
+
+        var linesBefore = session.Document.Entities.OfType<Line>().OrderBy(static line => Math.Min(line.StartPoint.X, line.EndPoint.X)).ToArray();
+        Assert.Equal(3, linesBefore.Length);
+
+        var join = await registry.ExecuteAsync(
+            $"JOIN {linesBefore[0].Handle:X} {linesBefore[1].Handle:X} {linesBefore[2].Handle:X}",
+            session);
+        Assert.True(join.Success, join.Message);
+        Assert.Contains("skipped", join.Message, StringComparison.OrdinalIgnoreCase);
+
+        var linesAfter = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, linesAfter.Length);
+        Assert.Contains(
+            linesAfter,
+            line =>
+                (Math.Abs(line.StartPoint.X - 0.0) < 1e-6 && Math.Abs(line.EndPoint.X - 10.0) < 1e-6) ||
+                (Math.Abs(line.StartPoint.X - 10.0) < 1e-6 && Math.Abs(line.EndPoint.X - 0.0) < 1e-6));
+        Assert.Contains(
+            linesAfter,
+            line =>
+                (Math.Abs(line.StartPoint.X - 100.0) < 1e-6 && Math.Abs(line.EndPoint.X - 110.0) < 1e-6) ||
+                (Math.Abs(line.StartPoint.X - 110.0) < 1e-6 && Math.Abs(line.EndPoint.X - 100.0) < 1e-6));
+    }
+
+    [Fact]
+    public async Task Join_MultiTargetWithIsolatedFirstEntity_MergesJoinableRemainder()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("LINE 100,0 110,0", session); // Isolated, first in command order.
+        await registry.ExecuteAsync("LINE 0,0 5,0", session);
+        await registry.ExecuteAsync("LINE 5,0 10,0", session);
+
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(3, lines.Length);
+
+        var isolated = lines.Single(line => Math.Abs(line.StartPoint.X - 100.0) < 1e-6 || Math.Abs(line.EndPoint.X - 100.0) < 1e-6);
+        var left = lines.Single(line => Math.Abs(line.StartPoint.X - 0.0) < 1e-6 || Math.Abs(line.EndPoint.X - 0.0) < 1e-6);
+        var right = lines.Single(line => !ReferenceEquals(line, isolated) && !ReferenceEquals(line, left));
+
+        var join = await registry.ExecuteAsync(
+            $"JOIN {isolated.Handle:X} {left.Handle:X} {right.Handle:X}",
+            session);
+        Assert.True(join.Success, join.Message);
+        Assert.Contains("skipped", join.Message, StringComparison.OrdinalIgnoreCase);
+
+        var linesAfter = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, linesAfter.Length);
+        Assert.Contains(
+            linesAfter,
+            line =>
+                (Math.Abs(line.StartPoint.X - 0.0) < 1e-6 && Math.Abs(line.EndPoint.X - 10.0) < 1e-6) ||
+                (Math.Abs(line.StartPoint.X - 10.0) < 1e-6 && Math.Abs(line.EndPoint.X - 0.0) < 1e-6));
+        Assert.Contains(
+            linesAfter,
+            line =>
+                (Math.Abs(line.StartPoint.X - 100.0) < 1e-6 && Math.Abs(line.EndPoint.X - 110.0) < 1e-6) ||
+                (Math.Abs(line.StartPoint.X - 110.0) < 1e-6 && Math.Abs(line.EndPoint.X - 100.0) < 1e-6));
+    }
+
+    [Fact]
     public async Task Join_LineAndOpenPolyline_AppendsLineAndRemovesLine()
     {
         var (session, registry) = CreateHarness();
@@ -2077,6 +2690,156 @@ public sealed class CadGeometryCommandHandlersTests
         Assert.Equal(4, updated.Vertices.Count);
         Assert.Equal(10.0, updated.Vertices[^1].Location.X, 6);
         Assert.Equal(5.0, updated.Vertices[^1].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Join_LineAndArcSegmentPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 5,0 5,5", session);
+        await registry.ExecuteAsync("LINE 5,5 10,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var join = await registry.ExecuteAsync($"JOIN {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(join.Success);
+        Assert.Contains("arc segments", join.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
+    }
+
+    [Fact]
+    public async Task Join_LineAndVariableWidthPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 5,0 5,5", session);
+        await registry.ExecuteAsync("LINE 5,5 10,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].StartWidth = 0.25;
+        polyline.Vertices[0].EndWidth = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var join = await registry.ExecuteAsync($"JOIN {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(join.Success);
+        Assert.Contains("variable-width", join.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.25, polyline.Vertices[0].StartWidth, 6);
+        Assert.Equal(0.5, polyline.Vertices[0].EndWidth, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
+    }
+
+    [Fact]
+    public async Task Join_LineAndNonWorldPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 5,0 5,5", session);
+        await registry.ExecuteAsync("LINE 5,5 10,5", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Normal = new XYZ(0.0, 0.0, -1.0);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var join = await registry.ExecuteAsync($"JOIN {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(join.Success);
+        Assert.Contains("world-xy", join.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1.0, polyline.Normal.Z, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
+    }
+
+    [Fact]
+    public async Task Join_TwoOpenPolylines_AppendsVerticesAndSupportsUndo()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 5,0 5,5", session);
+        await registry.ExecuteAsync("PLINE 5,5 10,5 10,10", session);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+
+        var join = await registry.ExecuteAsync($"JOIN {polylines[0].Handle:X} {polylines[1].Handle:X}", session);
+        Assert.True(join.Success);
+
+        var merged = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(5, merged.Vertices.Count);
+        Assert.Equal(0.0, merged.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[0].Location.Y, 6);
+        Assert.Equal(10.0, merged.Vertices[^1].Location.X, 6);
+        Assert.Equal(10.0, merged.Vertices[^1].Location.Y, 6);
+
+        var undo = await registry.ExecuteAsync("UNDO", session);
+        Assert.True(undo.Success);
+        Assert.Equal(2, session.Document.Entities.OfType<LwPolyline>().Count());
+    }
+
+    [Fact]
+    public async Task Join_TwoOpenPolylines_WithSharedStart_ReversesSecondAndMerges()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 3,0", session);
+        await registry.ExecuteAsync("PLINE 0,0 -4,0", session);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+
+        var join = await registry.ExecuteAsync($"JOIN {polylines[0].Handle:X} {polylines[1].Handle:X}", session);
+        Assert.True(join.Success);
+
+        var merged = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, merged.Vertices.Count);
+        Assert.Equal(-4.0, merged.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[0].Location.Y, 6);
+        Assert.Equal(0.0, merged.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[1].Location.Y, 6);
+        Assert.Equal(3.0, merged.Vertices[2].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[2].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Join_TwoOpenPolylines_WithSharedEnd_ReversesSecondAndMerges()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 3,0", session);
+        await registry.ExecuteAsync("PLINE -4,0 3,0", session);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+
+        var join = await registry.ExecuteAsync($"JOIN {polylines[0].Handle:X} {polylines[1].Handle:X}", session);
+        Assert.True(join.Success);
+
+        var merged = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, merged.Vertices.Count);
+        Assert.Equal(0.0, merged.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[0].Location.Y, 6);
+        Assert.Equal(3.0, merged.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[1].Location.Y, 6);
+        Assert.Equal(-4.0, merged.Vertices[2].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[2].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task Join_TwoOpenPolylines_WithSharedFirstStartSecondEnd_MergesForward()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 3,0", session);
+        await registry.ExecuteAsync("PLINE -4,0 0,0", session);
+
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+
+        var join = await registry.ExecuteAsync($"JOIN {polylines[0].Handle:X} {polylines[1].Handle:X}", session);
+        Assert.True(join.Success);
+
+        var merged = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        Assert.Equal(3, merged.Vertices.Count);
+        Assert.Equal(-4.0, merged.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[0].Location.Y, 6);
+        Assert.Equal(0.0, merged.Vertices[1].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[1].Location.Y, 6);
+        Assert.Equal(3.0, merged.Vertices[2].Location.X, 6);
+        Assert.Equal(0.0, merged.Vertices[2].Location.Y, 6);
     }
 
     [Fact]
@@ -2152,6 +2915,83 @@ public sealed class CadGeometryCommandHandlersTests
     }
 
     [Fact]
+    public async Task Fillet_LineAndOpenPolyline_CreatesArcAndTrimsPolylineEndpoint()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+        var fillet = await registry.ExecuteAsync($"FILLET 2 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.True(fillet.Success);
+
+        Assert.Equal(2.0, polyline.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, polyline.Vertices[0].Location.Y, 6);
+        Assert.True(
+            (Approximately(line.StartPoint.Y, 2.0) && Approximately(line.EndPoint.Y, 10.0)) ||
+            (Approximately(line.EndPoint.Y, 2.0) && Approximately(line.StartPoint.Y, 10.0)));
+
+        Assert.Single(session.Document.Entities.OfType<Arc>());
+    }
+
+    [Fact]
+    public async Task Fillet_LineAndArcSegmentPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var fillet = await registry.ExecuteAsync($"FILLET 2 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(fillet.Success);
+        Assert.Contains("arc segments", fillet.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Empty(session.Document.Entities.OfType<Arc>());
+    }
+
+    [Fact]
+    public async Task Fillet_LineAndVariableWidthPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].StartWidth = 0.25;
+        polyline.Vertices[0].EndWidth = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var fillet = await registry.ExecuteAsync($"FILLET 2 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(fillet.Success);
+        Assert.Contains("variable-width", fillet.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.25, polyline.Vertices[0].StartWidth, 6);
+        Assert.Equal(0.5, polyline.Vertices[0].EndWidth, 6);
+        Assert.Empty(session.Document.Entities.OfType<Arc>());
+    }
+
+    [Fact]
+    public async Task Fillet_LineAndNonWorldPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Normal = new XYZ(0.0, 0.0, -1.0);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var fillet = await registry.ExecuteAsync($"FILLET 2 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(fillet.Success);
+        Assert.Contains("world-xy", fillet.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1.0, polyline.Normal.Z, 6);
+        Assert.Empty(session.Document.Entities.OfType<Arc>());
+    }
+
+    [Fact]
     public async Task Fillet_RadiusTooLarge_Fails()
     {
         var (session, registry) = CreateHarness();
@@ -2182,6 +3022,89 @@ public sealed class CadGeometryCommandHandlersTests
              Approximately(line.EndPoint.X, 0.0) && Approximately(line.EndPoint.Y, 3.0)) ||
             (Approximately(line.EndPoint.X, 2.0) && Approximately(line.EndPoint.Y, 0.0) &&
              Approximately(line.StartPoint.X, 0.0) && Approximately(line.StartPoint.Y, 3.0)));
+    }
+
+    [Fact]
+    public async Task Chamfer_LineAndOpenPolyline_CreatesLineAndTrimsPolylineEndpoint()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+        var chamfer = await registry.ExecuteAsync($"CHAMFER 2 3 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.True(chamfer.Success);
+
+        Assert.Equal(2.0, polyline.Vertices[0].Location.X, 6);
+        Assert.Equal(0.0, polyline.Vertices[0].Location.Y, 6);
+        Assert.True(
+            (Approximately(line.StartPoint.Y, 3.0) && Approximately(line.EndPoint.Y, 10.0)) ||
+            (Approximately(line.EndPoint.Y, 3.0) && Approximately(line.StartPoint.Y, 10.0)));
+
+        var allLines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, allLines.Length);
+        Assert.Contains(allLines, candidate =>
+            (Approximately(candidate.StartPoint.X, 2.0) && Approximately(candidate.StartPoint.Y, 0.0) &&
+             Approximately(candidate.EndPoint.X, 0.0) && Approximately(candidate.EndPoint.Y, 3.0)) ||
+            (Approximately(candidate.EndPoint.X, 2.0) && Approximately(candidate.EndPoint.Y, 0.0) &&
+             Approximately(candidate.StartPoint.X, 0.0) && Approximately(candidate.StartPoint.Y, 3.0)));
+    }
+
+    [Fact]
+    public async Task Chamfer_LineAndArcSegmentPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].Bulge = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var chamfer = await registry.ExecuteAsync($"CHAMFER 2 3 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(chamfer.Success);
+        Assert.Contains("arc segments", chamfer.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.5, polyline.Vertices[0].Bulge, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
+    }
+
+    [Fact]
+    public async Task Chamfer_LineAndVariableWidthPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Vertices[0].StartWidth = 0.25;
+        polyline.Vertices[0].EndWidth = 0.5;
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var chamfer = await registry.ExecuteAsync($"CHAMFER 2 3 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(chamfer.Success);
+        Assert.Contains("variable-width", chamfer.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0.25, polyline.Vertices[0].StartWidth, 6);
+        Assert.Equal(0.5, polyline.Vertices[0].EndWidth, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
+    }
+
+    [Fact]
+    public async Task Chamfer_LineAndNonWorldPolyline_FailsWithoutMutatingGeometry()
+    {
+        var (session, registry) = CreateHarness();
+        await registry.ExecuteAsync("PLINE 0,0 10,0 10,6", session);
+        await registry.ExecuteAsync("LINE 0,0 0,10", session);
+
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        polyline.Normal = new XYZ(0.0, 0.0, -1.0);
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+
+        var chamfer = await registry.ExecuteAsync($"CHAMFER 2 3 {polyline.Handle:X} {line.Handle:X}", session);
+        Assert.False(chamfer.Success);
+        Assert.Contains("world-xy", chamfer.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(-1.0, polyline.Normal.Z, 6);
+        Assert.Single(session.Document.Entities.OfType<Line>());
     }
 
     [Fact]

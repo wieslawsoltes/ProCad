@@ -774,19 +774,34 @@ internal static class CadCommandParsing
     public static bool TryParseBreakArguments(
         IReadOnlyList<string> args,
         out ulong targetHandle,
-        out XYZ breakPoint,
+        out XYZ firstBreakPoint,
+        out XYZ secondBreakPoint,
+        out bool hasSecondBreakPoint,
         out string? error)
     {
         targetHandle = 0;
-        breakPoint = XYZ.Zero;
+        firstBreakPoint = XYZ.Zero;
+        secondBreakPoint = XYZ.Zero;
+        hasSecondBreakPoint = false;
         error = null;
 
-        if (args.Count != 2 ||
+        if (args.Count is not (2 or 3) ||
             !TryParseHandle(args[0], out targetHandle) ||
-            !TryParsePointToken(args[1], out breakPoint))
+            !TryParsePointToken(args[1], out firstBreakPoint))
         {
-            error = "Usage: BREAK targetHandle x,y[,z]";
+            error = "Usage: BREAK targetHandle firstPoint [secondPoint]";
             return false;
+        }
+
+        if (args.Count == 3)
+        {
+            if (!TryParsePointToken(args[2], out secondBreakPoint))
+            {
+                error = "Usage: BREAK targetHandle firstPoint [secondPoint]";
+                return false;
+            }
+
+            hasSecondBreakPoint = true;
         }
 
         return true;
@@ -806,7 +821,7 @@ internal static class CadCommandParsing
             !double.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out radius) ||
             radius <= 0.0)
         {
-            error = "Usage: FILLET radius(>0) [lineHandle1 lineHandle2]";
+            error = "Usage: FILLET radius(>0) [entityHandle1 entityHandle2]";
             return false;
         }
 
@@ -830,7 +845,7 @@ internal static class CadCommandParsing
             !double.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out firstDistance) ||
             firstDistance <= 0.0)
         {
-            error = "Usage: CHAMFER distance1(>0) [distance2(>0)] [lineHandle1 lineHandle2]";
+            error = "Usage: CHAMFER distance1(>0) [distance2(>0)] [entityHandle1 entityHandle2]";
             return false;
         }
 
@@ -846,7 +861,7 @@ internal static class CadCommandParsing
         {
             if (parsedSecondDistance <= 0.0)
             {
-                error = "Usage: CHAMFER distance1(>0) [distance2(>0)] [lineHandle1 lineHandle2]";
+                error = "Usage: CHAMFER distance1(>0) [distance2(>0)] [entityHandle1 entityHandle2]";
                 return false;
             }
 

@@ -8,6 +8,13 @@ namespace ACadInspector.Editing.Commands;
 
 public sealed class HatchCadCommand : ICadCommandHandler
 {
+    private const double Epsilon = 1e-8;
+    private const double NormalAxisEpsilon = 1e-6;
+
+    private readonly record struct HatchBoundaryData(
+        IReadOnlyList<IReadOnlyList<XYZ>> Loops,
+        XYZ Normal);
+
     public string Name => "HATCH";
     public IReadOnlyList<string> Aliases => ["H"];
 
@@ -42,33 +49,20 @@ public sealed class HatchCadCommand : ICadCommandHandler
         var forward = new List<CadOperation>(targets.Count);
         var inverse = new List<CadOperation>(targets.Count);
         var createdIds = new List<CadEntityId>(targets.Count);
+        var normalizedPatternName = isSolid ? "SOLID" : patternName;
 
         foreach (var target in targets)
         {
-            if (target is not LwPolyline polyline)
+            if (!TryResolveBoundary(target, out var boundary, out var boundaryError))
             {
-                return ValueTask.FromResult(CadCommandResult.Fail($"HATCH currently supports only closed LWPOLYLINE targets, got '{target.GetType().Name}'."));
+                return ValueTask.FromResult(CadCommandResult.Fail(boundaryError!));
             }
 
-            if (!polyline.IsClosed)
-            {
-                return ValueTask.FromResult(CadCommandResult.Fail("HATCH requires a closed LWPOLYLINE boundary."));
-            }
-
-            var vertices = CadGeometryTransform.ToVertices(polyline).ToArray();
-            if (vertices.Length < 3)
-            {
-                return ValueTask.FromResult(CadCommandResult.Fail("HATCH boundary must contain at least three vertices."));
-            }
-
-            var loops = new IReadOnlyList<XYZ>[] { vertices };
             var id = CadEntityId.New();
-            var normalizedPatternName = isSolid ? "SOLID" : patternName;
-
             forward.Add(
-                CadOperationPayloadCodec.CreateHatch(id, loops, isSolid, normalizedPatternName, XYZ.AxisZ)
+                CadOperationPayloadCodec.CreateHatch(id, boundary.Loops, isSolid, normalizedPatternName, boundary.Normal)
                     .WithCurrentProperties(session.Document));
-            inverse.Add(CadOperationPayloadCodec.DeleteHatch(id, loops, isSolid, normalizedPatternName, XYZ.AxisZ));
+            inverse.Add(CadOperationPayloadCodec.DeleteHatch(id, boundary.Loops, isSolid, normalizedPatternName, boundary.Normal));
             createdIds.Add(id);
         }
 
@@ -93,5 +87,154 @@ public sealed class HatchCadCommand : ICadCommandHandler
         }
 
         return ValueTask.FromResult(CadCommandResult.Ok($"Created {forward.Count} HATCH entity(s).", forward));
+    }
+
+    private static bool TryResolveBoundary(
+        Entity target,
+        out HatchBoundaryData boundary,
+        out string? error)
+    {
+        boundary = default;
+        error = null;
+
+        switch (target)
+        {
+            case Hatch hatch:
+            {
+                if (!CadHatchGeometry.TryGetLoops(hatch, out var loops, out error))
+                {
+                    return false;
+                }
+
+                boundary = new HatchBoundaryData(loops, ResolveNormal(hatch.Normal));
+                return true;
+            }
+            case LwPolyline polyline:
+            {
+                if (!polyline.IsClosed)
+                {
+                    error = "HATCH requires a closed LWPOLYLINE boundary.";
+                    return false;
+                }
+
+                var vertices = CadGeometryTransform.ToVertices(polyline).ToArray();
+                if (vertices.Length < 3)
+                {
+                    error = "HATCH boundary polyline must contain at least three vertices.";
+                    return false;
+                }
+
+                boundary = new HatchBoundaryData(
+                    new IReadOnlyList<XYZ>[] { vertices },
+                    ResolveNormal(polyline.Normal));
+                return true;
+            }
+            case Circle circle:
+            {
+                var segmentCount = CadCurveSampling.ResolveSegmentCount(CadCurveSampling.Tau, circle.Radius, minSegments: 16);
+                var vertices = CadCurveSampling.SampleCircle(circle.Center, circle.Radius, segmentCount);
+                if (vertices.Count < 3)
+                {
+                    error = "HATCH could not sample a valid CIRCLE boundary.";
+                    return false;
+                }
+
+                boundary = new HatchBoundaryData(
+                    new IReadOnlyList<XYZ>[] { vertices },
+                    ResolveNormal(circle.Normal));
+                return true;
+            }
+            case Ellipse ellipse:
+            {
+                if (!CadCurveSampling.IsFullSweep(ellipse.StartParameter, ellipse.EndParameter))
+                {
+                    error = "HATCH requires a closed ELLIPSE boundary (full sweep).";
+                    return false;
+                }
+
+                var majorLength = Math.Sqrt(
+                    ellipse.MajorAxisEndPoint.X * ellipse.MajorAxisEndPoint.X +
+                    ellipse.MajorAxisEndPoint.Y * ellipse.MajorAxisEndPoint.Y);
+                var segmentCount = CadCurveSampling.ResolveSegmentCount(CadCurveSampling.Tau, majorLength, minSegments: 16);
+                var vertices = CadCurveSampling.SampleEllipse(
+                    ellipse.Center,
+                    ellipse.MajorAxisEndPoint,
+                    ellipse.RadiusRatio,
+                    ellipse.StartParameter,
+                    ellipse.EndParameter,
+                    segmentCount,
+                    closed: true);
+                if (vertices.Count < 3)
+                {
+                    error = "HATCH could not sample a valid ELLIPSE boundary.";
+                    return false;
+                }
+
+                boundary = new HatchBoundaryData(
+                    new IReadOnlyList<XYZ>[] { vertices },
+                    ResolveNormal(ellipse.Normal));
+                return true;
+            }
+            case Spline spline:
+            {
+                if (!spline.IsClosed)
+                {
+                    error = "HATCH requires a closed SPLINE boundary.";
+                    return false;
+                }
+
+                var vertices = spline.FitPoints.Count >= 3
+                    ? spline.FitPoints.ToArray()
+                    : spline.ControlPoints.Count >= 3
+                        ? spline.ControlPoints.ToArray()
+                        : Array.Empty<XYZ>();
+
+                if (vertices.Length > 3 && DistanceSquared(vertices[0], vertices[^1]) <= Epsilon * Epsilon)
+                {
+                    vertices = vertices[..^1];
+                }
+
+                if (vertices.Length < 3)
+                {
+                    error = "HATCH requires a closed SPLINE boundary with at least three points.";
+                    return false;
+                }
+
+                boundary = new HatchBoundaryData(
+                    new IReadOnlyList<XYZ>[] { vertices },
+                    ResolveNormal(spline.Normal));
+                return true;
+            }
+            default:
+                error = $"HATCH does not support boundary entity type '{target.GetType().Name}' yet.";
+                return false;
+        }
+    }
+
+    private static double DistanceSquared(XYZ first, XYZ second)
+    {
+        var dx = first.X - second.X;
+        var dy = first.Y - second.Y;
+        var dz = first.Z - second.Z;
+        return (dx * dx) + (dy * dy) + (dz * dz);
+    }
+
+    private static XYZ ResolveNormal(XYZ normal)
+    {
+        if (normal.IsZero())
+        {
+            return XYZ.AxisZ;
+        }
+
+        var normalized = normal.Normalize();
+        if (Math.Abs(normalized.X) <= NormalAxisEpsilon &&
+            Math.Abs(normalized.Y) <= NormalAxisEpsilon)
+        {
+            return normalized.Z >= 0.0
+                ? XYZ.AxisZ
+                : new XYZ(0.0, 0.0, -1.0);
+        }
+
+        return normalized;
     }
 }

@@ -1,6 +1,7 @@
 using ACadInspector.Editing.Operations;
 using ACadInspector.Editing.Selection;
 using ACadInspector.Editing.Sessions;
+using ACadInspector.Editing.Undo;
 using ACadSharp.Entities;
 using CSMath;
 
@@ -23,28 +24,17 @@ public sealed class JoinCadCommand : ICadCommandHandler
             return ValueTask.FromResult(error);
         }
 
-        if (!TryResolveJoinTargets(session, context.Arguments, out var first, out var second, out var resolveError))
+        if (!TryResolveJoinTargets(session, context.Arguments, out var targets, out var resolveError))
         {
             return ValueTask.FromResult(CadCommandResult.Fail(resolveError!));
         }
 
-        if (first is Line firstLine && second is Line secondLine)
+        if (targets.Length == 2)
         {
-            return ExecuteJoinLines(session, firstLine, secondLine);
+            return ExecuteJoinPair(session, targets[0], targets[1], out _);
         }
 
-        if (first is LwPolyline polyline && second is Line line)
-        {
-            return ExecuteJoinPolylineLine(session, polyline, line);
-        }
-
-        if (first is Line lineFirst && second is LwPolyline polylineSecond)
-        {
-            return ExecuteJoinPolylineLine(session, polylineSecond, lineFirst);
-        }
-
-        return ValueTask.FromResult(CadCommandResult.Fail(
-            $"JOIN does not support entity types '{first.GetType().Name}' and '{second.GetType().Name}' yet."));
+        return ExecuteJoinMultiple(session, targets);
     }
 
     private static ValueTask<CadCommandResult> ExecuteJoinLines(CadDocumentSession session, Line first, Line second)
@@ -89,6 +79,11 @@ public sealed class JoinCadCommand : ICadCommandHandler
             return ValueTask.FromResult(CadCommandResult.Fail("JOIN currently supports only open polylines."));
         }
 
+        if (!CadPolylineEditValidation.TryValidateLinearPolyline(polyline, "JOIN", out var unsupportedError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(unsupportedError!));
+        }
+
         var oldVertices = CadGeometryTransform.ToVertices(polyline);
         if (oldVertices.Count < 2)
         {
@@ -128,6 +123,63 @@ public sealed class JoinCadCommand : ICadCommandHandler
         return ValueTask.FromResult(CadCommandResult.Ok("Join completed.", forwardOperations));
     }
 
+    private static ValueTask<CadCommandResult> ExecuteJoinPolylines(CadDocumentSession session, LwPolyline first, LwPolyline second)
+    {
+        if (first.IsClosed || second.IsClosed)
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail("JOIN currently supports only open polylines."));
+        }
+
+        if (!CadPolylineEditValidation.TryValidateLinearPolyline(first, "JOIN", out var firstUnsupportedError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(firstUnsupportedError!));
+        }
+
+        if (!CadPolylineEditValidation.TryValidateLinearPolyline(second, "JOIN", out var secondUnsupportedError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(secondUnsupportedError!));
+        }
+
+        var firstVertices = CadGeometryTransform.ToVertices(first);
+        var secondVertices = CadGeometryTransform.ToVertices(second);
+        if (firstVertices.Count < 2 || secondVertices.Count < 2)
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail("JOIN cannot use polyline with fewer than 2 vertices."));
+        }
+
+        if (!TryJoinPolylines(firstVertices, secondVertices, out var mergedVertices, out var joinError))
+        {
+            return ValueTask.FromResult(CadCommandResult.Fail(joinError!));
+        }
+
+        if (!session.EntityIndex.TryGetId(first, out var firstId))
+        {
+            firstId = session.EntityIndex.Register(first);
+        }
+
+        if (!session.EntityIndex.TryGetId(second, out var secondId))
+        {
+            secondId = session.EntityIndex.Register(second);
+        }
+
+        var forwardOperations = new CadOperation[]
+        {
+            CadOperationPayloadCodec.TransformLwPolyline(firstId, firstVertices, fromClosed: false, mergedVertices, toClosed: false),
+            CadOperationPayloadCodec.DeleteLwPolyline(secondId, secondVertices, isClosed: false)
+        };
+
+        var inverseOperations = new CadOperation[]
+        {
+            CadOperationPayloadCodec.CreateLwPolyline(secondId, secondVertices, isClosed: false).WithSourceProperties(second),
+            CadOperationPayloadCodec.TransformLwPolyline(firstId, mergedVertices, fromClosed: false, firstVertices, toClosed: false)
+        };
+
+        ApplyWithUndo(session, forwardOperations, inverseOperations);
+        session.SetSelection([first], CadSelectionMode.Replace);
+
+        return ValueTask.FromResult(CadCommandResult.Ok("Join completed.", forwardOperations));
+    }
+
     private static void ApplyWithUndo(
         CadDocumentSession session,
         IReadOnlyList<CadOperation> forwardOperations,
@@ -140,11 +192,142 @@ public sealed class JoinCadCommand : ICadCommandHandler
         session.UndoRedo.Record(forwardBatch, inverseBatch);
     }
 
+    private static ValueTask<CadCommandResult> ExecuteJoinPair(
+        CadDocumentSession session,
+        Entity first,
+        Entity second,
+        out Entity survivor)
+    {
+        if (first is Line firstLine && second is Line secondLine)
+        {
+            survivor = firstLine;
+            return ExecuteJoinLines(session, firstLine, secondLine);
+        }
+
+        if (first is LwPolyline polyline && second is Line line)
+        {
+            survivor = polyline;
+            return ExecuteJoinPolylineLine(session, polyline, line);
+        }
+
+        if (first is Line lineFirst && second is LwPolyline polylineSecond)
+        {
+            survivor = polylineSecond;
+            return ExecuteJoinPolylineLine(session, polylineSecond, lineFirst);
+        }
+
+        if (first is LwPolyline firstPolyline && second is LwPolyline secondPolyline)
+        {
+            survivor = firstPolyline;
+            return ExecuteJoinPolylines(session, firstPolyline, secondPolyline);
+        }
+
+        survivor = first;
+        return ValueTask.FromResult(CadCommandResult.Fail(
+            $"JOIN does not support entity types '{first.GetType().Name}' and '{second.GetType().Name}' yet."));
+    }
+
+    private static async ValueTask<CadCommandResult> ExecuteJoinMultiple(
+        CadDocumentSession session,
+        IReadOnlyList<Entity> targets)
+    {
+        var remaining = new List<Entity>(targets);
+        var finalized = new List<Entity>(targets.Count);
+        var primary = remaining[0];
+        remaining.RemoveAt(0);
+        var currentGroupSize = 1;
+
+        var mergedCount = 0;
+        var skippedSingleCount = 0;
+        var forwardOperations = new List<CadOperation>();
+        // Keep all pairwise joins from this command in one undo unit, but
+        // never merge across distinct JOIN command executions.
+        var mergeKey = $"join-{session.SessionId.Value:N}-{Guid.NewGuid():N}";
+        using var undoScope = CadUndoExecutionContext.Push(
+            new CadUndoRecordOptions(
+                CommandId: "JOIN",
+                Label: "Join",
+                ActorId: session.SessionId.Value,
+                Source: CadUndoSource.CommandLine,
+                TimestampUtc: DateTimeOffset.UtcNow,
+                MergeKey: mergeKey,
+                MergeWindow: TimeSpan.FromMinutes(1)));
+
+        while (true)
+        {
+            var mergedWithPrimary = false;
+            for (var i = 0; i < remaining.Count;)
+            {
+                var candidate = remaining[i];
+                var step = await ExecuteJoinPair(session, primary, candidate, out var survivor).ConfigureAwait(false);
+                if (!step.Success)
+                {
+                    i++;
+                    continue;
+                }
+
+                if (step.Operations is { Count: > 0 })
+                {
+                    forwardOperations.AddRange(step.Operations);
+                }
+
+                mergedCount++;
+                mergedWithPrimary = true;
+                currentGroupSize++;
+                primary = survivor;
+                remaining.RemoveAt(i);
+            }
+
+            if (mergedWithPrimary && remaining.Count > 0)
+            {
+                continue;
+            }
+
+            finalized.Add(primary);
+            if (currentGroupSize == 1)
+            {
+                skippedSingleCount++;
+            }
+
+            if (remaining.Count == 0)
+            {
+                break;
+            }
+
+            primary = remaining[0];
+            remaining.RemoveAt(0);
+            currentGroupSize = 1;
+        }
+
+        if (mergedCount == 0)
+        {
+            return CadCommandResult.Fail("JOIN could not merge any selected entities.");
+        }
+
+        var selected = finalized.Cast<object?>().ToArray();
+        session.SetSelection(selected, CadSelectionMode.Replace);
+        if (skippedSingleCount > 0)
+        {
+            var mergedEntityCount = targets.Count - skippedSingleCount;
+            return CadCommandResult.Ok(
+                $"Join completed. Merged {mergedEntityCount} entities; skipped {skippedSingleCount}.",
+                forwardOperations);
+        }
+
+        if (finalized.Count > 1)
+        {
+            return CadCommandResult.Ok(
+                $"Join completed. Created {finalized.Count} joined result entities.",
+                forwardOperations);
+        }
+
+        return CadCommandResult.Ok("Join completed.", forwardOperations);
+    }
+
     private static bool TryResolveJoinTargets(
         CadDocumentSession session,
         IReadOnlyList<string> args,
-        out Entity first,
-        out Entity second,
+        out Entity[] targets,
         out string? error)
     {
         error = null;
@@ -156,16 +339,14 @@ public sealed class JoinCadCommand : ICadCommandHandler
             {
                 if (!CadCommandParsing.TryParseHandle(token, out var handle))
                 {
-                    first = null!;
-                    second = null!;
+                    targets = Array.Empty<Entity>();
                     error = $"Invalid handle '{token}'.";
                     return false;
                 }
 
                 if (!session.EntityIndex.TryGetByHandle(handle, out var entity, out _))
                 {
-                    first = null!;
-                    second = null!;
+                    targets = Array.Empty<Entity>();
                     error = $"Entity handle '{token}' was not found.";
                     return false;
                 }
@@ -188,16 +369,14 @@ public sealed class JoinCadCommand : ICadCommandHandler
         }
 
         var unique = resolved.Distinct().ToArray();
-        if (unique.Length != 2)
+        if (unique.Length < 2)
         {
-            first = null!;
-            second = null!;
-            error = "JOIN currently requires exactly two target entities.";
+            targets = Array.Empty<Entity>();
+            error = "JOIN requires at least two target entities.";
             return false;
         }
 
-        first = unique[0];
-        second = unique[1];
+        targets = unique;
         return true;
     }
 
@@ -309,6 +488,114 @@ public sealed class JoinCadCommand : ICadCommandHandler
 
         error = "JOIN line/polyline requires touching endpoints.";
         return false;
+    }
+
+    private static bool TryJoinPolylines(
+        IReadOnlyList<XYZ> firstVertices,
+        IReadOnlyList<XYZ> secondVertices,
+        out IReadOnlyList<XYZ> mergedVertices,
+        out string? error)
+    {
+        mergedVertices = Array.Empty<XYZ>();
+        error = null;
+
+        var firstStart = firstVertices[0];
+        var firstEnd = firstVertices[^1];
+        var secondStart = secondVertices[0];
+        var secondEnd = secondVertices[^1];
+
+        if (NearlyEqual(firstEnd, secondStart))
+        {
+            mergedVertices = MergeForwardForward(firstVertices, secondVertices, skipSecondaryFirst: true);
+            return true;
+        }
+
+        if (NearlyEqual(firstEnd, secondEnd))
+        {
+            mergedVertices = MergeForwardReverse(firstVertices, secondVertices, skipSecondaryLast: true);
+            return true;
+        }
+
+        if (NearlyEqual(firstStart, secondEnd))
+        {
+            mergedVertices = MergeForwardForward(secondVertices, firstVertices, skipSecondaryFirst: true);
+            return true;
+        }
+
+        if (NearlyEqual(firstStart, secondStart))
+        {
+            mergedVertices = MergeReverseForward(secondVertices, firstVertices, skipSecondaryFirst: true);
+            return true;
+        }
+
+        error = "JOIN polylines require touching endpoints.";
+        return false;
+    }
+
+    private static IReadOnlyList<XYZ> MergeForwardForward(
+        IReadOnlyList<XYZ> primary,
+        IReadOnlyList<XYZ> secondary,
+        bool skipSecondaryFirst)
+    {
+        var merged = new XYZ[primary.Count + secondary.Count - 1];
+        var index = 0;
+
+        for (var i = 0; i < primary.Count; i++)
+        {
+            merged[index++] = primary[i];
+        }
+
+        var secondaryStart = skipSecondaryFirst ? 1 : 0;
+        for (var i = secondaryStart; i < secondary.Count; i++)
+        {
+            merged[index++] = secondary[i];
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyList<XYZ> MergeForwardReverse(
+        IReadOnlyList<XYZ> primary,
+        IReadOnlyList<XYZ> secondary,
+        bool skipSecondaryLast)
+    {
+        var merged = new XYZ[primary.Count + secondary.Count - 1];
+        var index = 0;
+
+        for (var i = 0; i < primary.Count; i++)
+        {
+            merged[index++] = primary[i];
+        }
+
+        var secondaryStart = skipSecondaryLast ? secondary.Count - 2 : secondary.Count - 1;
+        for (var i = secondaryStart; i >= 0; i--)
+        {
+            merged[index++] = secondary[i];
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyList<XYZ> MergeReverseForward(
+        IReadOnlyList<XYZ> primary,
+        IReadOnlyList<XYZ> secondary,
+        bool skipSecondaryFirst)
+    {
+        var merged = new XYZ[primary.Count + secondary.Count - 1];
+        var index = 0;
+
+        for (var i = primary.Count - 1; i >= 0; i--)
+        {
+            merged[index++] = primary[i];
+        }
+
+        var secondaryStart = skipSecondaryFirst ? 1 : 0;
+        for (var i = secondaryStart; i < secondary.Count; i++)
+        {
+            merged[index++] = secondary[i];
+        }
+
+        return merged;
     }
 
     private static bool NearlyEqual(XYZ a, XYZ b)

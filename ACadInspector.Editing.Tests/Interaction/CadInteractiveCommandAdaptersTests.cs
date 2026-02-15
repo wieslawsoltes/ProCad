@@ -453,7 +453,39 @@ public sealed class CadInteractiveCommandAdaptersTests
     }
 
     [Fact]
-    public async Task BreakAdapter_UsesSelectedLineAndPickedPoint()
+    public async Task JoinAdapter_UsesMultipleSelectedLines()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new JoinCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new JoinInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("LINE 0,0 5,0", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE 5,0 10,0", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE 10,0 15,0", session)).Result?.Success);
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(3, lines.Length);
+        session.SetSelection(lines, ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("JOIN");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "1,0"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        var merged = Assert.Single(session.Document.Entities.OfType<Line>());
+        Assert.True(
+            (Math.Abs(merged.StartPoint.X - 0.0) < 1e-6 && Math.Abs(merged.EndPoint.X - 15.0) < 1e-6) ||
+            (Math.Abs(merged.StartPoint.X - 15.0) < 1e-6 && Math.Abs(merged.EndPoint.X - 0.0) < 1e-6));
+    }
+
+    [Fact]
+    public async Task BreakAdapter_UsesSelectedLineAndSinglePointCommit()
     {
         var commandRegistry = new CadCommandRegistry();
         commandRegistry.Register(new LineCadCommand());
@@ -469,14 +501,179 @@ public sealed class CadInteractiveCommandAdaptersTests
         session.SetSelection([sourceLine], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
 
         runtime.BeginCommand("BREAK");
-        var result = await adapter.SubmitAsync(
+        var first = await adapter.SubmitAsync(
             runtime,
             new CadPromptToken(CadPromptTokenType.Coordinate, "5,0"),
             session,
             commit: false);
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
 
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
         Assert.True(result.Result?.Success);
         Assert.Equal(2, session.Document.Entities.OfType<Line>().Count());
+    }
+
+    [Fact]
+    public async Task BreakAdapter_ProjectsPointOnAngledLine_WithoutPrecisionLoss()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new BreakCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new BreakInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        var created = await runtime.SubmitAsync("LINE 0,0 3,2", session);
+        Assert.True(created.Result?.Success);
+        var sourceLine = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([sourceLine], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("BREAK");
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "1,1"),
+            session,
+            commit: false);
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Equal(2, session.Document.Entities.OfType<Line>().Count());
+    }
+
+    [Fact]
+    public async Task BreakAdapter_PreservesLargeCoordinatePrecision()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new BreakCadCommand());
+        var runtime = new CadCommandRuntime(commandRegistry, new CadCommandIntellisenseService(commandRegistry));
+        var adapter = new BreakInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        var created = await runtime.SubmitAsync("LINE 1000000000,0 1000000010,0", session);
+        Assert.True(created.Result?.Success, created.Result?.Message);
+        var sourceLine = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([sourceLine], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("BREAK");
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "1000000005,0"),
+            session,
+            commit: false);
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        var lines = session.Document.Entities
+            .OfType<Line>()
+            .OrderBy(static line => Math.Min(line.StartPoint.X, line.EndPoint.X))
+            .ToArray();
+        Assert.Equal(2, lines.Length);
+        Assert.Equal(1000000000.0, Math.Min(lines[0].StartPoint.X, lines[0].EndPoint.X), 6);
+        Assert.Equal(1000000005.0, Math.Max(lines[0].StartPoint.X, lines[0].EndPoint.X), 6);
+        Assert.Equal(1000000005.0, Math.Min(lines[1].StartPoint.X, lines[1].EndPoint.X), 6);
+        Assert.Equal(1000000010.0, Math.Max(lines[1].StartPoint.X, lines[1].EndPoint.X), 6);
+    }
+
+    [Fact]
+    public async Task BreakAdapter_UsesSelectedOpenPolylineAndProjectsPoint()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new PlineCadCommand());
+        commandRegistry.Register(new BreakCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new BreakInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        var created = await runtime.SubmitAsync("PLINE 0,0 10,0 10,10", session);
+        Assert.True(created.Result?.Success);
+        var source = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        session.SetSelection([source], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("BREAK");
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "5,1"),
+            session,
+            commit: false);
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: true);
+
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        var polylines = session.Document.Entities.OfType<LwPolyline>().ToArray();
+        Assert.Equal(2, polylines.Length);
+        Assert.Contains(
+            polylines,
+            candidate => candidate.Vertices.Count == 2 &&
+                         Math.Abs(candidate.Vertices[1].Location.X - 5.0) < 1e-6 &&
+                         Math.Abs(candidate.Vertices[1].Location.Y - 0.0) < 1e-6);
+    }
+
+    [Fact]
+    public async Task BreakAdapter_UsesTwoPointsToRemoveLineSpan()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new BreakCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new BreakInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        var created = await runtime.SubmitAsync("LINE 0,0 10,0", session);
+        Assert.True(created.Result?.Success);
+        var sourceLine = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([sourceLine], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("BREAK");
+        var first = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "3,0"),
+            session,
+            commit: false);
+        var second = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "7,0"),
+            session,
+            commit: false);
+
+        Assert.True(first.Handled);
+        Assert.Null(first.Result);
+        Assert.True(second.Result?.Success, second.Result?.Message);
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(2, lines.Length);
+        Assert.Contains(
+            lines,
+            candidate => Math.Abs(candidate.StartPoint.X - 0.0) < 1e-6 &&
+                         Math.Abs(candidate.EndPoint.X - 3.0) < 1e-6);
+        Assert.Contains(
+            lines,
+            candidate => Math.Abs(candidate.StartPoint.X - 7.0) < 1e-6 &&
+                         Math.Abs(candidate.EndPoint.X - 10.0) < 1e-6);
     }
 
     [Fact]
@@ -508,6 +705,97 @@ public sealed class CadInteractiveCommandAdaptersTests
     }
 
     [Fact]
+    public async Task TrimAdapter_PrefersNearestBoundaryWhenMultipleSelected()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new TrimCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new TrimInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("LINE 0,0 10,0", session)).Result?.Success);     // Target
+        Assert.True((await runtime.SubmitAsync("LINE 0,5 10,5", session)).Result?.Success);     // Parallel boundary
+        Assert.True((await runtime.SubmitAsync("LINE 8,-5 8,5", session)).Result?.Success);      // Intersecting boundary
+
+        var lines = session.Document.Entities.OfType<Line>().ToArray();
+        Assert.Equal(3, lines.Length);
+        var target = lines[0];
+        var parallelBoundary = lines[1];
+        var intersectingBoundary = lines[2];
+        session.SetSelection([parallelBoundary, target, intersectingBoundary], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("TRIM");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "9,0"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Equal(8.0, target.EndPoint.X, 6);
+    }
+
+    [Fact]
+    public async Task TrimAdapter_UsesOpenPolylineTarget()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new PlineCadCommand());
+        commandRegistry.Register(new TrimCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new TrimInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("PLINE 0,0 10,0 10,5", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE -5,2 15,2", session)).Result?.Success);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([polyline, boundary], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("TRIM");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "10,4"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Equal(2.0, polyline.Vertices[2].Location.Y, 6);
+    }
+
+    [Fact]
+    public async Task ExtendAdapter_UsesOpenPolylineTarget()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new PlineCadCommand());
+        commandRegistry.Register(new ExtendCadCommand());
+        var intellisense = new CadCommandIntellisenseService(commandRegistry);
+        var runtime = new CadCommandRuntime(commandRegistry, intellisense);
+        var adapter = new ExtendInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("PLINE 4,0 10,0 10,5", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE 0,-5 0,5", session)).Result?.Success);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var boundary = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([polyline, boundary], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("EXTEND");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "4,0"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Equal(0.0, polyline.Vertices[0].Location.X, 6);
+    }
+
+    [Fact]
     public async Task FilletAdapter_UsesSelectedLinesAndCreatesArc()
     {
         var commandRegistry = new CadCommandRegistry();
@@ -531,6 +819,36 @@ public sealed class CadInteractiveCommandAdaptersTests
 
         Assert.True(result.Result?.Success);
         Assert.Contains("Fillet completed", result.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEmpty(session.Document.Entities.OfType<Arc>());
+    }
+
+    [Fact]
+    public async Task FilletAdapter_UsesSelectedLineAndOpenPolyline()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new PlineCadCommand());
+        commandRegistry.Register(new FilletCadCommand());
+        var runtime = new CadCommandRuntime(commandRegistry, new CadCommandIntellisenseService(commandRegistry));
+        var adapter = new FilletInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("PLINE 0,0 20,0 20,8", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE 0,0 0,20", session)).Result?.Success);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([polyline, line], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("FILLET");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "0,0"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Contains("Fillet completed", result.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1.0, polyline.Vertices[0].Location.X, 6);
         Assert.NotEmpty(session.Document.Entities.OfType<Arc>());
     }
 
@@ -559,6 +877,36 @@ public sealed class CadInteractiveCommandAdaptersTests
         Assert.True(result.Result?.Success);
         Assert.Contains("Chamfer completed", result.Result?.Message, StringComparison.OrdinalIgnoreCase);
         Assert.True(session.Document.Entities.OfType<Line>().Count() >= 3);
+    }
+
+    [Fact]
+    public async Task ChamferAdapter_UsesSelectedLineAndOpenPolyline()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new LineCadCommand());
+        commandRegistry.Register(new PlineCadCommand());
+        commandRegistry.Register(new ChamferCadCommand());
+        var runtime = new CadCommandRuntime(commandRegistry, new CadCommandIntellisenseService(commandRegistry));
+        var adapter = new ChamferInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("PLINE 0,0 20,0 20,8", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("LINE 0,0 0,20", session)).Result?.Success);
+        var polyline = Assert.Single(session.Document.Entities.OfType<LwPolyline>());
+        var line = Assert.Single(session.Document.Entities.OfType<Line>());
+        session.SetSelection([polyline, line], ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("CHAMFER");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Coordinate, "0,0"),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        Assert.Contains("Chamfer completed", result.Result?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1.0, polyline.Vertices[0].Location.X, 6);
+        Assert.True(session.Document.Entities.OfType<Line>().Count() >= 2);
     }
 
     [Fact]
@@ -687,6 +1035,35 @@ public sealed class CadInteractiveCommandAdaptersTests
 
         Assert.True(result.Result?.Success);
         Assert.Equal(lines[0].LineTypeScale, lines[1].LineTypeScale, 6);
+    }
+
+    [Fact]
+    public async Task HatchSelectionCommitAdapter_UsesSolidDefaultWithExplicitSelectionHandles()
+    {
+        var commandRegistry = new CadCommandRegistry();
+        commandRegistry.Register(new CircleCadCommand());
+        commandRegistry.Register(new HatchCadCommand());
+        var runtime = new CadCommandRuntime(commandRegistry, new CadCommandIntellisenseService(commandRegistry));
+        var adapter = new HatchInteractiveCommandAdapter();
+        var session = Assert.IsType<CadDocumentSession>(new CadEditorSessionFactory().Create(new CadDocument()));
+
+        Assert.True((await runtime.SubmitAsync("CIRCLE 0,0 2", session)).Result?.Success);
+        Assert.True((await runtime.SubmitAsync("CIRCLE 10,0 2", session)).Result?.Success);
+        var circles = session.Document.Entities.OfType<Circle>().ToArray();
+        Assert.Equal(2, circles.Length);
+        session.SetSelection(circles, ACadInspector.Editing.Selection.CadSelectionMode.Replace);
+
+        runtime.BeginCommand("HATCH");
+        var result = await adapter.SubmitAsync(
+            runtime,
+            new CadPromptToken(CadPromptTokenType.Raw, string.Empty),
+            session,
+            commit: false);
+
+        Assert.True(result.Result?.Success, result.Result?.Message);
+        var hatches = session.Document.Entities.OfType<Hatch>().ToArray();
+        Assert.Equal(2, hatches.Length);
+        Assert.All(hatches, static hatch => Assert.True(hatch.IsSolid));
     }
 
     [Fact]
