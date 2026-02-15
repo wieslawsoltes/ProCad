@@ -20,29 +20,29 @@
         <TextBox Width="140"
                  Watermark="Search..."
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
         <TextBox Width="140"
                  Watermark="Filter..."
                  Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearFilterCommand}" />
       </StackPanel>
 
       <StackPanel Grid.Row="1"
                   Orientation="Horizontal"
                   Spacing="8">
-        <Button Content="New"
+        <Button Classes="fluent-icon" Tag="{StaticResource NewDocumentIconPath}" Content="New"
                 Command="{CompiledBinding NewStyleCommand}" />
-        <Button Content="Duplicate"
+        <Button Classes="fluent-icon" Tag="{StaticResource CopyIconPath}" Content="Duplicate"
                 Command="{CompiledBinding DuplicateStyleCommand}" />
-        <Button Content="Delete"
+        <Button Classes="fluent-icon" Tag="{StaticResource DeleteIconPath}" Content="Delete"
                 Command="{CompiledBinding DeleteStyleCommand}" />
-        <Button Content="Set Current"
+        <Button Classes="fluent-icon" Tag="{StaticResource CheckmarkIconPath}" Content="Set Current"
                 Command="{CompiledBinding SetCurrentStyleCommand}" />
-        <Button Content="Apply"
+        <Button Classes="fluent-icon" Tag="{StaticResource CheckmarkIconPath}" Content="Apply"
                 Command="{CompiledBinding ApplyStyleCommand}" />
-        <Button Content="Revert"
+        <Button Classes="fluent-icon" Tag="{StaticResource UndoIconPath}" Content="Revert"
                 Command="{CompiledBinding RevertStyleCommand}" />
       </StackPanel>
 

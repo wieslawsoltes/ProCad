@@ -20,12 +20,12 @@
         <TextBox Width="160"
                  Watermark="Search..."
                  Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearSearchCommand}" />
         <TextBox Width="160"
                  Watermark="Filter..."
                  Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"

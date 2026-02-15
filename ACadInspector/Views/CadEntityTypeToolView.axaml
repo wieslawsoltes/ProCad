@@ -17,19 +17,19 @@
         <TextBlock Text="Entity Types"
                    FontWeight="SemiBold"
                    VerticalAlignment="Center" />
-        <Button Content="Select All"
+        <Button Classes="fluent-icon" Tag="{StaticResource SelectAllIconPath}" Content="Select All"
                 Command="{CompiledBinding EntityTypeList.SelectAllCommand}" />
-        <Button Content="Select None"
+        <Button Classes="fluent-icon" Tag="{StaticResource SelectNoneIconPath}" Content="Select None"
                 Command="{CompiledBinding EntityTypeList.SelectNoneCommand}" />
         <TextBox Width="160"
                  Watermark="Search..."
                  Text="{CompiledBinding EntityTypeList.SearchText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding EntityTypeList.ClearSearchCommand}" />
         <TextBox Width="160"
                  Watermark="Filter..."
                  Text="{CompiledBinding EntityTypeList.FilterText, UpdateSourceTrigger=PropertyChanged}" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding EntityTypeList.ClearFilterCommand}" />
       </StackPanel>
       <DataGrid Grid.Row="1"

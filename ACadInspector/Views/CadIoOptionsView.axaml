@@ -19,7 +19,7 @@
       <TextBox Width="200"
                Watermark="Search..."
                Text="{CompiledBinding ReadSearchText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearReadSearchCommand}" />
       <TextBlock Text="Filter"
                  Margin="12,0,0,0"
@@ -27,7 +27,7 @@
       <TextBox Width="200"
                Watermark="Filter..."
                Text="{CompiledBinding ReadFilterText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearReadFilterCommand}" />
     </StackPanel>
     <DataGrid Grid.Row="2"
@@ -55,7 +55,7 @@
       <TextBox Width="200"
                Watermark="Search..."
                Text="{CompiledBinding WriteSearchText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearWriteSearchCommand}" />
       <TextBlock Text="Filter"
                  Margin="12,0,0,0"
@@ -63,7 +63,7 @@
       <TextBox Width="200"
                Watermark="Filter..."
                Text="{CompiledBinding WriteFilterText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearWriteFilterCommand}" />
     </StackPanel>
     <DataGrid Grid.Row="5"

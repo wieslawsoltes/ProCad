@@ -70,17 +70,17 @@
           <StackPanel Grid.Row="2"
                       Orientation="Horizontal"
                       Spacing="8">
-            <Button Content="+ Dash"
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Dash"
                     Command="{CompiledBinding Source.AddDashSegmentCommand}" />
-            <Button Content="+ Space"
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Space"
                     Command="{CompiledBinding Source.AddSpaceSegmentCommand}" />
-            <Button Content="+ Dot"
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Dot"
                     Command="{CompiledBinding Source.AddDotSegmentCommand}" />
-            <Button Content="Remove"
+            <Button Classes="fluent-icon" Tag="{StaticResource DeleteIconPath}" Content="Remove"
                     Command="{CompiledBinding Source.RemoveSegmentCommand}" />
-            <Button Content="Move Up"
+            <Button Classes="fluent-icon" Tag="{StaticResource ArrowUpIconPath}" Content="Move Up"
                     Command="{CompiledBinding Source.MoveSegmentUpCommand}" />
-            <Button Content="Move Down"
+            <Button Classes="fluent-icon" Tag="{StaticResource ArrowDownIconPath}" Content="Move Down"
                     Command="{CompiledBinding Source.MoveSegmentDownCommand}" />
           </StackPanel>
 
