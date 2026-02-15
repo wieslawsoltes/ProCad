@@ -45,9 +45,9 @@
         </Grid>
         <StackPanel Orientation="Horizontal"
                     Spacing="8">
-          <ToggleButton Content="Show Attributes"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource EyeIconPath}" Content="Show Attributes"
                         IsChecked="{CompiledBinding ShowAttributes}" />
-          <ToggleButton Content="Show Attr Defs"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource EyeIconPath}" Content="Show Attr Defs"
                         IsChecked="{CompiledBinding ShowAttributeDefinitions}" />
           <TextBlock Text="Visibility"
                      VerticalAlignment="Center"

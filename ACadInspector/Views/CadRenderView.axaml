@@ -34,13 +34,13 @@
         <StackPanel Orientation="Horizontal"
                     Spacing="8"
                     DockPanel.Dock="Left">
-          <Button Content="Fit"
+          <Button Classes="fluent-icon" Tag="{StaticResource FitViewIconPath}" Content="Fit"
                   Command="{CompiledBinding FitCommand}" />
-          <Button Content="Reset"
+          <Button Classes="fluent-icon" Tag="{StaticResource ResetViewIconPath}" Content="Reset"
                   Command="{CompiledBinding ResetCommand}" />
-          <ToggleButton Content="Grid"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource GridIconPath}" Content="Grid"
                         IsChecked="{CompiledBinding ShowGrid}" />
-          <ToggleButton Content="Axes"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource AxesIconPath}" Content="Axes"
                         IsChecked="{CompiledBinding ShowAxes}" />
         </StackPanel>
         <Grid HorizontalAlignment="Right"
@@ -160,15 +160,15 @@
         <StackPanel Orientation="Horizontal"
                     Spacing="6"
                     DockPanel.Dock="Right">
-          <ToggleButton Content="OSNAP"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource TargetIconPath}" Content="OSNAP"
                         IsChecked="{CompiledBinding OsnapEnabled}" />
-          <ToggleButton Content="OTRACK"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource LocationArrowIconPath}" Content="OTRACK"
                         IsChecked="{CompiledBinding OtrackEnabled}" />
-          <ToggleButton Content="ORTHO"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource GridIconPath}" Content="ORTHO"
                         IsChecked="{CompiledBinding OrthoEnabled}" />
-          <ToggleButton Content="POLAR"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource AxesIconPath}" Content="POLAR"
                         IsChecked="{CompiledBinding PolarEnabled}" />
-          <ToggleButton Content="DYNINPUT"
+          <ToggleButton Classes="fluent-icon" Tag="{StaticResource TextTIconPath}" Content="DYNINPUT"
                         IsChecked="{CompiledBinding DynamicInputEnabled}" />
         </StackPanel>
         <TextBlock Text="{CompiledBinding InteractionStatus}"

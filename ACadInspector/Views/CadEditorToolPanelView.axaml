@@ -20,7 +20,7 @@
             <TextBlock Text="{CompiledBinding ActiveCommand, StringFormat='Active: {0}'}"
                        FontWeight="SemiBold" />
             <Button DockPanel.Dock="Right"
-                    Content="Esc"
+                    Classes="fluent-icon" Tag="{StaticResource DismissCircleIconPath}" Content="Esc"
                     Command="{CompiledBinding CancelCommand}"
                     IsVisible="{CompiledBinding IsCommandActive}" />
           </DockPanel>

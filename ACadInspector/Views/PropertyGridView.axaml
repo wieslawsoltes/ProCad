@@ -15,9 +15,9 @@
       <TextBox Width="200"
                Watermark="Search..."
                Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Prev"
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronLeftIconPath}" Content="Prev"
               Command="{CompiledBinding PreviousSearchCommand}" />
-      <Button Content="Next"
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronRightIconPath}" Content="Next"
               Command="{CompiledBinding NextSearchCommand}" />
       <TextBlock Text="{CompiledBinding SearchSummary}"
                  VerticalAlignment="Center" />
@@ -27,9 +27,9 @@
       <TextBox Width="200"
                Watermark="Filter..."
                Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearFilterCommand}" />
-      <Button Content="Edit Block"
+      <Button Classes="fluent-icon" Tag="{StaticResource EditIconPath}" Content="Edit Block"
               Margin="12,0,0,0"
               IsVisible="{CompiledBinding CanEditBlock}"
               Command="{CompiledBinding EditBlockCommand}" />

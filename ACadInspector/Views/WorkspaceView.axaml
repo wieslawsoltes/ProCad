@@ -17,18 +17,16 @@
             Padding="8">
       <StackPanel Orientation="Horizontal"
                   Spacing="8">
-        <Button Content="New"
+        <Button Classes="fluent-icon" Tag="{StaticResource NewDocumentIconPath}" Content="New"
                 Command="{CompiledBinding NewCommand}" />
-        <Button Content="Open"
+        <Button Classes="fluent-icon" Tag="{StaticResource OpenFolderIconPath}" Content="Open"
                 Command="{CompiledBinding OpenCommand}" />
-        <Button Content="Save"
+        <Button Classes="fluent-icon" Tag="{StaticResource SaveIconPath}" Content="Save"
                 Command="{CompiledBinding SaveCommand}" />
-        <Button Content="Save As"
+        <Button Classes="fluent-icon" Tag="{StaticResource SaveAsIconPath}" Content="Save As"
                 Command="{CompiledBinding SaveAsCommand}" />
-        <Button Content="Compare"
+        <Button Classes="fluent-icon" Tag="{StaticResource CompareIconPath}" Content="Compare"
                 Command="{CompiledBinding CompareCommand}" />
-        <ToggleSwitch Content="Diagnostics"
-                      IsChecked="{CompiledBinding FastPathDiagnostics.IsEnabled}" />
       </StackPanel>
     </Border>
     <dock:DockControl Grid.Row="1"
@@ -47,7 +45,7 @@
                    FontWeight="SemiBold" />
         <TextBlock Text="{CompiledBinding FastPathDiagnostics.StatusText}"
                    TextTrimming="CharacterEllipsis" />
-        <Button Content="Clear"
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearDiagnosticsCommand}" />
       </StackPanel>
     </Border>

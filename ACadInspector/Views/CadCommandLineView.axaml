@@ -20,7 +20,7 @@
                    FontWeight="SemiBold"
                    VerticalAlignment="Center" />
         <Button DockPanel.Dock="Right"
-                Content="Clear"
+                Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
                 Command="{CompiledBinding ClearHistoryCommand}" />
       </DockPanel>
     </Border>
@@ -93,10 +93,10 @@
         </i:Interaction.Behaviors>
       </TextBox>
       <Button Grid.Column="1"
-              Content="Run"
+              Classes="fluent-icon" Tag="{StaticResource PlayIconPath}" Content="Run"
               Command="{CompiledBinding SubmitCommand}" />
       <Button Grid.Column="2"
-              Content="Esc"
+              Classes="fluent-icon" Tag="{StaticResource DismissCircleIconPath}" Content="Esc"
               Command="{CompiledBinding CancelCommand}" />
     </Grid>
   </Grid>

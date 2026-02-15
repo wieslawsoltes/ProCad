@@ -19,9 +19,9 @@
       <TextBox Width="200"
                Watermark="Search..."
                Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Prev"
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronLeftIconPath}" Content="Prev"
               Command="{CompiledBinding PreviousSearchCommand}" />
-      <Button Content="Next"
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronRightIconPath}" Content="Next"
               Command="{CompiledBinding NextSearchCommand}" />
       <TextBlock Text="{CompiledBinding SearchSummary}"
                  VerticalAlignment="Center" />
@@ -31,7 +31,7 @@
       <TextBox Width="200"
                Watermark="Filter..."
                Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-      <Button Content="Clear"
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
               Command="{CompiledBinding ClearFilterCommand}" />
     </StackPanel>
     <DataGrid Grid.Row="1"
@@ -56,7 +56,12 @@
           <MenuItem Header="Edit Block"
                     Command="{CompiledBinding EditBlockCommand}"
                     CommandParameter="{CompiledBinding SelectedItem}"
-                    IsEnabled="{CompiledBinding CanEditBlock}" />
+                    IsEnabled="{CompiledBinding CanEditBlock}">
+            <MenuItem.Icon>
+              <PathIcon Classes="fluent-glyph"
+                        Data="{StaticResource EditIconPath}" />
+            </MenuItem.Icon>
+          </MenuItem>
         </ContextMenu>
       </DataGrid.ContextMenu>
     </DataGrid>
