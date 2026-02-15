@@ -21,11 +21,11 @@
         <PackageVersion Include="ReactiveUI.Avalonia" Version="11.3.8" />
         <PackageVersion Include="ReactiveUI.SourceGenerators" Version="2.6.1" />
 
-        <PackageVersion Include="Dock.Avalonia" Version="11.3.11.8" />
-        <PackageVersion Include="Dock.Avalonia.Themes.Fluent" Version="11.3.11.8" />
-        <PackageVersion Include="Dock.Model" Version="11.3.11.8" />
-        <PackageVersion Include="Dock.Model.ReactiveUI" Version="11.3.11.8" />
-        <PackageVersion Include="ProDataGrid" Version="11.3.11-preview.5" />
+        <PackageVersion Include="Dock.Avalonia" Version="11.3.11.13" />
+        <PackageVersion Include="Dock.Avalonia.Themes.Fluent" Version="11.3.11.13" />
+        <PackageVersion Include="Dock.Model" Version="11.3.11.13" />
+        <PackageVersion Include="Dock.Model.ReactiveUI" Version="11.3.11.13" />
+        <PackageVersion Include="ProDataGrid" Version="11.3.11-preview.14" />
 
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
 
