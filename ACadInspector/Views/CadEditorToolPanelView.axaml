@@ -3,9 +3,18 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:ACadInspector.ViewModels"
+             xmlns:converters="using:ACadInspector.Converters"
              mc:Ignorable="d"
              x:Class="ACadInspector.Views.CadEditorToolPanelView"
              x:DataType="vm:CadEditorToolPanelViewModel">
+  <UserControl.Styles>
+    <Style Selector="ItemsControl.editor-tool-list > ContentPresenter">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+  <UserControl.Resources>
+    <converters:IconResourceKeyToGeometryConverter x:Key="IconResourceKeyToGeometryConverter" />
+  </UserControl.Resources>
   <ScrollViewer Margin="10"
                 VerticalScrollBarVisibility="Auto"
                 HorizontalScrollBarVisibility="Disabled">
@@ -47,7 +56,7 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CadCommandCompletionItemViewModel">
                 <Button Content="{CompiledBinding DisplayText}"
-                        Command="{CompiledBinding $parent[vm:CadEditorToolPanelViewModel].ApplyCompletionCommand}"
+                        Command="{CompiledBinding ApplyCommand}"
                         CommandParameter="{CompiledBinding .}"
                         Margin="0,0,4,4"
                         MinHeight="24"
@@ -67,13 +76,16 @@
           <TextBlock Text="Draw"
                      FontWeight="SemiBold" />
           <ItemsControl Grid.Row="1"
+                        Classes="editor-tool-list"
                         ItemsSource="{CompiledBinding DrawTools}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CadEditorToolActionViewModel">
-                <Button Content="{CompiledBinding DisplayName}"
+                <Button Classes="fluent-icon"
+                        Tag="{CompiledBinding IconResourceKey, Converter={StaticResource IconResourceKeyToGeometryConverter}}"
+                        Content="{CompiledBinding DisplayName}"
                         Command="{CompiledBinding StartCommand}"
                         CommandParameter="{CompiledBinding Command}"
-                        IsEnabled="{CompiledBinding $parent[vm:CadEditorToolPanelViewModel].CanStartTools}"
+                        HorizontalAlignment="Stretch"
                         Margin="0,2" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -90,13 +102,16 @@
           <TextBlock Text="Modify"
                      FontWeight="SemiBold" />
           <ItemsControl Grid.Row="1"
+                        Classes="editor-tool-list"
                         ItemsSource="{CompiledBinding ModifyTools}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CadEditorToolActionViewModel">
-                <Button Content="{CompiledBinding DisplayName}"
+                <Button Classes="fluent-icon"
+                        Tag="{CompiledBinding IconResourceKey, Converter={StaticResource IconResourceKeyToGeometryConverter}}"
+                        Content="{CompiledBinding DisplayName}"
                         Command="{CompiledBinding StartCommand}"
                         CommandParameter="{CompiledBinding Command}"
-                        IsEnabled="{CompiledBinding $parent[vm:CadEditorToolPanelViewModel].CanStartTools}"
+                        HorizontalAlignment="Stretch"
                         Margin="0,2" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -113,13 +128,16 @@
           <TextBlock Text="Annotate"
                      FontWeight="SemiBold" />
           <ItemsControl Grid.Row="1"
+                        Classes="editor-tool-list"
                         ItemsSource="{CompiledBinding AnnotateTools}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CadEditorToolActionViewModel">
-                <Button Content="{CompiledBinding DisplayName}"
+                <Button Classes="fluent-icon"
+                        Tag="{CompiledBinding IconResourceKey, Converter={StaticResource IconResourceKeyToGeometryConverter}}"
+                        Content="{CompiledBinding DisplayName}"
                         Command="{CompiledBinding StartCommand}"
                         CommandParameter="{CompiledBinding Command}"
-                        IsEnabled="{CompiledBinding $parent[vm:CadEditorToolPanelViewModel].CanStartTools}"
+                        HorizontalAlignment="Stretch"
                         Margin="0,2" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>

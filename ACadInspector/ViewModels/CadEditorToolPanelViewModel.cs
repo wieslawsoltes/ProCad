@@ -57,61 +57,63 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
     {
         _controllerHost = controllerHost ?? throw new ArgumentNullException(nameof(controllerHost));
         _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
-        StartToolCommand = ReactiveCommand.Create<string>(StartCommand);
+        StartToolCommand = ReactiveCommand.Create<string>(
+            StartCommand,
+            this.WhenAnyValue(x => x.CanStartTools));
         ApplyCompletionCommand = ReactiveCommand.CreateFromTask<CadCommandCompletionItemViewModel>(ApplyCompletionAsync);
         CancelCommand = ReactiveCommand.Create(CancelActiveCommand);
         DrawTools =
         [
-            new("LINE", "Line", StartToolCommand),
-            new("PLINE", "Polyline", StartToolCommand),
-            new("XLINE", "XLine", StartToolCommand),
-            new("RAY", "Ray", StartToolCommand),
-            new("CIRCLE", "Circle", StartToolCommand),
-            new("ARC", "Arc", StartToolCommand),
-            new("ELLIPSE", "Ellipse", StartToolCommand),
-            new("SPLINE", "Spline", StartToolCommand),
-            new("POLYGON", "Polygon", StartToolCommand),
-            new("RECTANG", "Rectangle", StartToolCommand),
-            new("POINT", "Point", StartToolCommand),
-            new("INSERT", "Insert", StartToolCommand),
-            new("HATCH", "Hatch", StartToolCommand),
-            new("BOUNDARY", "Boundary", StartToolCommand)
+            CreateTool("LINE", "Line", StartToolCommand),
+            CreateTool("PLINE", "Polyline", StartToolCommand),
+            CreateTool("XLINE", "XLine", StartToolCommand),
+            CreateTool("RAY", "Ray", StartToolCommand),
+            CreateTool("CIRCLE", "Circle", StartToolCommand),
+            CreateTool("ARC", "Arc", StartToolCommand),
+            CreateTool("ELLIPSE", "Ellipse", StartToolCommand),
+            CreateTool("SPLINE", "Spline", StartToolCommand),
+            CreateTool("POLYGON", "Polygon", StartToolCommand),
+            CreateTool("RECTANG", "Rectangle", StartToolCommand),
+            CreateTool("POINT", "Point", StartToolCommand),
+            CreateTool("INSERT", "Insert", StartToolCommand),
+            CreateTool("HATCH", "Hatch", StartToolCommand),
+            CreateTool("BOUNDARY", "Boundary", StartToolCommand)
         ];
         ModifyTools =
         [
-            new("MOVE", "Move", StartToolCommand),
-            new("COPY", "Copy", StartToolCommand),
-            new("ROTATE", "Rotate", StartToolCommand),
-            new("SCALE", "Scale", StartToolCommand),
-            new("MIRROR", "Mirror", StartToolCommand),
-            new("STRETCH", "Stretch", StartToolCommand),
-            new("ERASE", "Erase", StartToolCommand),
-            new("OFFSET", "Offset", StartToolCommand),
-            new("TRIM", "Trim", StartToolCommand),
-            new("EXTEND", "Extend", StartToolCommand),
-            new("BREAK", "Break", StartToolCommand),
-            new("JOIN", "Join", StartToolCommand),
-            new("FILLET", "Fillet", StartToolCommand),
-            new("CHAMFER", "Chamfer", StartToolCommand),
-            new("ARRAY", "Array", StartToolCommand),
-            new("EXPLODE", "Explode", StartToolCommand),
-            new("ALIGN", "Align", StartToolCommand),
-            new("MATCHPROP", "MatchProp", StartToolCommand),
-            new("COPYCLIP", "CopyClip", StartToolCommand),
-            new("CUT", "Cut", StartToolCommand),
-            new("PASTECLIP", "PasteClip", StartToolCommand)
+            CreateTool("MOVE", "Move", StartToolCommand),
+            CreateTool("COPY", "Copy", StartToolCommand),
+            CreateTool("ROTATE", "Rotate", StartToolCommand),
+            CreateTool("SCALE", "Scale", StartToolCommand),
+            CreateTool("MIRROR", "Mirror", StartToolCommand),
+            CreateTool("STRETCH", "Stretch", StartToolCommand),
+            CreateTool("ERASE", "Erase", StartToolCommand),
+            CreateTool("OFFSET", "Offset", StartToolCommand),
+            CreateTool("TRIM", "Trim", StartToolCommand),
+            CreateTool("EXTEND", "Extend", StartToolCommand),
+            CreateTool("BREAK", "Break", StartToolCommand),
+            CreateTool("JOIN", "Join", StartToolCommand),
+            CreateTool("FILLET", "Fillet", StartToolCommand),
+            CreateTool("CHAMFER", "Chamfer", StartToolCommand),
+            CreateTool("ARRAY", "Array", StartToolCommand),
+            CreateTool("EXPLODE", "Explode", StartToolCommand),
+            CreateTool("ALIGN", "Align", StartToolCommand),
+            CreateTool("MATCHPROP", "MatchProp", StartToolCommand),
+            CreateTool("COPYCLIP", "CopyClip", StartToolCommand),
+            CreateTool("CUT", "Cut", StartToolCommand),
+            CreateTool("PASTECLIP", "PasteClip", StartToolCommand)
         ];
         AnnotateTools =
         [
-            new("TEXT", "Text", StartToolCommand),
-            new("MTEXT", "MText", StartToolCommand),
-            new("DIMLINEAR", "Dim Linear", StartToolCommand),
-            new("DIMALIGNED", "Dim Aligned", StartToolCommand),
-            new("DIMRADIUS", "Dim Radius", StartToolCommand),
-            new("DIMDIAMETER", "Dim Diameter", StartToolCommand),
-            new("DIMANGULAR", "Dim Angular", StartToolCommand),
-            new("LEADER", "Leader", StartToolCommand),
-            new("MLEADER", "MLeader", StartToolCommand)
+            CreateTool("TEXT", "Text", StartToolCommand),
+            CreateTool("MTEXT", "MText", StartToolCommand),
+            CreateTool("DIMLINEAR", "Dim Linear", StartToolCommand),
+            CreateTool("DIMALIGNED", "Dim Aligned", StartToolCommand),
+            CreateTool("DIMRADIUS", "Dim Radius", StartToolCommand),
+            CreateTool("DIMDIAMETER", "Dim Diameter", StartToolCommand),
+            CreateTool("DIMANGULAR", "Dim Angular", StartToolCommand),
+            CreateTool("LEADER", "Leader", StartToolCommand),
+            CreateTool("MLEADER", "MLeader", StartToolCommand)
         ];
 
         _activeDocumentSubscription = _documentContext.WhenAnyValue(x => x.ActiveDocument)
@@ -176,7 +178,7 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
                     continue;
                 }
 
-                _completions.Add(new CadCommandCompletionItemViewModel(completion));
+                _completions.Add(new CadCommandCompletionItemViewModel(completion, ApplyCompletionCommand));
             }
         }
 
@@ -240,6 +242,67 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
     {
         return string.Equals(kind, "Command", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(kind, "Alias", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static CadEditorToolActionViewModel CreateTool(string command, string displayName, ICommand startCommand)
+    {
+        return new CadEditorToolActionViewModel(
+            command,
+            displayName,
+            ResolveToolIconResourceKey(command),
+            startCommand);
+    }
+
+    private static string ResolveToolIconResourceKey(string command)
+    {
+        return command.ToUpperInvariant() switch
+        {
+            "LINE" => "LineIconPath",
+            "PLINE" => "LineIconPath",
+            "XLINE" => "LineIconPath",
+            "RAY" => "LocationArrowIconPath",
+            "CIRCLE" => "CircleIconPath",
+            "ARC" => "RotateClockwiseIconPath",
+            "ELLIPSE" => "OvalIconPath",
+            "SPLINE" => "LineIconPath",
+            "POLYGON" => "ShapeExcludeIconPath",
+            "RECTANG" => "RectangleIconPath",
+            "POINT" => "PointScanIconPath",
+            "INSERT" => "InsertIconPath",
+            "HATCH" => "PaintBrushIconPath",
+            "BOUNDARY" => "ShapeExcludeIconPath",
+            "MOVE" => "ArrowMoveIconPath",
+            "COPY" => "CopyIconPath",
+            "ROTATE" => "RotateClockwiseIconPath",
+            "SCALE" => "ScaleFitIconPath",
+            "MIRROR" => "FlipHorizontalIconPath",
+            "STRETCH" => "ArrowExpandIconPath",
+            "ERASE" => "DeleteIconPath",
+            "OFFSET" => "ArrowMoveInwardIconPath",
+            "TRIM" => "CutIconPath",
+            "EXTEND" => "ArrowExpandIconPath",
+            "BREAK" => "SplitHorizontalIconPath",
+            "JOIN" => "LinkIconPath",
+            "FILLET" => "CircleLineIconPath",
+            "CHAMFER" => "ShapeExcludeIconPath",
+            "ARRAY" => "GridIconPath",
+            "EXPLODE" => "SplitHorizontalIconPath",
+            "ALIGN" => "AlignStraightenIconPath",
+            "MATCHPROP" => "PaintBrushIconPath",
+            "COPYCLIP" => "CopyIconPath",
+            "CUT" => "CutIconPath",
+            "PASTECLIP" => "ClipboardPasteIconPath",
+            "TEXT" => "TextTIconPath",
+            "MTEXT" => "TextTIconPath",
+            "DIMLINEAR" => "RulerIconPath",
+            "DIMALIGNED" => "AlignStraightenIconPath",
+            "DIMRADIUS" => "CircleIconPath",
+            "DIMDIAMETER" => "CircleIconPath",
+            "DIMANGULAR" => "RotateClockwiseIconPath",
+            "LEADER" => "LocationArrowIconPath",
+            "MLEADER" => "LocationArrowIconPath",
+            _ => "CodeIconPath"
+        };
     }
 
     private void BindActiveController()
@@ -333,14 +396,20 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
 
 public sealed class CadEditorToolActionViewModel
 {
-    public CadEditorToolActionViewModel(string command, string displayName, ICommand startCommand)
+    public CadEditorToolActionViewModel(
+        string command,
+        string displayName,
+        string iconResourceKey,
+        ICommand startCommand)
     {
         Command = command;
         DisplayName = displayName;
+        IconResourceKey = iconResourceKey;
         StartCommand = startCommand;
     }
 
     public string Command { get; }
     public string DisplayName { get; }
+    public string IconResourceKey { get; }
     public ICommand StartCommand { get; }
 }
