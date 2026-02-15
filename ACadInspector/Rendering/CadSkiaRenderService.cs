@@ -1436,12 +1436,13 @@ public sealed class CadSkiaRenderService
             return;
         }
 
-        var alpha = (byte)Math.Clamp((int)Math.Round(255f * Math.Clamp(image.Opacity, 0f, 1f)), 0, 255);
+        var (paintColor, tintColor) = ResolveImagePaint(image);
         using var paint = new SKPaint
         {
-            Color = new SKColor(255, 255, 255, alpha),
+            Color = paintColor,
             IsAntialias = true
         };
+        paint.ColorFilter = SKColorFilter.CreateBlendMode(tintColor, SKBlendMode.Modulate);
 
         var matrix = new SKMatrix
         {
@@ -1460,6 +1461,15 @@ public sealed class CadSkiaRenderService
         canvas.Restore();
     }
 
+    internal static (SKColor PaintColor, SKColor TintColor) ResolveImagePaint(RenderImage image)
+    {
+        var opacity = Math.Clamp(image.Opacity, 0f, 1f) * (image.Color.A / 255f);
+        var alpha = (byte)Math.Clamp((int)Math.Round(255f * opacity), 0, 255);
+        var paintColor = new SKColor(255, 255, 255, alpha);
+        var tintColor = new SKColor(image.Color.R, image.Color.G, image.Color.B, 255);
+        return (paintColor, tintColor);
+    }
+
     private void DrawImagePlaceholder(SKCanvas canvas, RenderImage image, CadRenderStateSnapshot state)
     {
         var corners = GetImageCorners(image);
@@ -1469,9 +1479,9 @@ public sealed class CadSkiaRenderService
         }
 
         var paint = GetStrokePaint(image.Color, 0f, RenderLineCap.Round, RenderLineJoin.Round, state);
-        var alpha = (byte)Math.Clamp((int)Math.Round(255f * Math.Clamp(image.Opacity, 0f, 1f)), 0, 255);
+        var placeholderColor = ResolveImagePlaceholderColor(image);
         var prevColor = paint.Color;
-        paint.Color = new SKColor(prevColor.Red, prevColor.Green, prevColor.Blue, alpha);
+        paint.Color = placeholderColor;
 
         canvas.DrawLine(corners[0].X, corners[0].Y, corners[1].X, corners[1].Y, paint);
         canvas.DrawLine(corners[1].X, corners[1].Y, corners[2].X, corners[2].Y, paint);
@@ -1481,6 +1491,12 @@ public sealed class CadSkiaRenderService
         canvas.DrawLine(corners[1].X, corners[1].Y, corners[3].X, corners[3].Y, paint);
 
         paint.Color = prevColor;
+    }
+
+    internal static SKColor ResolveImagePlaceholderColor(RenderImage image)
+    {
+        var (paintColor, tintColor) = ResolveImagePaint(image);
+        return new SKColor(tintColor.Red, tintColor.Green, tintColor.Blue, paintColor.Alpha);
     }
 
     private static Vector2[] GetImageCorners(RenderImage image)
