@@ -1,5 +1,5 @@
 using ACadInspector.Collaboration.Transports;
-using Vibe.Office.Collaboration.Transports;
+using ProEdit.Collaboration.Transports;
 using Xunit;
 
 namespace ACadInspector.Editing.Tests.Collaboration;

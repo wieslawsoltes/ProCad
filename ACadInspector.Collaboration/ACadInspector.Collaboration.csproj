@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ACadInspector.Editing\ACadInspector.Editing.csproj" />
-    <ProjectReference Include="..\external\VibeOffice\src\Vibe.Office.Collaboration.Transports\Vibe.Office.Collaboration.Transports.csproj" />
+    <ProjectReference Include="..\external\ProEdit\src\ProEdit.Collaboration.Transports\ProEdit.Collaboration.Transports.csproj" />
   </ItemGroup>
 
 </Project>

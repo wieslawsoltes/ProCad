@@ -1,6 +1,6 @@
-using Vibe.Office.Collaboration.Transports;
-using Vibe.Office.Collaboration.Transports.SharedFile;
-using Vibe.Office.Collaboration.Transports.WebSocket;
+using ProEdit.Collaboration.Transports;
+using ProEdit.Collaboration.Transports.SharedFile;
+using ProEdit.Collaboration.Transports.WebSocket;
 
 namespace ACadInspector.Collaboration.Transports;
 

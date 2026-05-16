@@ -1,4 +1,4 @@
-using Vibe.Office.Collaboration;
+using ProEdit.Collaboration;
 
 namespace ACadInspector.Collaboration.Transports;
 

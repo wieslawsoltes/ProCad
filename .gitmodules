@@ -1,6 +1,6 @@
 [submodule "external/ACadSharp"]
 	path = external/ACadSharp
 	url = https://github.com/wieslawsoltes/ACadSharp
-[submodule "external/VibeOffice"]
-	path = external/VibeOffice
-	url = https://github.com/wieslawsoltes/VibeOffice
+[submodule "external/ProEdit"]
+	path = external/ProEdit
+	url = https://github.com/wieslawsoltes/ProEdit
