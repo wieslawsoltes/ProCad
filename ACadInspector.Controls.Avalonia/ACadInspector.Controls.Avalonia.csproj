@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>ACadInspector.Controls.Avalonia</PackageId>
+    <Description>Avalonia CAD viewer and editor controls backed by ACadInspector render scenes and SkiaSharp.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;avalonia;skia;viewer;editor;controls</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Skia" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACadInspector.Controls\ACadInspector.Controls.csproj" />
+    <ProjectReference Include="..\ACadInspector.Controls.Skia\ACadInspector.Controls.Skia.csproj" />
+    <ProjectReference Include="..\ACadInspector.Rendering\ACadInspector.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
