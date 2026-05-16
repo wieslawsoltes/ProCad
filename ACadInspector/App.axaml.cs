@@ -360,7 +360,7 @@ public partial class App : Application
         services.AddSingleton<ICadGripService, CadGripService>();
         services.AddSingleton<ICadScriptCommandHost>(provider =>
             new CadScriptCommandHost(() => provider.GetRequiredService<ICadCommandRegistry>()));
-        services.AddSingleton<ICadRealtimeTransportFactory, VibeCadRealtimeTransportFactory>();
+        services.AddSingleton<ICadRealtimeTransportFactory, ProEditCadRealtimeTransportFactory>();
         services.AddSingleton<ICadCollabService, CadCollabService>();
         services.AddSingleton<ICadCollabUiService, CadCollabUiService>();
         services.AddSingleton<ICadCollabConnectionOptionsProvider, CadCollabConnectionOptionsProvider>();

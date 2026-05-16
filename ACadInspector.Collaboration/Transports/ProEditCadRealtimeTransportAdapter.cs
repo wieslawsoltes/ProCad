@@ -2,12 +2,12 @@ using ProEdit.Collaboration;
 
 namespace ACadInspector.Collaboration.Transports;
 
-public sealed class VibeCadRealtimeTransportAdapter : ICadRealtimeTransport
+public sealed class ProEditCadRealtimeTransportAdapter : ICadRealtimeTransport
 {
     private readonly ICollabTransportConnection _transport;
     private bool _disposed;
 
-    public VibeCadRealtimeTransportAdapter(ICollabTransportConnection transport)
+    public ProEditCadRealtimeTransportAdapter(ICollabTransportConnection transport)
     {
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _transport.MessageReceived += OnMessageReceived;

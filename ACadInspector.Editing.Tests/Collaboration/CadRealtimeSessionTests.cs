@@ -24,7 +24,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         await using var realtime = new CadRealtimeSession(Guid.NewGuid(), coordinator, transport);
 
         await realtime.ConnectAsync();
@@ -49,7 +49,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         await using var realtime = new CadRealtimeSession(Guid.NewGuid(), coordinator, transport);
         var tcs = new TaskCompletionSource<CadCollabPresence>(TaskCreationOptions.RunContinuationsAsynchronously);
         realtime.PresenceReceived += (_, presence) => tcs.TrySetResult(presence);
@@ -79,7 +79,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         var snapshotStore = new InMemoryCadCollabSnapshotStore();
         await snapshotStore.AppendBatchAsync(new CadCollabBatch(
             BatchId: Guid.NewGuid(),
@@ -108,7 +108,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         var snapshotStore = new InMemoryCadCollabSnapshotStore();
         await snapshotStore.AppendBatchAsync(new CadCollabBatch(
             BatchId: Guid.NewGuid(),
@@ -145,7 +145,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         var snapshotStore = new InMemoryCadCollabSnapshotStore();
         await using var realtime = new CadRealtimeSession(Guid.NewGuid(), coordinator, transport, snapshotStore);
         await realtime.ConnectAsync();
@@ -167,7 +167,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         var snapshotStore = new InMemoryCadCollabSnapshotStore();
         await using var realtime = new CadRealtimeSession(Guid.NewGuid(), coordinator, transport, snapshotStore);
         await realtime.ConnectAsync();
@@ -206,7 +206,7 @@ public sealed class CadRealtimeSessionTests
     {
         var editorSession = new FakeCadEditorSession();
         var coordinator = new CadCollabSessionCoordinator(editorSession, new CadCollabOpHistory());
-        var transport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var transport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         await using var realtime = new CadRealtimeSession(Guid.NewGuid(), coordinator, transport);
         await realtime.ConnectAsync();
 
@@ -251,7 +251,7 @@ public sealed class CadRealtimeSessionTests
         var snapshotStore = new InMemoryCadCollabSnapshotStore();
         var initialSession = new FakeCadEditorSession();
         var initialCoordinator = new CadCollabSessionCoordinator(initialSession, new CadCollabOpHistory());
-        var initialTransport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var initialTransport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         await using (var initialRealtime = new CadRealtimeSession(Guid.NewGuid(), initialCoordinator, initialTransport, snapshotStore))
         {
             await initialRealtime.ConnectAsync();
@@ -269,7 +269,7 @@ public sealed class CadRealtimeSessionTests
 
         var recoveredSession = new FakeCadEditorSession();
         var recoveredCoordinator = new CadCollabSessionCoordinator(recoveredSession, new CadCollabOpHistory());
-        var recoveredTransport = new VibeCadRealtimeTransportFactory().CreateLoopback();
+        var recoveredTransport = new ProEditCadRealtimeTransportFactory().CreateLoopback();
         await using var recoveredRealtime = new CadRealtimeSession(Guid.NewGuid(), recoveredCoordinator, recoveredTransport, snapshotStore);
         await recoveredRealtime.ConnectAsync();
 

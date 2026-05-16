@@ -4,22 +4,22 @@ using ProEdit.Collaboration.Transports.WebSocket;
 
 namespace ACadInspector.Collaboration.Transports;
 
-public sealed class VibeCadRealtimeTransportFactory : ICadRealtimeTransportFactory
+public sealed class ProEditCadRealtimeTransportFactory : ICadRealtimeTransportFactory
 {
     public ICadRealtimeTransport CreateWebSocket(Uri uri)
     {
         ArgumentNullException.ThrowIfNull(uri);
-        return new VibeCadRealtimeTransportAdapter(new WebSocketClientTransport(uri));
+        return new ProEditCadRealtimeTransportAdapter(new WebSocketClientTransport(uri));
     }
 
     public ICadRealtimeTransport CreateSharedFile(string basePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
-        return new VibeCadRealtimeTransportAdapter(SharedFileTransport.CreateForBasePath(basePath));
+        return new ProEditCadRealtimeTransportAdapter(SharedFileTransport.CreateForBasePath(basePath));
     }
 
     public ICadRealtimeTransport CreateLoopback()
     {
-        return new VibeCadRealtimeTransportAdapter(new InMemoryLoopbackTransport());
+        return new ProEditCadRealtimeTransportAdapter(new InMemoryLoopbackTransport());
     }
 }

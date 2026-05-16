@@ -4,13 +4,13 @@ using Xunit;
 
 namespace ACadInspector.Editing.Tests.Collaboration;
 
-public sealed class VibeCadRealtimeTransportAdapterTests
+public sealed class ProEditCadRealtimeTransportAdapterTests
 {
     [Fact]
     public async Task Adapter_ForwardsStateAndPayload()
     {
         var inner = new InMemoryLoopbackTransport();
-        await using var adapter = new VibeCadRealtimeTransportAdapter(inner);
+        await using var adapter = new ProEditCadRealtimeTransportAdapter(inner);
 
         var states = new List<CadRealtimeTransportState>();
         byte[]? received = null;

@@ -472,7 +472,7 @@ public sealed class UiSmokeTests
         services.AddSingleton<ICadSnapService, CadSnapService>();
         services.AddSingleton<ICadTrackingService, CadTrackingService>();
         services.AddSingleton<ICadGripService, CadGripService>();
-        services.AddSingleton<ICadRealtimeTransportFactory, VibeCadRealtimeTransportFactory>();
+        services.AddSingleton<ICadRealtimeTransportFactory, ProEditCadRealtimeTransportFactory>();
         services.AddSingleton<ICadCollabSnapshotStoreFactory, InMemoryCadCollabSnapshotStoreFactory>();
         services.AddSingleton<ICadCollabService, CadCollabService>();
         services.AddSingleton<ICadCollabUiService, CadCollabUiService>();
