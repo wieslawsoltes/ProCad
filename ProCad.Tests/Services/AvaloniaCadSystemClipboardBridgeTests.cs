@@ -12,21 +12,7 @@ public sealed class AvaloniaCadSystemClipboardBridgeTests
     {
         var platform = new FakeClipboardPlatformFacade();
         var bridge = new AvaloniaCadSystemClipboardBridge(platform);
-        var payload = new CadClipboardPayload(
-            Entities:
-            [
-                new CadClipboardEntity(
-                    EntityType: "LINE",
-                    Payload: new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["entityType"] = "LINE",
-                        ["start"] = "0,0,0",
-                        ["end"] = "2,0,0"
-                    },
-                    ReferencePoint: XYZ.Zero)
-            ],
-            BasePoint: XYZ.Zero,
-            Dependencies: CadClipboardDependencies.Empty);
+        var payload = CreatePayload();
 
         await bridge.WriteAsync(payload);
 
@@ -42,6 +28,55 @@ public sealed class AvaloniaCadSystemClipboardBridgeTests
         var hydratedFromText = await bridge.ReadAsync();
         Assert.NotNull(hydratedFromText);
         Assert.Single(hydratedFromText!.Entities);
+    }
+
+    [Fact]
+    public async Task ReadAsync_AcceptsLegacyCadJsonFormat()
+    {
+        var payload = CreatePayload();
+        var platform = new FakeClipboardPlatformFacade();
+        platform.SetFormat(CadClipboardFormats.LegacyCadJsonMime, CadClipboardPayloadSerializer.Serialize(payload));
+        var bridge = new AvaloniaCadSystemClipboardBridge(platform);
+
+        var hydrated = await bridge.ReadAsync();
+
+        Assert.NotNull(hydrated);
+        Assert.Single(hydrated!.Entities);
+    }
+
+    [Fact]
+    public async Task ReadAsync_AcceptsLegacyTextPrefix()
+    {
+        var payload = CreatePayload();
+        var platform = new FakeClipboardPlatformFacade();
+        platform.SetText(string.Concat(
+            CadClipboardFormats.LegacyCadTextPrefix,
+            CadClipboardPayloadSerializer.Serialize(payload)));
+        var bridge = new AvaloniaCadSystemClipboardBridge(platform);
+
+        var hydrated = await bridge.ReadAsync();
+
+        Assert.NotNull(hydrated);
+        Assert.Single(hydrated!.Entities);
+    }
+
+    private static CadClipboardPayload CreatePayload()
+    {
+        return new CadClipboardPayload(
+            Entities:
+            [
+                new CadClipboardEntity(
+                    EntityType: "LINE",
+                    Payload: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["entityType"] = "LINE",
+                        ["start"] = "0,0,0",
+                        ["end"] = "2,0,0"
+                    },
+                    ReferencePoint: XYZ.Zero)
+            ],
+            BasePoint: XYZ.Zero,
+            Dependencies: CadClipboardDependencies.Empty);
     }
 
     private sealed class FakeClipboardPlatformFacade : ICadClipboardPlatformFacade
@@ -85,6 +120,16 @@ public sealed class AvaloniaCadSystemClipboardBridgeTests
         {
             StoredCadJson = null;
             _formats.Remove(CadClipboardFormats.CadJsonMime);
+        }
+
+        public void SetFormat(string formatIdentifier, string value)
+        {
+            _formats[formatIdentifier] = value;
+        }
+
+        public void SetText(string value)
+        {
+            StoredTextPayload = value;
         }
     }
 }

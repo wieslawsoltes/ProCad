@@ -17,6 +17,10 @@ function toLegacyCollabKey(key) {
     return key;
 }
 
+function isLegacyCollabKey(key) {
+    return typeof key === "string" && key.startsWith(`${legacyCollabKeyPrefix}.`);
+}
+
 async function collabDbExists(dbName) {
     if (typeof globalThis.indexedDB?.databases !== "function") {
         return true;
@@ -120,7 +124,7 @@ globalThis.proCadCollab.idbRemove = async (key) => {
     try {
         const result = await runCollabRequest(collabDbName, "readwrite", (store) => store.delete(key));
         const legacyKey = toLegacyCollabKey(key);
-        if (legacyKey !== key) {
+        if (legacyKey !== key || isLegacyCollabKey(key)) {
             await runCollabRequest(legacyCollabDbName, "readwrite", (store) => store.delete(legacyKey), false);
         }
 

@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using ProCad.Editing.Clipboard;
@@ -34,13 +33,17 @@ public sealed class AvaloniaCadSystemClipboardBridge : ICadSystemClipboardBridge
     public async ValueTask<CadClipboardPayload?> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var json = await _clipboardPlatform
-            .ReadFormatAsync(CadClipboardFormats.CadJsonMime, cancellationToken)
-            .ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(json) &&
-            CadClipboardPayloadSerializer.TryDeserialize(json, out var payloadFromMime))
+        var jsonMimeFormats = new[] { CadClipboardFormats.CadJsonMime, CadClipboardFormats.LegacyCadJsonMime };
+        foreach (var jsonMimeFormat in jsonMimeFormats)
         {
-            return payloadFromMime;
+            var json = await _clipboardPlatform
+                .ReadFormatAsync(jsonMimeFormat, cancellationToken)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(json) &&
+                CadClipboardPayloadSerializer.TryDeserialize(json, out var payloadFromMime))
+            {
+                return payloadFromMime;
+            }
         }
 
         var text = await _clipboardPlatform.ReadTextAsync(cancellationToken).ConfigureAwait(false);
@@ -49,9 +52,8 @@ public sealed class AvaloniaCadSystemClipboardBridge : ICadSystemClipboardBridge
             return null;
         }
 
-        if (text.StartsWith(CadClipboardFormats.CadTextPrefix, StringComparison.Ordinal))
+        if (CadClipboardFormats.TryRemoveCadTextPrefix(text, out var serialized))
         {
-            var serialized = text[CadClipboardFormats.CadTextPrefix.Length..];
             if (CadClipboardPayloadSerializer.TryDeserialize(serialized, out var payloadFromText))
             {
                 return payloadFromText;
