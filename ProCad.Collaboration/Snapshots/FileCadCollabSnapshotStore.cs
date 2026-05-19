@@ -12,9 +12,11 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
 
     private readonly string _snapshotPath;
     private readonly string _oplogPath;
+    private readonly string? _legacySnapshotPath;
+    private readonly string? _legacyOplogPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public FileCadCollabSnapshotStore(string basePath)
+    public FileCadCollabSnapshotStore(string basePath, string? legacyBasePath = null)
     {
         if (string.IsNullOrWhiteSpace(basePath))
         {
@@ -24,6 +26,16 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         Directory.CreateDirectory(basePath);
         _snapshotPath = Path.Combine(basePath, "cadcollab.snapshot.json");
         _oplogPath = Path.Combine(basePath, "cadcollab.oplog.jsonl");
+
+        if (!string.IsNullOrWhiteSpace(legacyBasePath)
+            && !string.Equals(
+                Path.GetFullPath(basePath),
+                Path.GetFullPath(legacyBasePath),
+                StringComparison.Ordinal))
+        {
+            _legacySnapshotPath = Path.Combine(legacyBasePath, "cadcollab.snapshot.json");
+            _legacyOplogPath = Path.Combine(legacyBasePath, "cadcollab.oplog.jsonl");
+        }
     }
 
     public async ValueTask<CadCollabSnapshot?> LoadLatestSnapshotAsync(CancellationToken cancellationToken = default)
@@ -31,6 +43,7 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await MigrateLegacyFileIfNeededAsync(_snapshotPath, _legacySnapshotPath, cancellationToken).ConfigureAwait(false);
             if (!File.Exists(_snapshotPath))
             {
                 return null;
@@ -52,6 +65,7 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await MigrateLegacyFileIfNeededAsync(_oplogPath, _legacyOplogPath, cancellationToken).ConfigureAwait(false);
             if (!File.Exists(_oplogPath))
             {
                 return Array.Empty<CadCollabBatch>();
@@ -102,6 +116,7 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await MigrateLegacyFileIfNeededAsync(_oplogPath, _legacyOplogPath, cancellationToken).ConfigureAwait(false);
             var line = JsonSerializer.Serialize(batch, JsonOptions);
             await using var stream = new FileStream(_oplogPath, FileMode.Append, FileAccess.Write, FileShare.Read);
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
@@ -138,6 +153,9 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
             {
                 File.Delete(_oplogPath);
             }
+
+            DeleteLegacyFile(_legacySnapshotPath);
+            DeleteLegacyFile(_legacyOplogPath);
         }
         finally
         {
@@ -150,6 +168,7 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await MigrateLegacyFileIfNeededAsync(_oplogPath, _legacyOplogPath, cancellationToken).ConfigureAwait(false);
             if (!File.Exists(_oplogPath))
             {
                 return;
@@ -169,6 +188,51 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         finally
         {
             _gate.Release();
+        }
+    }
+
+    private static async ValueTask MigrateLegacyFileIfNeededAsync(
+        string currentPath,
+        string? legacyPath,
+        CancellationToken cancellationToken)
+    {
+        if (legacyPath is null || File.Exists(currentPath) || !File.Exists(legacyPath))
+        {
+            return;
+        }
+
+        var currentDirectory = Path.GetDirectoryName(currentPath);
+        if (!string.IsNullOrWhiteSpace(currentDirectory))
+        {
+            Directory.CreateDirectory(currentDirectory);
+        }
+
+        try
+        {
+            await using (var source = new FileStream(legacyPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            await using (var destination = new FileStream(currentPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+                await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (FileNotFoundException) when (File.Exists(currentPath))
+        {
+            return;
+        }
+        catch (IOException) when (File.Exists(currentPath))
+        {
+            return;
+        }
+
+        File.Delete(legacyPath);
+    }
+
+    private static void DeleteLegacyFile(string? legacyPath)
+    {
+        if (legacyPath is not null && File.Exists(legacyPath))
+        {
+            File.Delete(legacyPath);
         }
     }
 }

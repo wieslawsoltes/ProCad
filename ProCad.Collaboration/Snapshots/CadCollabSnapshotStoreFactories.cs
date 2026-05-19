@@ -7,10 +7,11 @@ namespace ProCad.Collaboration.Snapshots;
 public sealed class FileCadCollabSnapshotStoreFactory : ICadCollabSnapshotStoreFactory
 {
     private readonly string _basePath;
+    private readonly string? _legacyBasePath;
     private readonly ConcurrentDictionary<string, ICadCollabSnapshotStore> _stores =
         new(StringComparer.Ordinal);
 
-    public FileCadCollabSnapshotStoreFactory(string basePath)
+    public FileCadCollabSnapshotStoreFactory(string basePath, string? legacyBasePath = null)
     {
         if (string.IsNullOrWhiteSpace(basePath))
         {
@@ -18,6 +19,7 @@ public sealed class FileCadCollabSnapshotStoreFactory : ICadCollabSnapshotStoreF
         }
 
         _basePath = basePath;
+        _legacyBasePath = string.IsNullOrWhiteSpace(legacyBasePath) ? null : legacyBasePath;
     }
 
     public ICadCollabSnapshotStore CreateStore(string scopeKey)
@@ -28,7 +30,8 @@ public sealed class FileCadCollabSnapshotStoreFactory : ICadCollabSnapshotStoreF
 
     private ICadCollabSnapshotStore CreateStoreCore(string scope)
     {
-        return new FileCadCollabSnapshotStore(Path.Combine(_basePath, scope));
+        var legacyPath = _legacyBasePath is null ? null : Path.Combine(_legacyBasePath, scope);
+        return new FileCadCollabSnapshotStore(Path.Combine(_basePath, scope), legacyPath);
     }
 
     private static string NormalizeScope(string? scopeKey)

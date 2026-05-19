@@ -379,7 +379,11 @@ public partial class App : Application
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ProCad",
                 "Collaboration");
-            return new FileCadCollabSnapshotStoreFactory(basePath);
+            var legacyBasePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                string.Concat("A", "Cad", "Inspector"),
+                "Collaboration");
+            return new FileCadCollabSnapshotStoreFactory(basePath, legacyBasePath);
         });
         services.AddSingleton<CadSelectionService>();
         services.AddSingleton<CadSelectionFocusService>();

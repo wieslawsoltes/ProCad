@@ -24,7 +24,11 @@ public sealed class BrowserHybridCadCollabKeyValueStore : IBrowserCadCollabKeyVa
         {
             try
             {
-                return await BrowserIndexedDbInterop.GetItemAsync(key).ConfigureAwait(false);
+                var value = await BrowserIndexedDbInterop.GetItemAsync(key).ConfigureAwait(false);
+                if (value is not null)
+                {
+                    return value;
+                }
             }
             catch
             {
