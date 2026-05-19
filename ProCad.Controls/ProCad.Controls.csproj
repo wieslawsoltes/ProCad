@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>ProCad.Controls</PackageId>
+    <Description>Platform-neutral CAD viewing and editing control primitives for ProCad render scenes.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;viewer;editor;controls;rendering</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProCad.Rendering\ProCad.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

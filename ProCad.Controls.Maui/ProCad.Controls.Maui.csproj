@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>ProCad.Controls.Maui</RootNamespace>
+    <PackageId>ProCad.Controls.Maui</PackageId>
+    <Description>.NET MAUI CAD viewer and editor controls backed by ProCad render scenes and SKCanvasView.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;maui;skia;skiasharp;viewer;editor;controls</PackageTags>
+    <VersionSuffix Condition="'$(VersionSuffix)' == ''">preview.1</VersionSuffix>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">12.2</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="SkiaSharp.Views.Maui.Controls" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProCad.Controls\ProCad.Controls.csproj" />
+    <ProjectReference Include="..\ProCad.Controls.Skia\ProCad.Controls.Skia.csproj" />
+    <ProjectReference Include="..\ProCad.Rendering\ProCad.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,69 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ProCad.ViewModels"
+             xmlns:adapters="using:ProCad.Adapters"
+             mc:Ignorable="d"
+             x:Class="ProCad.Views.CadDocumentTreeView"
+             x:DataType="vm:CadDocumentTreeViewModel">
+  <UserControl.Resources>
+    <adapters:HierarchicalSortingAdapterFactory x:Key="HierarchicalSortingAdapterFactory" />
+  </UserControl.Resources>
+  <Grid RowDefinitions="Auto,*">
+    <StackPanel Orientation="Horizontal"
+                Spacing="8"
+                Margin="0,0,0,8">
+      <TextBlock Text="Search"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Search..."
+               Text="{CompiledBinding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronLeftIconPath}" Content="Prev"
+              Command="{CompiledBinding PreviousSearchCommand}" />
+      <Button Classes="fluent-icon" Tag="{StaticResource ChevronRightIconPath}" Content="Next"
+              Command="{CompiledBinding NextSearchCommand}" />
+      <TextBlock Text="{CompiledBinding SearchSummary}"
+                 VerticalAlignment="Center" />
+      <TextBlock Text="Filter"
+                 Margin="12,0,0,0"
+                 VerticalAlignment="Center" />
+      <TextBox Width="200"
+               Watermark="Filter..."
+               Text="{CompiledBinding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+      <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
+              Command="{CompiledBinding ClearFilterCommand}" />
+    </StackPanel>
+    <DataGrid Grid.Row="1"
+              ColumnDefinitionsSource="{CompiledBinding ColumnDefinitions}"
+              SortingModel="{CompiledBinding SortingModel}"
+              FilteringModel="{CompiledBinding FilteringModel}"
+              SearchModel="{CompiledBinding SearchModel}"
+              SortingAdapterFactory="{StaticResource HierarchicalSortingAdapterFactory}"
+              SelectedItem="{CompiledBinding SelectedItem, Mode=TwoWay}"
+              AutoExpandSelectedItem="False"
+              AutoScrollToSelectedItem="True"
+              AutoGenerateColumns="False"
+              CanUserSortColumns="True"
+              CanUserReorderColumns="False"
+              CanUserResizeColumns="True"
+              GridLinesVisibility="All"
+              IsReadOnly="True"
+              HierarchicalRowsEnabled="True"
+              HierarchicalModel="{CompiledBinding TreeModel}">
+      <DataGrid.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="Edit Block"
+                    Command="{CompiledBinding EditBlockCommand}"
+                    CommandParameter="{CompiledBinding SelectedItem}"
+                    IsEnabled="{CompiledBinding CanEditBlock}">
+            <MenuItem.Icon>
+              <PathIcon Classes="fluent-glyph"
+                        Data="{StaticResource EditIconPath}" />
+            </MenuItem.Icon>
+          </MenuItem>
+        </ContextMenu>
+      </DataGrid.ContextMenu>
+    </DataGrid>
+  </Grid>
+</UserControl>

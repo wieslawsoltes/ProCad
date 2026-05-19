@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ProCad.ViewModels"
+             xmlns:edit="using:AvaloniaEdit"
+             xmlns:i="using:Avalonia.Xaml.Interactivity"
+             xmlns:behaviors="using:ProCad.Behaviors"
+             mc:Ignorable="d"
+             x:Class="ProCad.Views.CadDxfRawView"
+             x:DataType="vm:CadDxfRawViewModel">
+  <Grid RowDefinitions="Auto,Auto,*"
+        Margin="12">
+    <TextBlock Text="{CompiledBinding SelectedTitle}"
+               FontWeight="SemiBold" />
+    <TextBlock Grid.Row="1"
+               Text="Raw DXF Preview"
+               Margin="0,8,0,4"
+               FontWeight="SemiBold" />
+    <Border Grid.Row="2"
+            BorderThickness="1"
+            CornerRadius="6"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}">
+      <edit:TextEditor Document="{CompiledBinding RawDxfDocument}"
+                       IsReadOnly="True"
+                       ShowLineNumbers="True"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto">
+        <i:Interaction.Behaviors>
+          <behaviors:TextMateBehavior GrammarExtension=".dxf" Theme="Dark" />
+        </i:Interaction.Behaviors>
+      </edit:TextEditor>
+    </Border>
+  </Grid>
+</UserControl>

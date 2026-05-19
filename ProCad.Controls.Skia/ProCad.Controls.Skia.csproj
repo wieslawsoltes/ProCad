@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>ProCad.Controls.Skia</PackageId>
+    <Description>Shared SkiaSharp renderer for ProCad CAD viewer and editor controls.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;skia;skiasharp;rendering;controls</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProCad.Controls\ProCad.Controls.csproj" />
+    <ProjectReference Include="..\ProCad.Rendering\ProCad.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
