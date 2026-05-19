@@ -11,37 +11,37 @@ Final closure evidence for Step 99-104 implementation:
 
 ## Key Delivery Evidence
 1. Step 99:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadTextStyleToolViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadTextStyleEditorToolView.axaml`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadTextStyleToolViewModelTests.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadTextStyleToolViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadTextStyleEditorToolView.axaml`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadTextStyleToolViewModelTests.cs`
 2. Step 100:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadLineTypeToolViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadLineTypeEditorToolView.axaml`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadLineTypeToolViewModelTests.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadLineTypeToolViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadLineTypeEditorToolView.axaml`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadLineTypeToolViewModelTests.cs`
 3. Step 101:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadScriptingViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadScriptingView.axaml`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadCommandScriptRecordingService.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/ICadScriptCommandHost.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/CadScriptCommandHost.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadScriptingViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadScriptingView.axaml`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadCommandScriptRecordingService.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/ICadScriptCommandHost.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/CadScriptCommandHost.cs`
 4. Step 102:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadRenderViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadDocumentViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadBlockEditorViewModel.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Docking/WorkspaceDockFactory.cs`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadRenderViewModelTests.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadRenderViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadDocumentViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadBlockEditorViewModel.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Docking/WorkspaceDockFactory.cs`
+   - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadRenderViewModelTests.cs`
 5. Step 103:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/plan/step103_perf_gate_suite_2026-02-09.md`
+   - `/Users/wieslawsoltes/GitHub/ProCad/plan/step103_perf_gate_suite_2026-02-09.md`
 
 ## Release Gate Commands
 1. Build:
-   - `dotnet build /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.slnx --configuration Debug --nologo -v minimal`
+   - `dotnet build /Users/wieslawsoltes/GitHub/ProCad/ProCad.slnx --configuration Debug --nologo -v minimal`
    - Result: **Pass**
 2. Editing/domain tests:
-   - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj --configuration Debug --nologo -m:1`
+   - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --configuration Debug --nologo -m:1`
    - Result: **Pass** (`233/233`)
 3. Application/integration/UI tests:
-   - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo -m:1`
+   - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo -m:1`
    - Result: **Pass** (`336/336`)
 
 ## Additional Focused Validation
