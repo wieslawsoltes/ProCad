@@ -207,22 +207,34 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
             Directory.CreateDirectory(currentDirectory);
         }
 
+        var tempPath = Path.Combine(
+            string.IsNullOrWhiteSpace(currentDirectory) ? "." : currentDirectory,
+            $"{Path.GetFileName(currentPath)}.{Guid.NewGuid():N}.tmp");
         try
         {
             await using (var source = new FileStream(legacyPath, FileMode.Open, FileAccess.Read, FileShare.Read))
-            await using (var destination = new FileStream(currentPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            await using (var destination = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
                 await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            File.Move(tempPath, currentPath);
         }
         catch (FileNotFoundException) when (File.Exists(currentPath))
         {
+            DeleteFileQuietly(tempPath);
             return;
         }
         catch (IOException) when (File.Exists(currentPath))
         {
+            DeleteFileQuietly(tempPath);
             return;
+        }
+        catch
+        {
+            DeleteFileQuietly(tempPath);
+            throw;
         }
 
         File.Delete(legacyPath);
@@ -233,6 +245,21 @@ public sealed class FileCadCollabSnapshotStore : ICadCollabSnapshotStore
         if (legacyPath is not null && File.Exists(legacyPath))
         {
             File.Delete(legacyPath);
+        }
+    }
+
+    private static void DeleteFileQuietly(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup for interrupted migrations.
         }
     }
 }

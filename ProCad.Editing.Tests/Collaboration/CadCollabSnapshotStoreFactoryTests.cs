@@ -110,6 +110,7 @@ public sealed class CadCollabSnapshotStoreFactoryTests
             Assert.Single(batches);
             Assert.True(File.Exists(Path.Combine(basePath, scope, "cadcollab.oplog.jsonl")));
             Assert.False(File.Exists(Path.Combine(legacyBasePath, scope, "cadcollab.oplog.jsonl")));
+            Assert.Empty(Directory.GetFiles(Path.Combine(basePath, scope), "*.tmp"));
         }
         finally
         {
@@ -143,6 +144,7 @@ public sealed class CadCollabSnapshotStoreFactoryTests
             Assert.Equal(snapshot.Version, loaded!.Version);
             Assert.True(File.Exists(Path.Combine(basePath, scope, "cadcollab.snapshot.json")));
             Assert.False(File.Exists(Path.Combine(legacyBasePath, scope, "cadcollab.snapshot.json")));
+            Assert.Empty(Directory.GetFiles(Path.Combine(basePath, scope), "*.tmp"));
         }
         finally
         {
