@@ -3,6 +3,7 @@ using ProCad.Collaboration.Snapshots;
 using ProCad.Editing.Identifiers;
 using ProCad.Editing.Operations;
 using CSMath;
+using System.Text.Json;
 using Xunit;
 
 namespace ProCad.Editing.Tests.Collaboration;
@@ -81,6 +82,56 @@ public sealed class BrowserCadCollabSnapshotStoreTests
         var reloaded = await store.LoadLatestSnapshotAsync();
         Assert.NotNull(reloaded);
         Assert.Equal(1, reloaded!.Payload[0]);
+    }
+
+    [Fact]
+    public async Task LoadBatchesAsync_WithLegacyPrefix_MigratesOplogToCurrentPrefix()
+    {
+        const string currentPrefix = "procad.collab.document";
+        const string legacyPrefix = "legacy-collab.document";
+        var storage = new FakeBrowserStorage();
+        var batch = new CadCollabBatch(
+            BatchId: Guid.NewGuid(),
+            ActorId: Guid.NewGuid(),
+            BaseVersion: 0,
+            Sequence: 1,
+            Lamport: 1,
+            TimestampUtc: DateTimeOffset.UtcNow,
+            Operations: [CadOperationPayloadCodec.CreatePoint(CadEntityId.New(), new XYZ(5, 6, 0))]);
+        storage.SetRaw(
+            $"{legacyPrefix}.oplog",
+            JsonSerializer.Serialize(new[] { batch }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var store = new BrowserCadCollabSnapshotStore(storage, currentPrefix, legacyPrefix);
+
+        var loaded = await store.LoadBatchesAsync();
+
+        Assert.Single(loaded);
+        Assert.True(storage.ContainsKey($"{currentPrefix}.oplog"));
+        Assert.False(storage.ContainsKey($"{legacyPrefix}.oplog"));
+    }
+
+    [Fact]
+    public async Task LoadLatestSnapshotAsync_WithLegacyPrefix_MigratesSnapshotToCurrentPrefix()
+    {
+        const string currentPrefix = "procad.collab.snapshot-document";
+        const string legacyPrefix = "legacy-collab.snapshot-document";
+        var storage = new FakeBrowserStorage();
+        var snapshot = new CadCollabSnapshot(
+            SnapshotId: Guid.NewGuid(),
+            Version: 42,
+            Payload: [9, 8, 7],
+            TimestampUtc: DateTimeOffset.UtcNow);
+        storage.SetRaw(
+            $"{legacyPrefix}.snapshot",
+            JsonSerializer.Serialize(snapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var store = new BrowserCadCollabSnapshotStore(storage, currentPrefix, legacyPrefix);
+
+        var loaded = await store.LoadLatestSnapshotAsync();
+
+        Assert.NotNull(loaded);
+        Assert.Equal(snapshot.Version, loaded!.Version);
+        Assert.True(storage.ContainsKey($"{currentPrefix}.snapshot"));
+        Assert.False(storage.ContainsKey($"{legacyPrefix}.snapshot"));
     }
 
     private sealed class FakeBrowserStorage : IBrowserCadCollabKeyValueStore

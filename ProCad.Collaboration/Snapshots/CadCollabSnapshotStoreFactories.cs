@@ -51,14 +51,18 @@ public sealed class FileCadCollabSnapshotStoreFactory : ICadCollabSnapshotStoreF
 [System.Runtime.Versioning.SupportedOSPlatform("browser")]
 public sealed class BrowserCadCollabSnapshotStoreFactory : ICadCollabSnapshotStoreFactory
 {
+    private const string DefaultKeyPrefix = "procad.collab";
+
     private readonly string _keyPrefix;
+    private readonly string? _legacyKeyPrefix;
     private readonly IBrowserCadCollabKeyValueStore _storage;
     private readonly ConcurrentDictionary<string, ICadCollabSnapshotStore> _stores =
         new(StringComparer.Ordinal);
 
     public BrowserCadCollabSnapshotStoreFactory(
-        string keyPrefix = "procad.collab",
-        IBrowserCadCollabKeyValueStore? storage = null)
+        string keyPrefix = DefaultKeyPrefix,
+        IBrowserCadCollabKeyValueStore? storage = null,
+        string? legacyKeyPrefix = null)
     {
         if (string.IsNullOrWhiteSpace(keyPrefix))
         {
@@ -66,6 +70,7 @@ public sealed class BrowserCadCollabSnapshotStoreFactory : ICadCollabSnapshotSto
         }
 
         _keyPrefix = keyPrefix.Trim();
+        _legacyKeyPrefix = NormalizeLegacyPrefix(_keyPrefix, legacyKeyPrefix);
         _storage = storage ?? new BrowserHybridCadCollabKeyValueStore();
     }
 
@@ -77,7 +82,21 @@ public sealed class BrowserCadCollabSnapshotStoreFactory : ICadCollabSnapshotSto
 
     private ICadCollabSnapshotStore CreateStoreCore(string scope)
     {
-        return new BrowserCadCollabSnapshotStore(_storage, $"{_keyPrefix}.{scope}");
+        var currentPrefix = $"{_keyPrefix}.{scope}";
+        var legacyPrefix = _legacyKeyPrefix is null ? null : $"{_legacyKeyPrefix}.{scope}";
+        return new BrowserCadCollabSnapshotStore(_storage, currentPrefix, legacyPrefix);
+    }
+
+    private static string? NormalizeLegacyPrefix(string currentPrefix, string? legacyPrefix)
+    {
+        if (!string.IsNullOrWhiteSpace(legacyPrefix))
+        {
+            return legacyPrefix.Trim();
+        }
+
+        return string.Equals(currentPrefix, DefaultKeyPrefix, StringComparison.Ordinal)
+            ? string.Concat("acad", "inspector.collab")
+            : null;
     }
 
     private static string NormalizeScope(string? scopeKey)
