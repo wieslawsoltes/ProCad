@@ -1,0 +1,158 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ProCad.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ProCad.Views.CadLineTypeEditorToolView"
+             x:DataType="vm:CadLineTypeEditorToolViewModel">
+  <Border Background="{DynamicResource ThemeControlLowBrush}"
+          BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+          BorderThickness="1"
+          Padding="10">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto">
+      <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+            RowSpacing="8">
+        <TextBlock Text="Line Type Editor"
+                   FontWeight="SemiBold" />
+        <TextBlock Grid.Row="1"
+                   Text="{CompiledBinding Source.StatusMessage}" />
+        <TextBlock Grid.Row="2"
+                   Text="{CompiledBinding Source.ValidationMessage}"
+                   Foreground="IndianRed" />
+        <TextBlock Grid.Row="3"
+                   Text="{CompiledBinding Source.SegmentSummaryText}" />
+        <TextBlock Grid.Row="4"
+                   Text="{CompiledBinding Source.EditorPreviewSummary}"
+                   TextWrapping="Wrap" />
+
+        <Grid Grid.Row="5"
+              ColumnDefinitions="Auto,*"
+              RowDefinitions="Auto,Auto"
+              ColumnSpacing="8"
+              RowSpacing="6">
+          <TextBlock Grid.Row="0"
+                     Grid.Column="0"
+                     Text="Name"
+                     VerticalAlignment="Center" />
+          <TextBox Grid.Row="0"
+                   Grid.Column="1"
+                   Text="{CompiledBinding Source.EditorName, UpdateSourceTrigger=PropertyChanged}" />
+
+          <TextBlock Grid.Row="1"
+                     Grid.Column="0"
+                     Text="Description"
+                     VerticalAlignment="Center" />
+          <TextBox Grid.Row="1"
+                   Grid.Column="1"
+                   Text="{CompiledBinding Source.EditorDescription, UpdateSourceTrigger=PropertyChanged}" />
+        </Grid>
+
+        <Grid Grid.Row="6"
+              RowDefinitions="Auto,Auto,Auto,*"
+              RowSpacing="6">
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="Current:"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{CompiledBinding Source.IsCurrentLineType}"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="Dirty:"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{CompiledBinding Source.IsDirty}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+
+          <TextBlock Grid.Row="1"
+                     Text="Segments"
+                     FontWeight="SemiBold" />
+          <StackPanel Grid.Row="2"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Dash"
+                    Command="{CompiledBinding Source.AddDashSegmentCommand}" />
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Space"
+                    Command="{CompiledBinding Source.AddSpaceSegmentCommand}" />
+            <Button Classes="fluent-icon" Tag="{StaticResource AddIconPath}" Content="+ Dot"
+                    Command="{CompiledBinding Source.AddDotSegmentCommand}" />
+            <Button Classes="fluent-icon" Tag="{StaticResource DeleteIconPath}" Content="Remove"
+                    Command="{CompiledBinding Source.RemoveSegmentCommand}" />
+            <Button Classes="fluent-icon" Tag="{StaticResource ArrowUpIconPath}" Content="Move Up"
+                    Command="{CompiledBinding Source.MoveSegmentUpCommand}" />
+            <Button Classes="fluent-icon" Tag="{StaticResource ArrowDownIconPath}" Content="Move Down"
+                    Command="{CompiledBinding Source.MoveSegmentDownCommand}" />
+          </StackPanel>
+
+          <ListBox Grid.Row="3"
+                   ItemsSource="{CompiledBinding Source.SegmentRows}"
+                   SelectedItem="{CompiledBinding Source.SelectedSegment}"
+                   MinHeight="220">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CadLineTypeSegmentEditorRowViewModel">
+                <Border Padding="6"
+                        Margin="0,0,0,4"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1">
+                  <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                        RowDefinitions="Auto,Auto"
+                        ColumnSpacing="6"
+                        RowSpacing="4">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Kind" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="1" Grid.Column="0"
+                              Width="92"
+                              ItemsSource="{x:Static vm:CadLineTypeSegmentKindValues.All}"
+                              SelectedItem="{CompiledBinding Kind}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Length" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Width="62"
+                             Text="{CompiledBinding Length, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <CheckBox Grid.Row="1" Grid.Column="2"
+                              Content="Text"
+                              IsChecked="{CompiledBinding IsText}" />
+                    <CheckBox Grid.Row="1" Grid.Column="3"
+                              Content="Shape"
+                              IsChecked="{CompiledBinding IsShape}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="4" Text="Text" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="4" Width="96"
+                             Text="{CompiledBinding TextValue, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="5" Text="Shape #" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="5" Width="60"
+                             Text="{CompiledBinding ShapeNumber, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Style" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="6" Width="90"
+                             Text="{CompiledBinding StyleName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="7" Text="Scale" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="7" Width="60"
+                             Text="{CompiledBinding Scale, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="8" Text="Rot°" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="8" Width="60"
+                             Text="{CompiledBinding RotationDegrees, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="9" Text="Off X" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="9" Width="60"
+                             Text="{CompiledBinding OffsetX, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="10" Text="Off Y" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="10" Width="60"
+                             Text="{CompiledBinding OffsetY, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <CheckBox Grid.Row="1" Grid.Column="11"
+                              Content="Abs Rot"
+                              IsChecked="{CompiledBinding RotationIsAbsolute}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Grid>
+    </ScrollViewer>
+  </Border>
+</UserControl>

@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:ProCad.ViewModels"
+             mc:Ignorable="d"
+             x:Class="ProCad.Views.CadLayerToolView"
+             x:DataType="vm:CadLayerToolViewModel">
+  <Border Background="{DynamicResource ThemeControlLowBrush}"
+          BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+          BorderThickness="1"
+          Padding="10">
+    <Grid RowDefinitions="Auto,*"
+          RowSpacing="8">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <TextBlock Text="Layers"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <TextBox Width="140"
+                 Watermark="Search..."
+                 Text="{CompiledBinding LayerList.LayerSearchText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
+                Command="{CompiledBinding LayerList.ClearLayerSearchCommand}" />
+        <TextBox Width="140"
+                 Watermark="Filter..."
+                 Text="{CompiledBinding LayerList.LayerFilterText, UpdateSourceTrigger=PropertyChanged}" />
+        <Button Classes="fluent-icon" Tag="{StaticResource ClearIconPath}" Content="Clear"
+                Command="{CompiledBinding LayerList.ClearLayerFilterCommand}" />
+      </StackPanel>
+      <DataGrid Grid.Row="1"
+                ItemsSource="{CompiledBinding LayerRowsView}"
+                ColumnDefinitionsSource="{CompiledBinding LayerColumnDefinitions}"
+                SortingModel="{CompiledBinding LayerSortingModel}"
+                FilteringModel="{CompiledBinding LayerFilteringModel}"
+                SearchModel="{CompiledBinding LayerSearchModel}"
+                AutoGenerateColumns="False"
+                CanUserSortColumns="True"
+                CanUserReorderColumns="False"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="All"
+                IsReadOnly="False" />
+    </Grid>
+  </Border>
+</UserControl>

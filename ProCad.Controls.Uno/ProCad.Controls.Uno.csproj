@@ -1,0 +1,36 @@
+<Project Sdk="Uno.Sdk/6.5.31">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <UnoSingleProject>true</UnoSingleProject>
+    <GenerateLibraryLayout>true</GenerateLibraryLayout>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>ProCad.Controls.Uno</RootNamespace>
+    <PackageId>ProCad.Controls.Uno</PackageId>
+    <Description>Uno Platform CAD viewer and editor controls backed by ProCad render scenes and SKCanvasElement.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;uno;winui;skia;viewer;editor;controls</PackageTags>
+    <UnoFeatures>
+      SkiaRenderer;
+    </UnoFeatures>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" VersionOverride="3.119.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProCad.Controls\ProCad.Controls.csproj" />
+    <ProjectReference Include="..\ProCad.Controls.Skia\ProCad.Controls.Skia.csproj" />
+    <ProjectReference Include="..\ProCad.Rendering\ProCad.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

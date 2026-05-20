@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="ProCad.Browser/ProCad.Browser.csproj" />
+  <Project Path="ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj" />
+  <Project Path="ProCad.Collaboration/ProCad.Collaboration.csproj" />
+  <Project Path="ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj" />
+  <Project Path="ProCad.Controls.Maui/ProCad.Controls.Maui.csproj" />
+  <Project Path="ProCad.Controls.Skia/ProCad.Controls.Skia.csproj" />
+  <Project Path="ProCad.Controls.Tests/ProCad.Controls.Tests.csproj" />
+  <Project Path="ProCad.Controls.Uno/ProCad.Controls.Uno.csproj" />
+  <Project Path="ProCad.Controls/ProCad.Controls.csproj" />
+  <Project Path="ProCad.Core/ProCad.Core.csproj" />
+  <Project Path="ProCad.Desktop/ProCad.Desktop.csproj" />
+  <Project Path="ProCad.Editing.Tests/ProCad.Editing.Tests.csproj" />
+  <Project Path="ProCad.Editing/ProCad.Editing.csproj" />
+  <Project Path="ProCad.Generators/ProCad.Generators.csproj" />
+  <Project Path="ProCad.IO/ProCad.IO.csproj" />
+  <Project Path="ProCad.TraceCli/ProCad.TraceCli.csproj" />
+  <Project Path="ProCad.Rendering/ProCad.Rendering.csproj" />
+  <Project Path="ProCad.Scripting/ProCad.Scripting.csproj" />
+  <Project Path="ProCad.Tests/ProCad.Tests.csproj" />
+  <Project Path="ProCad/ProCad.csproj" />
+  <Project Path="external/ACadSharp/src/ACadSharp/ACadSharp.csproj" />
+</Solution>

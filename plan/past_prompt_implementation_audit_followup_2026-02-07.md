@@ -1,4 +1,4 @@
-# ACadInspector Past-Prompt Implementation Audit Follow-up (2026-02-07)
+# ProCad Past-Prompt Implementation Audit Follow-up (2026-02-07)
 
 ## Scope
 This follow-up audit re-checks implementation against the full request history in this thread, with emphasis on:
@@ -9,17 +9,17 @@ This follow-up audit re-checks implementation against the full request history i
 
 ## Verification Method
 1. Reviewed active plan trackers:
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/plan/2d_editing_collab_master_plan.md`
-   - `/Users/wieslawsoltes/GitHub/ACadInspector/plan/past_prompt_implementation_audit_2026-02-07.md`
+   - `/Users/wieslawsoltes/GitHub/ProCad/plan/2d_editing_collab_master_plan.md`
+   - `/Users/wieslawsoltes/GitHub/ProCad/plan/past_prompt_implementation_audit_2026-02-07.md`
 2. Reviewed implementation hotspots:
    - editor controller/runtime/interaction stack
    - command descriptors/handlers and interactive adapters
    - collaboration session/presence/conflict panel code
    - style editors, scripting, and block editor surfaces
 3. Executed current gates:
-   - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj -v minimal` -> passed `225/225`
-   - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj -v minimal -m:1` -> passed `276/276`
-   - `dotnet build /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.slnx -v minimal` -> passed (existing browser wasm warning only)
+   - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -v minimal` -> passed `225/225`
+   - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj -v minimal -m:1` -> passed `276/276`
+   - `dotnet build /Users/wieslawsoltes/GitHub/ProCad/ProCad.slnx -v minimal` -> passed (existing browser wasm warning only)
 
 ## Executive Summary
 1. The architecture is now materially aligned with controller-first editing and collaboration boundaries (session-scoped controller/runtime, CAD-native op model, Vibe-backed transport adapters).
@@ -29,30 +29,30 @@ This follow-up audit re-checks implementation against the full request history i
 ## Coverage Matrix (Past Prompt Themes vs Current State)
 | Theme | Status | Evidence | Gap Summary |
 |---|---|---|---|
-| Tool panel as primary command surface | Completed | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadEditorToolPanelViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadEditorToolPanelView.axaml` | Draw/Modify/Annotate groups are present and routed through controller runtime. |
-| Canvas header drawing buttons removed | Completed | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadRenderView.axaml` | Drawing action surface is in tool panel, not canvas header. |
-| Command line v2 (autocomplete/help/history/cancel) | Completed | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadCommandLineViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadCommandLineView.axaml` | Tab/Shift+Tab cycling, help, history, and Esc cancel are implemented. |
-| Command families (draw/modify/annotate) | Completed baseline | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands` | Handler coverage is broad and registered in DI. |
-| Interactive picked-token adapters | Completed baseline | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Interaction/CadInteractiveCommandAdapters.cs` | Broad adapter coverage exists; some parity is still evidence-limited (see tasks). |
-| Visual helpers/adorners during editing | Partial-High | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadRenderViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Rendering/CadSkiaRenderService.cs` | Strong baseline exists; full command-by-command parity acceptance matrix is still missing. |
-| Undo/redo merge semantics | Completed baseline | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Undo/CadUndoRedoService.cs` | Merge metadata/window are implemented and tested. |
-| Collaboration panel + controls | Completed baseline | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadCollaborationToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadCollaborationToolView.axaml` | Join/leave/reconnect/resync/reapply and diagnostics are wired. |
-| VibeOffice reuse boundary | Completed baseline | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Collaboration/Transports/VibeCadRealtimeTransportFactory.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Collaboration/Transports/VibeCadRealtimeTransportAdapter.cs` | Transport/session reuse exists without coupling CAD domain model to Vibe document model. |
-| Startup/file-switch stale artifact leakage | Improved, not fully closed | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadRenderViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadEditorSessionHostService.cs` | Core resets were added, but full open/close/multi-tab stress proof is still incomplete. |
-| Diagram/tree/properties/dxf/dxf raw sync | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadDocumentTreeViewModelTests.cs` | Test coverage currently proves tree + property sync; full panel matrix is not covered yet. |
-| Block editor insert/drag-drop parity | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadBlockEditorParityTests.cs` | Command flow parity is tested; insert drag-drop parity coverage is still missing. |
-| Text style editor parity | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadTextStyleToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadTextStyleEditorToolView.axaml` | Rich editor exists, but full AutoCAD-level parity set is not complete. |
-| Line type editor parity | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadLineTypeToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadLineTypeEditorToolView.axaml` | Segment editor exists, but advanced parity controls/validation remain. |
-| Scripting + recording parity | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadScriptingViewModel.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadCommandScriptRecordingService.cs` | Functional baseline exists; full parity for advanced script UX/runtime control remains. |
-| AutoCAD keyboard parity | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadShortcutBindings.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadInteractionRouter.cs` | Matrix exists but is a bounded subset, not full AutoCAD-compatible breadth. |
-| Clipboard OS bridge + deep graph payload | Partial | `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/ICadClipboardService.cs`, `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/InMemoryCadClipboardService.cs` | Internal in-memory clipboard exists; custom MIME + DXF/text bridge and dependency graph payload are not fully realized. |
+| Tool panel as primary command surface | Completed | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadEditorToolPanelViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadEditorToolPanelView.axaml` | Draw/Modify/Annotate groups are present and routed through controller runtime. |
+| Canvas header drawing buttons removed | Completed | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadRenderView.axaml` | Drawing action surface is in tool panel, not canvas header. |
+| Command line v2 (autocomplete/help/history/cancel) | Completed | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadCommandLineViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadCommandLineView.axaml` | Tab/Shift+Tab cycling, help, history, and Esc cancel are implemented. |
+| Command families (draw/modify/annotate) | Completed baseline | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands` | Handler coverage is broad and registered in DI. |
+| Interactive picked-token adapters | Completed baseline | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Interaction/CadInteractiveCommandAdapters.cs` | Broad adapter coverage exists; some parity is still evidence-limited (see tasks). |
+| Visual helpers/adorners during editing | Partial-High | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadRenderViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Rendering/CadSkiaRenderService.cs` | Strong baseline exists; full command-by-command parity acceptance matrix is still missing. |
+| Undo/redo merge semantics | Completed baseline | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Undo/CadUndoRedoService.cs` | Merge metadata/window are implemented and tested. |
+| Collaboration panel + controls | Completed baseline | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadCollaborationToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadCollaborationToolView.axaml` | Join/leave/reconnect/resync/reapply and diagnostics are wired. |
+| VibeOffice reuse boundary | Completed baseline | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Collaboration/Transports/VibeCadRealtimeTransportFactory.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Collaboration/Transports/VibeCadRealtimeTransportAdapter.cs` | Transport/session reuse exists without coupling CAD domain model to Vibe document model. |
+| Startup/file-switch stale artifact leakage | Improved, not fully closed | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadRenderViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadEditorSessionHostService.cs` | Core resets were added, but full open/close/multi-tab stress proof is still incomplete. |
+| Diagram/tree/properties/dxf/dxf raw sync | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadDocumentTreeViewModelTests.cs` | Test coverage currently proves tree + property sync; full panel matrix is not covered yet. |
+| Block editor insert/drag-drop parity | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadBlockEditorParityTests.cs` | Command flow parity is tested; insert drag-drop parity coverage is still missing. |
+| Text style editor parity | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadTextStyleToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadTextStyleEditorToolView.axaml` | Rich editor exists, but full AutoCAD-level parity set is not complete. |
+| Line type editor parity | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadLineTypeToolViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadLineTypeEditorToolView.axaml` | Segment editor exists, but advanced parity controls/validation remain. |
+| Scripting + recording parity | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadScriptingViewModel.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadCommandScriptRecordingService.cs` | Functional baseline exists; full parity for advanced script UX/runtime control remains. |
+| AutoCAD keyboard parity | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadShortcutBindings.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadInteractionRouter.cs` | Matrix exists but is a bounded subset, not full AutoCAD-compatible breadth. |
+| Clipboard OS bridge + deep graph payload | Partial | `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/ICadClipboardService.cs`, `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/InMemoryCadClipboardService.cs` | Internal in-memory clipboard exists; custom MIME + DXF/text bridge and dependency graph payload are not fully realized. |
 
 ## Findings (Ordered by Priority)
 
 ### P0
 1. Clipboard architecture is still below locked-scope target:
    - Current clipboard implementation is in-memory only.
-   - Required OS bridge payloads (`application/x-acadinspector-cadjson`, DXF/text fallback) and deeper dependency copy semantics need completion.
+   - Required OS bridge payloads (`application/x-procad-cadjson`, DXF/text fallback) and deeper dependency copy semantics need completion.
 
 ### P1
 1. Full cross-panel selection synchronization is not proven:
@@ -93,124 +93,124 @@ This continues and closes remaining work after Step 90.
 
 ## Execution Updates (2026-02-09)
 1. ✅ Step 91 completed:
-   - Implemented session-driven selection refresh/canonicalization on revision updates in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadEditorSessionHostService.cs`.
-   - Added explicit selection refresh signal in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadSelectionService.cs`.
-   - Hardened DXF raw preview cache invalidation by selection stamp in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadDxfRawViewModel.cs`.
-   - Added synchronization matrix coverage in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadInspectorSelectionSyncMatrixTests.cs` and `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadEditorSessionHostServiceTests.cs`.
+   - Implemented session-driven selection refresh/canonicalization on revision updates in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadEditorSessionHostService.cs`.
+   - Added explicit selection refresh signal in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadSelectionService.cs`.
+   - Hardened DXF raw preview cache invalidation by selection stamp in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadDxfRawViewModel.cs`.
+   - Added synchronization matrix coverage in `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/ProCadSelectionSyncMatrixTests.cs` and `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadEditorSessionHostServiceTests.cs`.
 2. ✅ Step 92 completed:
    - Added clipboard dependency graph contracts/serialization and DXF fallback codec in:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/ICadClipboardService.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/CadClipboardPayloadSerializer.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/CadClipboardDxfFallbackCodec.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/CadClipboardDependencyGraphBuilder.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Clipboard/CadClipboardDependencyResolver.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/ICadClipboardService.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/CadClipboardPayloadSerializer.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/CadClipboardDxfFallbackCodec.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/CadClipboardDependencyGraphBuilder.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Clipboard/CadClipboardDependencyResolver.cs`
    - Added system clipboard bridge/sync path and DI wiring in:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/AvaloniaCadSystemClipboardBridge.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/AvaloniaClipboardPlatformFacade.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/App.axaml.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/AvaloniaCadSystemClipboardBridge.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/AvaloniaClipboardPlatformFacade.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/App.axaml.cs`
    - Updated copy/cut/paste command handlers to publish/hydrate system clipboard and remap dependency payloads:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/CopyClipCadCommand.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/CutCadCommand.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/PasteClipCadCommand.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/CopyClipCadCommand.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/CutCadCommand.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/PasteClipCadCommand.cs`
    - Added round-trip and remap tests:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/Clipboard/CadClipboardIntegrationTests.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/AvaloniaCadSystemClipboardBridgeTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/Clipboard/CadClipboardIntegrationTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/AvaloniaCadSystemClipboardBridgeTests.cs`
 3. ✅ Step 95 completed:
    - Unified block insert drop handling to use tokenized command-runtime flow (`INSERT` begin + text token + picked coordinate token) so drag/drop and command invocation share the same runtime/session path in model space and block editor:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadRenderViewModel.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadRenderViewModel.cs`
    - Added block-editor/model-space parity coverage:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadBlockEditorParityTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadBlockEditorParityTests.cs`
    - New parity tests verify:
      - block editor drop commits through document controller session and advances revision
      - model-space and block-editor drop paths produce equivalent insert outcomes through one controller/runtime.
 4. ✅ Step 96 completed:
    - Added command-family visual preview matrix tests that assert overlay primitive parity and command-specific helper text across representative command families (`LINE`, `CIRCLE`, `ARC`, `ELLIPSE`, `SPLINE`, `DIMLINEAR`, `DIMRADIUS`, `LEADER`, `MLEADER`, `INSERT`):
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadPreviewParityMatrixTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadPreviewParityMatrixTests.cs`
    - Added acceptance artifact pack for interactive preview workflows:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/plan/step96_preview_acceptance_script_pack_2026-02-09.md`
+     - `/Users/wieslawsoltes/GitHub/ProCad/plan/step96_preview_acceptance_script_pack_2026-02-09.md`
    - Validation gates:
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj --configuration Debug --nologo` -> pass (`228/228`)
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo` -> pass (`298/298`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --configuration Debug --nologo` -> pass (`228/228`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo` -> pass (`298/298`)
 5. ✅ Step 97 completed:
    - Strengthened reconnect/recovery determinism and action-loop recovery semantics in:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Collaboration/Sessions/CadRealtimeSession.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadCollaborationWorkspaceService.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Collaboration/Sessions/CadRealtimeSession.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadCollaborationWorkspaceService.cs`
    - Added collaboration determinism coverage for reconnect/replay and active-session action loop routing:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/Collaboration/CadRealtimeSessionTests.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadCollaborationWorkspaceServiceTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/Collaboration/CadRealtimeSessionTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadCollaborationWorkspaceServiceTests.cs`
    - New tests verify:
      - multi-client reconnect replay applies only missed batches and remains idempotent across repeated reconnect cycles.
      - reconnect/resync/reapply controls are routed only to the active collaboration session in multi-session scenarios.
      - reconnect can recreate a missing active realtime context from last active editor session state.
 6. ✅ Step 98 completed:
    - Added remote preview fidelity matrix coverage for major entity families and prompt-stage progression:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadCollaborationWorkspaceServiceTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadCollaborationWorkspaceServiceTests.cs`
    - New tests verify remote preview mapping and fidelity for:
      - line, arc, circle, polyline, text, dim, leader, hatch, insert, ellipse, and spline tool-preview families.
      - prompt-stage progression for the same remote actor replaces stale preview hints and participant prompt metadata deterministically.
    - Validation gates:
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj --configuration Debug --nologo` -> pass (`229/229`)
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`312/312`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --configuration Debug --nologo` -> pass (`229/229`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`312/312`)
 7. ✅ Step 93 completed:
    - Added shortcut profile catalog (`AutoCadLike` + `Minimal`) and conflict-safe shortcut resolution with explicit scope/priority ordering:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadShortcutBindings.cs`
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadInteractionRouter.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadShortcutBindings.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadInteractionRouter.cs`
    - Added cycle-selection shortcut action (`Shift+Space`) and ensured command-active shortcuts can explicitly start non-transparent commands.
    - Added profile coverage tests:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadShortcutBindingCatalogTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadShortcutBindingCatalogTests.cs`
 8. ✅ Step 94 completed:
    - Completed gesture parity cases for selection cycling and `Alt` sub-selection modifiers (`Alt+Shift` add, `Alt+Ctrl` remove), including grip-priority fix so `Alt` gestures are not hijacked by hot-grip starts:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Services/CadInteractionRouter.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Services/CadInteractionRouter.cs`
    - Added/updated interaction regression tests:
-     - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadRenderInteractiveEditingTests.cs`
+     - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadRenderInteractiveEditingTests.cs`
    - Validation gates:
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo -m:1 --filter "FullyQualifiedName~CadShortcutBindingCatalogTests|FullyQualifiedName~Interaction_MinimalShortcutProfile_DisablesFunctionCommandMatrix|FullyQualifiedName~Interaction_ShortcutConflictResolution_PrefersScopeSpecificBindings|FullyQualifiedName~Interaction_ShiftSpaceCyclesOverlappingSelectionCandidates|FullyQualifiedName~Interaction_AltCtrlClick_RemovesSubSelectionFromCurrentSet|FullyQualifiedName~Interaction_AltShiftClick_AddsEntityToSubSelectionSet"` -> pass (`8/8`)
-     - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`320/320`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo -m:1 --filter "FullyQualifiedName~CadShortcutBindingCatalogTests|FullyQualifiedName~Interaction_MinimalShortcutProfile_DisablesFunctionCommandMatrix|FullyQualifiedName~Interaction_ShortcutConflictResolution_PrefersScopeSpecificBindings|FullyQualifiedName~Interaction_ShiftSpaceCyclesOverlappingSelectionCandidates|FullyQualifiedName~Interaction_AltCtrlClick_RemovesSubSelectionFromCurrentSet|FullyQualifiedName~Interaction_AltShiftClick_AddsEntityToSubSelectionSet"` -> pass (`8/8`)
+     - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`320/320`)
 9. ✅ Step 99 completed:
-   - Added text-style parity hardening in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadTextStyleToolViewModel.cs`:
+   - Added text-style parity hardening in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadTextStyleToolViewModel.cs`:
      - current-style rename now keeps `Header.CurrentTextStyleName` in sync
      - validation expanded for shape-style font requirements and extension checks
      - editor preview summary string surfaced for live feedback
-   - Surfaced preview summary in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadTextStyleEditorToolView.axaml`.
-   - Added edge-case coverage in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadTextStyleToolViewModelTests.cs` for rename-current/apply/revert/validation flows.
+   - Surfaced preview summary in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadTextStyleEditorToolView.axaml`.
+   - Added edge-case coverage in `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadTextStyleToolViewModelTests.cs` for rename-current/apply/revert/validation flows.
 10. ✅ Step 100 completed:
-    - Added line-type parity hardening in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadLineTypeToolViewModel.cs`:
+    - Added line-type parity hardening in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadLineTypeToolViewModel.cs`:
       - current-line-type rename now updates `Header.CurrentLineTypeName`
       - shape-segment validation now rejects non-positive shape numbers
       - editor preview summary string surfaced for line pattern context
-    - Surfaced preview summary in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadLineTypeEditorToolView.axaml`.
-    - Added edge-case coverage in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadLineTypeToolViewModelTests.cs` for rename-current, segment validation, and revert behavior.
+    - Surfaced preview summary in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadLineTypeEditorToolView.axaml`.
+    - Added edge-case coverage in `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadLineTypeToolViewModelTests.cs` for rename-current, segment validation, and revert behavior.
 11. ✅ Step 101 completed:
-    - Expanded scripting parity in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadScriptingViewModel.cs` and `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Views/CadScriptingView.axaml`:
+    - Expanded scripting parity in `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadScriptingViewModel.cs` and `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Views/CadScriptingView.axaml`:
       - command-script playback range controls (`StartLine`, `MaxCommands`)
       - macro save/apply/delete tooling with workspace persistence
       - timestamp metadata toggle for recording comments
-    - Extended playback contracts in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/ICadScriptCommandHost.cs` and `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing/Commands/CadScriptCommandHost.cs`.
+    - Extended playback contracts in `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/ICadScriptCommandHost.cs` and `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing/Commands/CadScriptCommandHost.cs`.
     - Added tests:
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/Commands/CadScriptCommandHostTests.cs`
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadScriptingViewModelTests.cs`
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadCommandScriptRecordingServiceTests.cs`
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Commands/ScriptRecordCadCommandTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/Commands/CadScriptCommandHostTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadScriptingViewModelTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadCommandScriptRecordingServiceTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Commands/ScriptRecordCadCommandTests.cs`
 12. ✅ Step 102 completed:
     - Hardened startup/open/close lifecycle and transient-state teardown:
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadRenderViewModel.cs` now implements deterministic dispose/unsubscription/overlay cleanup
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadDocumentViewModel.cs` and `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/ViewModels/CadBlockEditorViewModel.cs` now dispose render contexts
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector/Docking/WorkspaceDockFactory.cs` now disposes closed document/block-editor dockables
-    - Added lifecycle regression coverage in `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadRenderViewModelTests.cs`.
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadRenderViewModel.cs` now implements deterministic dispose/unsubscription/overlay cleanup
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadDocumentViewModel.cs` and `/Users/wieslawsoltes/GitHub/ProCad/ProCad/ViewModels/CadBlockEditorViewModel.cs` now dispose render contexts
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad/Docking/WorkspaceDockFactory.cs` now disposes closed document/block-editor dockables
+    - Added lifecycle regression coverage in `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadRenderViewModelTests.cs`.
 13. ✅ Step 103 completed:
     - Added deterministic performance gates:
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/Performance/CadEditingPerfGateTests.cs`
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadSelectionPerfGateTests.cs`
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadDocumentContextServiceTests.cs` (recovery-loop budget)
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/Services/CadCollaborationWorkspaceServiceTests.cs` (presence ghost throughput)
-      - `/Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ViewModels/CadRenderInteractiveEditingTests.cs` (overlay refresh budget)
-    - Captured suite artifact in `/Users/wieslawsoltes/GitHub/ACadInspector/plan/step103_perf_gate_suite_2026-02-09.md`.
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/Performance/CadEditingPerfGateTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadSelectionPerfGateTests.cs`
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadDocumentContextServiceTests.cs` (recovery-loop budget)
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/Services/CadCollaborationWorkspaceServiceTests.cs` (presence ghost throughput)
+      - `/Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ViewModels/CadRenderInteractiveEditingTests.cs` (overlay refresh budget)
+    - Captured suite artifact in `/Users/wieslawsoltes/GitHub/ProCad/plan/step103_perf_gate_suite_2026-02-09.md`.
 14. ✅ Step 104 completed:
     - Executed full release gates:
-      - `dotnet build /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.slnx --configuration Debug --nologo -v minimal` -> pass
-      - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Editing.Tests/ACadInspector.Editing.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`233/233`)
-      - `dotnet test /Users/wieslawsoltes/GitHub/ACadInspector/ACadInspector.Tests/ACadInspector.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`336/336`)
-    - Captured consolidated release evidence in `/Users/wieslawsoltes/GitHub/ACadInspector/plan/step104_release_evidence_2026-02-09.md`.
+      - `dotnet build /Users/wieslawsoltes/GitHub/ProCad/ProCad.slnx --configuration Debug --nologo -v minimal` -> pass
+      - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`233/233`)
+      - `dotnet test /Users/wieslawsoltes/GitHub/ProCad/ProCad.Tests/ProCad.Tests.csproj --configuration Debug --nologo -m:1` -> pass (`336/336`)
+    - Captured consolidated release evidence in `/Users/wieslawsoltes/GitHub/ProCad/plan/step104_release_evidence_2026-02-09.md`.
 
 ## Immediate Execution Order
 1. Step 99-101 (style/linetype/scripting parity closure).
