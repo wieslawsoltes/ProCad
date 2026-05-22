@@ -1,0 +1,6 @@
+packages:
+  - {path: readme.md, title: "Packages"}
+  - {path: core-and-rendering.md, title: "Core And Rendering"}
+  - {path: controls.md, title: "Controls"}
+  - {path: collaboration-and-scripting.md, title: "Collaboration And Scripting"}
+  - {path: tracecli.md, title: "Trace CLI"}

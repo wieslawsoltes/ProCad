@@ -14,7 +14,7 @@ public sealed class AppLogServiceTests
         var logPath = CreateTempLogPath();
         try
         {
-            var service = new AppLogService(logPath, maxEntries: 16);
+            var service = CreateService(logPath, maxEntries: 16);
 
             service.Log(AppLogLevel.Information, "Tests", "hello world");
 
@@ -40,7 +40,7 @@ public sealed class AppLogServiceTests
         var logPath = CreateTempLogPath();
         try
         {
-            var service = new AppLogService(logPath, maxEntries: 2);
+            var service = CreateService(logPath, maxEntries: 2);
 
             service.Log(AppLogLevel.Information, "Tests", "one");
             service.Log(AppLogLevel.Information, "Tests", "two");
@@ -77,6 +77,11 @@ public sealed class AppLogServiceTests
     private static string CreateTempLogPath()
     {
         return Path.Combine(Path.GetTempPath(), $"procad-log-{Guid.NewGuid():N}.log");
+    }
+
+    private static AppLogService CreateService(string logPath, int maxEntries)
+    {
+        return new AppLogService(logPath, maxEntries, static action => action());
     }
 
     private static void DeleteIfExists(string path)

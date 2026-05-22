@@ -1,0 +1,7 @@
+reference:
+  - {path: readme.md, title: "Reference"}
+  - {path: feature-matrix.md, title: "Feature Matrix"}
+  - {path: api-coverage-index.md, title: "API Coverage Index"}
+  - {path: build-docs-release.md, title: "Build, Docs, And Release Pipeline"}
+  - {path: known-limits.md, title: "Known Limits"}
+  - {path: license.md, title: "License"}

@@ -1,0 +1,402 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, for example 0.1.0-preview.1'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark the GitHub release as prerelease'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_VERSION: 10.0.x
+
+jobs:
+  metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      tag-name: ${{ steps.version.outputs.tag-name }}
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+            prerelease="${{ github.event.inputs.prerelease }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+            if [[ "${version}" == *"-"* ]]; then
+              prerelease="true"
+            else
+              prerelease="false"
+            fi
+          fi
+
+          version="${version#v}"
+          if [[ ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release version must be SemVer without a leading v: ${version}"
+            exit 1
+          fi
+
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+          echo "tag-name=v${version}" >> "${GITHUB_OUTPUT}"
+
+  validate:
+    name: Validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Verify repository rename
+        shell: bash
+        run: scripts/verify-procad-rename.sh
+
+      - name: Restore focused projects
+        run: |
+          dotnet restore ProCad.Desktop/ProCad.Desktop.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.TraceCli/ProCad.TraceCli.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Tests/ProCad.Tests.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Controls.Tests/ProCad.Controls.Tests.csproj --nologo -p:Configuration=Release
+
+      - name: Build focused projects
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          dotnet build ProCad.Desktop/ProCad.Desktop.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet build ProCad.TraceCli/ProCad.TraceCli.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet build ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+
+      - name: Run tests
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet test ProCad.Controls.Tests/ProCad.Controls.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/controls /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-test-results-${{ matrix.os }}
+          path: artifacts/test-results/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
+
+  full-solution:
+    name: Full solution validation (macOS)
+    runs-on: macos-latest
+    needs: [metadata]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore workloads
+        run: dotnet workload restore
+
+      - name: Restore solution
+        run: dotnet restore ProCad.slnx --nologo
+
+      - name: Build solution
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: dotnet build ProCad.slnx -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+
+  pack:
+    name: Pack packages
+    runs-on: ubuntu-latest
+    needs: [metadata, validate, full-solution]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore package projects
+        shell: bash
+        run: |
+          package_projects=(
+            ProCad.Core/ProCad.Core.csproj
+            ProCad.IO/ProCad.IO.csproj
+            ProCad.Rendering/ProCad.Rendering.csproj
+            ProCad.Editing/ProCad.Editing.csproj
+            ProCad.Scripting/ProCad.Scripting.csproj
+            ProCad.Collaboration/ProCad.Collaboration.csproj
+            ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj
+            ProCad.Controls/ProCad.Controls.csproj
+            ProCad.Controls.Skia/ProCad.Controls.Skia.csproj
+            ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj
+            ProCad.Controls.Uno/ProCad.Controls.Uno.csproj
+          )
+          for project in "${package_projects[@]}"; do
+            dotnet restore "$project" --nologo
+          done
+
+      - name: Pack non-MAUI packages
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          package_projects=(
+            ProCad.Core/ProCad.Core.csproj
+            ProCad.IO/ProCad.IO.csproj
+            ProCad.Rendering/ProCad.Rendering.csproj
+            ProCad.Editing/ProCad.Editing.csproj
+            ProCad.Scripting/ProCad.Scripting.csproj
+            ProCad.Collaboration/ProCad.Collaboration.csproj
+            ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj
+            ProCad.Controls/ProCad.Controls.csproj
+            ProCad.Controls.Skia/ProCad.Controls.Skia.csproj
+            ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj
+            ProCad.Controls.Uno/ProCad.Controls.Uno.csproj
+          )
+          for project in "${package_projects[@]}"; do
+            dotnet pack "$project" -c Release --no-restore --nologo -o artifacts/packages /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-nuget-packages
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+          if-no-files-found: error
+          retention-days: 90
+
+  pack-maui:
+    name: Pack MAUI package
+    runs-on: macos-latest
+    needs: [metadata, validate, full-solution]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore workloads
+        run: dotnet workload restore ProCad.Controls.Maui/ProCad.Controls.Maui.csproj
+
+      - name: Restore MAUI package
+        run: dotnet restore ProCad.Controls.Maui/ProCad.Controls.Maui.csproj --nologo
+
+      - name: Pack MAUI package
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: dotnet pack ProCad.Controls.Maui/ProCad.Controls.Maui.csproj -c Release --no-restore --nologo -o artifacts/maui-packages /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+
+      - name: Upload MAUI package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-maui-nuget-packages
+          path: |
+            artifacts/maui-packages/*.nupkg
+            artifacts/maui-packages/*.snupkg
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [metadata, pack, pack-maui]
+    environment: nuget
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*-packages
+          path: artifacts/packages
+          merge-multiple: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Validate package metadata
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          expected_packages=(
+            ProCad.Core
+            ProCad.IO
+            ProCad.Rendering
+            ProCad.Editing
+            ProCad.Scripting
+            ProCad.Collaboration
+            ProCad.Collaboration.ServerHost
+            ProCad.Controls
+            ProCad.Controls.Skia
+            ProCad.Controls.Avalonia
+            ProCad.Controls.Uno
+            ProCad.Controls.Maui
+          )
+
+          shopt -s nullglob
+          nupkgs=(artifacts/packages/*.nupkg)
+          snupkgs=(artifacts/packages/*.snupkg)
+          if [ "${#nupkgs[@]}" -ne "${#expected_packages[@]}" ]; then
+            echo "::error::Expected ${#expected_packages[@]} nupkg files, found ${#nupkgs[@]}."
+            printf '%s\n' "${nupkgs[@]}"
+            exit 1
+          fi
+          if [ "${#snupkgs[@]}" -ne "${#expected_packages[@]}" ]; then
+            echo "::error::Expected ${#expected_packages[@]} snupkg files, found ${#snupkgs[@]}."
+            printf '%s\n' "${snupkgs[@]}"
+            exit 1
+          fi
+
+          for package_id in "${expected_packages[@]}"; do
+            package="artifacts/packages/${package_id}.${VERSION}.nupkg"
+            symbols="artifacts/packages/${package_id}.${VERSION}.snupkg"
+            if [ ! -f "${package}" ]; then
+              echo "::error::Missing package ${package}."
+              exit 1
+            fi
+            if [ ! -f "${symbols}" ]; then
+              echo "::error::Missing symbols package ${symbols}."
+              exit 1
+            fi
+
+            nuspec="${package_id}.nuspec"
+            metadata="$(unzip -p "${package}" "${nuspec}")"
+            if ! grep -Fq "<id>${package_id}</id>" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing or invalid id metadata."
+              exit 1
+            fi
+            if ! grep -Fq "<version>${VERSION}</version>" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing or invalid version metadata."
+              exit 1
+            fi
+            if ! grep -Fq "url=\"https://github.com/wieslawsoltes/ProCad\"" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing repository URL metadata."
+              exit 1
+            fi
+            if ! grep -Fq "<license type=\"expression\">MIT</license>" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing MIT license expression metadata."
+              exit 1
+            fi
+            if ! grep -Fq "<icon>Icon.png</icon>" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing icon metadata."
+              exit 1
+            fi
+
+            readme="README.md"
+            if [[ "${package_id}" == ProCad.Controls* ]]; then
+              readme="PACKAGE-README.md"
+            fi
+            if ! grep -Fq "<readme>${readme}</readme>" <<< "${metadata}"; then
+              echo "::error::Package ${package_id} has missing readme metadata."
+              exit 1
+            fi
+            package_entries="$(unzip -Z1 "${package}")"
+            if ! grep -Fxq "${readme}" <<< "${package_entries}"; then
+              echo "::error::Package ${package_id} is missing ${readme}."
+              exit 1
+            fi
+            if ! grep -Fxq "LICENSE" <<< "${package_entries}"; then
+              echo "::error::Package ${package_id} is missing LICENSE."
+              exit 1
+            fi
+            if ! grep -Fxq "Icon.png" <<< "${package_entries}"; then
+              echo "::error::Package ${package_id} is missing Icon.png."
+              exit 1
+            fi
+          done
+
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${NUGET_API_KEY}" ]; then
+            echo "::error::NUGET_API_KEY is not configured."
+            exit 1
+          fi
+          shopt -s nullglob
+          for package in artifacts/packages/*.nupkg; do
+            echo "Publishing package ${package}"
+            dotnet nuget push "$package" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+          for package in artifacts/packages/*.snupkg; do
+            echo "Publishing symbols ${package}"
+            dotnet nuget push "$package" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag-name }}
+          target_commitish: ${{ github.sha }}
+          name: Release ${{ needs.metadata.outputs.version }}
+          prerelease: ${{ needs.metadata.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          files: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg

@@ -4,6 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>ProCad.Rendering</PackageId>
+    <Description>DWG and DXF render-scene pipeline, entity handlers, hit testing, diagnostics, caching, and render stats for ProCad.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>cad;dwg;dxf;rendering;scene;hit-testing;skia;procad</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

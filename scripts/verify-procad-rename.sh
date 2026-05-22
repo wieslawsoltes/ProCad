@@ -95,8 +95,13 @@ else
   fail "legacy product identifiers remain in tracked text content"
 fi
 
-path_hits="$(git ls-files | rg 'ACADINSPECTOR|ACadInspector|AcadInspector|CADINSPECTOR|CadInspector|acadInspector|cadInspector|acad-inspector|cad-inspector|acadinspector|cadinspector' || true)"
-path_hits="$(printf '%s\n' "$path_hits" | rg -v '^(PROCAD-RENAME-REPORT\.md|scripts/rename-to-procad\.sh|scripts/verify-procad-rename\.sh|plan/procad_rename_report_[^/]+\.md)$' || true)"
+if command -v rg >/dev/null 2>&1; then
+  path_hits="$(git ls-files | rg 'ACADINSPECTOR|ACadInspector|AcadInspector|CADINSPECTOR|CadInspector|acadInspector|cadInspector|acad-inspector|cad-inspector|acadinspector|cadinspector' || true)"
+  path_hits="$(printf '%s\n' "$path_hits" | rg -v '^(PROCAD-RENAME-REPORT\.md|scripts/rename-to-procad\.sh|scripts/verify-procad-rename\.sh|plan/procad_rename_report_[^/]+\.md)$' || true)"
+else
+  path_hits="$(git ls-files | grep -E 'ACADINSPECTOR|ACadInspector|AcadInspector|CADINSPECTOR|CadInspector|acadInspector|cadInspector|acad-inspector|cad-inspector|acadinspector|cadinspector' || true)"
+  path_hits="$(printf '%s\n' "$path_hits" | grep -Ev '^(PROCAD-RENAME-REPORT\.md|scripts/rename-to-procad\.sh|scripts/verify-procad-rename\.sh|plan/procad_rename_report_[^/]+\.md)$' || true)"
+fi
 
 if [[ -z "$path_hits" ]]; then
   pass "no legacy product identifiers remain in tracked paths"
@@ -132,14 +137,18 @@ fi
 missing_project_references=0
 while IFS= read -r csproj; do
   project_dir="$(dirname "$csproj")"
-  while IFS= read -r include_path; do
+  while IFS=$'\t' read -r include_path condition; do
     normalized_include="${include_path//\\//}"
     resolved_path="$project_dir/$normalized_include"
     if [[ ! -f "$resolved_path" ]]; then
+      if [[ "$condition" == *"Configuration"* && "$condition" == *"Debug"* ]]; then
+        printf 'optional missing Debug-only ProjectReference from %s: %s\n' "$csproj" "$include_path"
+        continue
+      fi
       printf 'missing ProjectReference from %s: %s\n' "$csproj" "$include_path" >&2
       missing_project_references=$((missing_project_references + 1))
     fi
-  done < <(perl -ne 'while (/<ProjectReference\s+Include="([^"]+)"/g) { print "$1\n" }' "$csproj")
+  done < <(perl -0ne 'while (/<ProjectReference\b([^>]*)\/>/g) { $attrs = $1; $include = ""; $condition = ""; $include = $1 if $attrs =~ /\bInclude="([^"]+)"/; $condition = $1 if $attrs =~ /\bCondition="([^"]+)"/; print "$include\t$condition\n" if $include ne ""; }' "$csproj")
 done < <(git ls-files '*.csproj' ':!external/ACadSharp/**' ':!external/ProEdit/**' | sort)
 
 if [[ "$missing_project_references" -eq 0 ]]; then
