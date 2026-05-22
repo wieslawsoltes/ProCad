@@ -55,26 +55,26 @@ jobs:
 
       - name: Restore focused projects
         run: |
-          dotnet restore ProCad.Desktop/ProCad.Desktop.csproj --nologo
-          dotnet restore ProCad.TraceCli/ProCad.TraceCli.csproj --nologo
-          dotnet restore ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj --nologo
-          dotnet restore ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj --nologo
-          dotnet restore ProCad.Tests/ProCad.Tests.csproj --nologo
-          dotnet restore ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --nologo
-          dotnet restore ProCad.Controls.Tests/ProCad.Controls.Tests.csproj --nologo
+          dotnet restore ProCad.Desktop/ProCad.Desktop.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.TraceCli/ProCad.TraceCli.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Tests/ProCad.Tests.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Editing.Tests/ProCad.Editing.Tests.csproj --nologo -p:Configuration=Release
+          dotnet restore ProCad.Controls.Tests/ProCad.Controls.Tests.csproj --nologo -p:Configuration=Release
 
       - name: Build focused projects
         run: |
-          dotnet build ProCad.Desktop/ProCad.Desktop.csproj -c Debug --no-restore --nologo -v minimal
-          dotnet build ProCad.TraceCli/ProCad.TraceCli.csproj -c Debug --no-restore --nologo -v minimal
-          dotnet build ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Debug --no-restore --nologo -v minimal
-          dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Debug --no-restore --nologo -v minimal
+          dotnet build ProCad.Desktop/ProCad.Desktop.csproj -c Release --no-restore --nologo -v minimal
+          dotnet build ProCad.TraceCli/ProCad.TraceCli.csproj -c Release --no-restore --nologo -v minimal
+          dotnet build ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release --no-restore --nologo -v minimal
+          dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release --no-restore --nologo -v minimal
 
       - name: Run tests
         run: |
-          dotnet test ProCad.Tests/ProCad.Tests.csproj -c Debug --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad
-          dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Debug --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing
-          dotnet test ProCad.Controls.Tests/ProCad.Controls.Tests.csproj -c Debug --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/controls
+          dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad
+          dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing
+          dotnet test ProCad.Controls.Tests/ProCad.Controls.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/controls
 
       - name: Upload test results
         if: always()
