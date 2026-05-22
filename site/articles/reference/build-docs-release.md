@@ -46,9 +46,9 @@ Generated output goes to `site/.lunet/build/www`.
 
 ## GitHub Workflows
 
-- `Build`: cross-platform focused build/test validation, macOS full-solution build, and reusable control package artifacts.
+- `Build`: cross-platform focused build/test validation, macOS full-solution build, and reusable package artifacts.
 - `Docs`: Lunet build, generated output validation, and GitHub Pages deployment from `site/.lunet/build/www`.
-- `Release`: tag/workflow-dispatch validation, package creation, optional NuGet publishing, and GitHub release creation.
+- `Release`: tag/workflow-dispatch validation, shared release metadata resolution, package metadata validation, NuGet publishing, and GitHub release creation.
 
 ## Release Tags
 

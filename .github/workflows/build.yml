@@ -160,24 +160,44 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore package projects
+        shell: bash
         run: |
-          dotnet restore ProCad.Core/ProCad.Core.csproj --nologo
-          dotnet restore ProCad.IO/ProCad.IO.csproj --nologo
-          dotnet restore ProCad.Rendering/ProCad.Rendering.csproj --nologo
-          dotnet restore ProCad.Controls/ProCad.Controls.csproj --nologo
-          dotnet restore ProCad.Controls.Skia/ProCad.Controls.Skia.csproj --nologo
-          dotnet restore ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj --nologo
-          dotnet restore ProCad.Controls.Uno/ProCad.Controls.Uno.csproj --nologo
+          package_projects=(
+            ProCad.Core/ProCad.Core.csproj
+            ProCad.IO/ProCad.IO.csproj
+            ProCad.Rendering/ProCad.Rendering.csproj
+            ProCad.Editing/ProCad.Editing.csproj
+            ProCad.Scripting/ProCad.Scripting.csproj
+            ProCad.Collaboration/ProCad.Collaboration.csproj
+            ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj
+            ProCad.Controls/ProCad.Controls.csproj
+            ProCad.Controls.Skia/ProCad.Controls.Skia.csproj
+            ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj
+            ProCad.Controls.Uno/ProCad.Controls.Uno.csproj
+          )
+          for project in "${package_projects[@]}"; do
+            dotnet restore "$project" --nologo
+          done
 
       - name: Pack packages
+        shell: bash
         run: |
-          dotnet pack ProCad.Core/ProCad.Core.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.IO/ProCad.IO.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.Rendering/ProCad.Rendering.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.Controls/ProCad.Controls.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.Controls.Skia/ProCad.Controls.Skia.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release --no-restore --nologo -o artifacts/packages
-          dotnet pack ProCad.Controls.Uno/ProCad.Controls.Uno.csproj -c Release --no-restore --nologo -o artifacts/packages
+          package_projects=(
+            ProCad.Core/ProCad.Core.csproj
+            ProCad.IO/ProCad.IO.csproj
+            ProCad.Rendering/ProCad.Rendering.csproj
+            ProCad.Editing/ProCad.Editing.csproj
+            ProCad.Scripting/ProCad.Scripting.csproj
+            ProCad.Collaboration/ProCad.Collaboration.csproj
+            ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj
+            ProCad.Controls/ProCad.Controls.csproj
+            ProCad.Controls.Skia/ProCad.Controls.Skia.csproj
+            ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj
+            ProCad.Controls.Uno/ProCad.Controls.Uno.csproj
+          )
+          for project in "${package_projects[@]}"; do
+            dotnet pack "$project" -c Release --no-restore --nologo -o artifacts/packages
+          done
 
       - name: Upload packages
         uses: actions/upload-artifact@v7

@@ -16,8 +16,4 @@
     <ProjectReference Include="..\ProCad.Rendering\ProCad.Rendering.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="..\PACKAGE-README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
 </Project>

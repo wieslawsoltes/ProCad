@@ -3,4 +3,55 @@
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ACadSharp'">
     <TargetFrameworks>net5.0;net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PackageId)' != '' and $([System.String]::Copy('$(PackageId)').StartsWith('ProCad.'))">
+    <IsProCadPackage>true</IsProCadPackage>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsProCadPackage)' == 'true' and '$(IsPackable)' == 'true'">
+    <Product Condition="'$(Product)' == ''">ProCad</Product>
+    <Title Condition="'$(Title)' == ''">$(PackageId)</Title>
+    <VersionPrefix Condition="'$(VersionPrefix)' == '' and '$(Version)' == ''">0.1.0</VersionPrefix>
+    <Authors Condition="'$(Authors)' == ''">Wieslaw Soltes</Authors>
+    <Company Condition="'$(Company)' == ''">Wieslaw Soltes</Company>
+    <Copyright Condition="'$(Copyright)' == ''">Copyright (c) 2026 Wieslaw Soltes</Copyright>
+    <PackageProjectUrl Condition="'$(PackageProjectUrl)' == ''">https://github.com/wieslawsoltes/ProCad</PackageProjectUrl>
+    <RepositoryUrl Condition="'$(RepositoryUrl)' == ''">https://github.com/wieslawsoltes/ProCad</RepositoryUrl>
+    <RepositoryType Condition="'$(RepositoryType)' == ''">git</RepositoryType>
+    <PublishRepositoryUrl Condition="'$(PublishRepositoryUrl)' == ''">true</PublishRepositoryUrl>
+    <EmbedUntrackedSources Condition="'$(EmbedUntrackedSources)' == ''">true</EmbedUntrackedSources>
+    <IncludeSymbols Condition="'$(IncludeSymbols)' == ''">true</IncludeSymbols>
+    <SymbolPackageFormat Condition="'$(SymbolPackageFormat)' == ''">snupkg</SymbolPackageFormat>
+    <Deterministic Condition="'$(Deterministic)' == ''">true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == '' and ('$(CI)' == 'true' or '$(CI)' == '1' or '$(GITHUB_ACTIONS)' == 'true')">true</ContinuousIntegrationBuild>
+    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)' == ''">true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
+    <PackageIcon Condition="'$(PackageIcon)' == ''">Icon.png</PackageIcon>
+    <PackageReadmeFile Condition="'$(PackageReadmeFile)' == ''">README.md</PackageReadmeFile>
+    <PackageReleaseNotes Condition="'$(PackageReleaseNotes)' == ''">https://github.com/wieslawsoltes/ProCad/releases</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance Condition="'$(PackageRequireLicenseAcceptance)' == ''">false</PackageRequireLicenseAcceptance>
+    <PackageTags Condition="'$(PackageTags)' == ''">cad;dwg;dxf;procad</PackageTags>
+    <GeneratePackageOnBuild Condition="'$(GeneratePackageOnBuild)' == ''">false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsProCadPackage)' == 'true' and '$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)$(PackageReadmeFile)"
+          Pack="true"
+          PackagePath="/"
+          Visible="false"
+          Condition="'$(PackageReadmeFile)' != '' and Exists('$(MSBuildThisFileDirectory)$(PackageReadmeFile)')" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE"
+          Pack="true"
+          PackagePath="/"
+          Visible="false"
+          Condition="Exists('$(MSBuildThisFileDirectory)LICENSE')" />
+    <None Include="$(MSBuildThisFileDirectory)build/Assets/Icon.png"
+          Pack="true"
+          PackagePath="/"
+          Visible="false"
+          Condition="'$(PackageIcon)' == 'Icon.png' and Exists('$(MSBuildThisFileDirectory)build/Assets/Icon.png')" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+    <SourceRoot Include="$([MSBuild]::EnsureTrailingSlash($(NuGetPackageRoot)))" Condition="'$(NuGetPackageRoot)' != ''" />
+  </ItemGroup>
 </Project>

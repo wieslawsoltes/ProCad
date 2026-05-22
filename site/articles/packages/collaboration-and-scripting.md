@@ -19,7 +19,7 @@ The collaboration package contains:
 
 ## ProCad.Collaboration.ServerHost
 
-The server host contains the server-side hosting helpers for collaboration sessions. Use it when a shared realtime transport is required.
+The server host package contains the server-side hosting helpers for collaboration sessions. Use it when a shared realtime transport is required.
 
 ## ProCad.Scripting
 

@@ -84,6 +84,10 @@ The reusable library and control packages are packable:
 - `ProCad.Core`
 - `ProCad.IO`
 - `ProCad.Rendering`
+- `ProCad.Editing`
+- `ProCad.Scripting`
+- `ProCad.Collaboration`
+- `ProCad.Collaboration.ServerHost`
 - `ProCad.Controls`
 - `ProCad.Controls.Skia`
 - `ProCad.Controls.Avalonia`
@@ -96,9 +100,14 @@ Create local packages:
 dotnet pack ProCad.Core/ProCad.Core.csproj -c Release -o artifacts/packages
 dotnet pack ProCad.IO/ProCad.IO.csproj -c Release -o artifacts/packages
 dotnet pack ProCad.Rendering/ProCad.Rendering.csproj -c Release -o artifacts/packages
+dotnet pack ProCad.Editing/ProCad.Editing.csproj -c Release -o artifacts/packages
+dotnet pack ProCad.Scripting/ProCad.Scripting.csproj -c Release -o artifacts/packages
+dotnet pack ProCad.Collaboration/ProCad.Collaboration.csproj -c Release -o artifacts/packages
+dotnet pack ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release -o artifacts/packages
 dotnet pack ProCad.Controls/ProCad.Controls.csproj -c Release -o artifacts/packages
 dotnet pack ProCad.Controls.Skia/ProCad.Controls.Skia.csproj -c Release -o artifacts/packages
 dotnet pack ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release -o artifacts/packages
+dotnet pack ProCad.Controls.Uno/ProCad.Controls.Uno.csproj -c Release -o artifacts/packages
 ```
 
 MAUI packages require platform workloads and are packed by the release workflow on macOS.
