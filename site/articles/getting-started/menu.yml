@@ -1,0 +1,7 @@
+getting-started:
+  - {path: readme.md, title: "Getting Started"}
+  - {path: overview.md, title: "Overview"}
+  - {path: installation.md, title: "Installation"}
+  - {path: desktop-and-browser.md, title: "Desktop And Browser"}
+  - {path: controls-quickstart.md, title: "Controls Quickstart"}
+  - {path: trace-cli.md, title: "Trace CLI"}

@@ -1,0 +1,7 @@
+concepts:
+  - {path: readme.md, title: "Concepts"}
+  - {path: architecture.md, title: "Architecture"}
+  - {path: rendering-pipeline.md, title: "Rendering Pipeline"}
+  - {path: editing-model.md, title: "Editing Model"}
+  - {path: inspection-workspace.md, title: "Inspection Workspace"}
+  - {path: collaboration-model.md, title: "Collaboration Model"}

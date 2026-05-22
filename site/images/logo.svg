@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">ProCad logo</title>
+  <desc id="desc">A CAD grid with a plotted polyline and inspection marker.</desc>
+  <rect width="160" height="160" rx="28" fill="#0f172a"/>
+  <path d="M32 32h96v96H32z" fill="#111827" stroke="#38bdf8" stroke-width="4"/>
+  <path d="M56 32v96M80 32v96M104 32v96M32 56h96M32 80h96M32 104h96" stroke="#334155" stroke-width="2"/>
+  <path d="M44 108 68 72l22 18 30-42" fill="none" stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="68" cy="72" r="7" fill="#f59e0b"/>
+  <circle cx="120" cy="48" r="7" fill="#f59e0b"/>
+  <path d="M38 132h84" stroke="#e5e7eb" stroke-width="6" stroke-linecap="round"/>
+</svg>

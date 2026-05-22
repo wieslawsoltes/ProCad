@@ -1,0 +1,8 @@
+guides:
+  - {path: readme.md, title: "Guides"}
+  - {path: opening-saving.md, title: "Opening And Saving"}
+  - {path: command-editing.md, title: "Command Editing"}
+  - {path: compare-and-batch.md, title: "Compare And Batch"}
+  - {path: scripting.md, title: "Scripting"}
+  - {path: diagnostics-performance.md, title: "Diagnostics And Performance"}
+  - {path: testing.md, title: "Testing"}

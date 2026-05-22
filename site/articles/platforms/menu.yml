@@ -1,0 +1,6 @@
+platforms:
+  - {path: readme.md, title: "Platforms"}
+  - {path: desktop.md, title: "Desktop"}
+  - {path: browser.md, title: "Browser"}
+  - {path: avalonia-controls.md, title: "Avalonia Controls"}
+  - {path: uno-and-maui.md, title: "Uno And MAUI"}

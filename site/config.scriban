@@ -1,0 +1,101 @@
+# Use the Lunet default templates for docs navigation, layout, and API rendering.
+extend "lunet-io/templates"
+
+template_theme_default_mode = "system"
+
+site_project_baseurl = "https://wieslawsoltes.github.io"
+site_project_basepath = environment == "dev" ? "" : "/ProCad"
+site_project_name = "ProCad"
+site_project_description = "DWG/DXF CAD inspection, rendering, editing, scripting, collaboration, and reusable controls for .NET and Avalonia."
+site_project_logo_path = "/images/logo.svg"
+site_project_social_banner_path = "/images/logo.svg"
+site_project_package_id = "ProCad"
+site_project_github_user = "wieslawsoltes"
+site_project_github_repo = "ProCad"
+site_project_owner_name = "Wieslaw Soltes"
+site_project_owner_alias = "wieslawsoltes"
+site_project_owner_url = "https://github.com/wieslawsoltes"
+site_project_twitter_user = "wieslawsoltes"
+site_project_content_license_name = "MIT"
+site_project_content_license_url = "https://github.com/wieslawsoltes/ProCad/blob/main/LICENSE"
+template_footer_content_license_html = $"- Content licensed under the <a href='{site_project_content_license_url}'>MIT license</a>"
+
+site_project_init
+
+# macOS 15 + lunet 1.0.10 has a Dart Sass platform detection bug.
+# Use the precompiled template bundle pattern used by the sibling docs sites.
+with bundle "lite"
+    bootstrap = resource "npm:bootstrap" "5.3.8"
+    bootstrap_icons = resource "npm:bootstrap-icons" "1.13.1"
+    tocbot = resource "npm:tocbot" "4.36.4"
+    anchorjs = resource "npm:anchor-js" "5.0.0"
+    prismjs = resource "npm:prismjs" "1.30.0"
+
+    css tocbot "/dist/tocbot.css"
+    css "/css/prism.css"
+    css "/css/template-main.css"
+    css "/css/site-overrides.css"
+
+    js "/modules/menus/lunet-menu-async.js"
+    js "/modules/api/dotnet/lunet-api-dotnet-ui.js"
+    js bootstrap "/dist/js/bootstrap.bundle.min.js"
+    js anchorjs "/anchor.min.js"
+    js tocbot "/dist/tocbot.min.js"
+    js prismjs "/prism.js"
+    js prismjs "/plugins/autoloader/prism-autoloader.min.js"
+    js prismjs "/plugins/toolbar/prism-toolbar.min.js"
+    js prismjs "/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"
+    js prismjs "/plugins/show-language/prism-show-language.min.js"
+    js "/js/prism-scriban.js"
+    js "/js/main.js"
+
+    for path in template_prism_components
+        content prismjs "components/" + path "/js/components/"
+    end
+
+    content bootstrap_icons "/font/fonts/bootstrap-icons.*" "/fonts/"
+
+    concat = true
+    minify = false
+end
+
+with attributes
+    match "/**/*.md" {
+        bundle: "lite"
+    }
+end
+
+with api.dotnet
+    title = "ProCad .NET API Reference"
+    path = "/api"
+    menu_name = "api"
+    menu_title = "API Reference"
+    config = "Release"
+    properties = {
+        TargetFramework: "net10.0"
+    }
+    projects = [
+        { name: "ProCad.Core", path: "../ProCad.Core/ProCad.Core.csproj" },
+        { name: "ProCad.IO", path: "../ProCad.IO/ProCad.IO.csproj" },
+        { name: "ProCad.Rendering", path: "../ProCad.Rendering/ProCad.Rendering.csproj" },
+        { name: "ProCad.Editing", path: "../ProCad.Editing/ProCad.Editing.csproj" },
+        { name: "ProCad.Collaboration", path: "../ProCad.Collaboration/ProCad.Collaboration.csproj" },
+        { name: "ProCad.Scripting", path: "../ProCad.Scripting/ProCad.Scripting.csproj" },
+        { name: "ProCad.Controls", path: "../ProCad.Controls/ProCad.Controls.csproj" },
+        { name: "ProCad.Controls.Skia", path: "../ProCad.Controls.Skia/ProCad.Controls.Skia.csproj" },
+        { name: "ProCad.Controls.Avalonia", path: "../ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj" },
+        { name: "ProCad.Controls.Uno", path: "../ProCad.Controls.Uno/ProCad.Controls.Uno.csproj" }
+    ]
+    external_apis = [
+        { assembly: "ACadSharp", url: "https://github.com/wieslawsoltes/ACadSharp" },
+        { assembly: "Avalonia", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Avalonia.Base", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Avalonia.Controls", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Avalonia.Markup", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Avalonia.Markup.Xaml", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Avalonia.Skia", url: "https://api-docs.avaloniaui.net/docs" },
+        { assembly: "Dock.Model", url: "https://github.com/wieslawsoltes/Dock" },
+        { assembly: "ReactiveUI", url: "https://www.reactiveui.net/api" },
+        { assembly: "SkiaSharp", url: "https://learn.microsoft.com/en-us/dotnet/api" }
+    ]
+end
