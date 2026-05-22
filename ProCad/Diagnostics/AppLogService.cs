@@ -12,6 +12,7 @@ public sealed class AppLogService : IAppLogService
     private readonly ObservableCollection<AppLogEntry> _entries = new();
     private readonly ReadOnlyObservableCollection<AppLogEntry> _entriesReadOnly;
     private readonly object _fileGate = new();
+    private readonly Action<Action> _invokeOnUiThread;
     private readonly int _maxEntries;
     private long _sequence;
 
@@ -21,12 +22,21 @@ public sealed class AppLogService : IAppLogService
     }
 
     public AppLogService(string? logPath, int maxEntries)
+        : this(logPath, maxEntries, InvokeOnUiThread)
+    {
+    }
+
+    internal AppLogService(
+        string? logPath,
+        int maxEntries,
+        Action<Action> invokeOnUiThread)
     {
         if (maxEntries <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maxEntries));
         }
 
+        _invokeOnUiThread = invokeOnUiThread ?? throw new ArgumentNullException(nameof(invokeOnUiThread));
         _maxEntries = maxEntries;
         LogPath = string.IsNullOrWhiteSpace(logPath)
             ? AppLog.ResolveDefaultPath()
@@ -60,12 +70,12 @@ public sealed class AppLogService : IAppLogService
             threadId: Environment.CurrentManagedThreadId);
 
         WriteToFile(entry);
-        InvokeOnUiThread(() => AppendEntry(entry));
+        _invokeOnUiThread(() => AppendEntry(entry));
     }
 
     public void Clear()
     {
-        InvokeOnUiThread(_entries.Clear);
+        _invokeOnUiThread(_entries.Clear);
     }
 
     private void AppendEntry(AppLogEntry entry)

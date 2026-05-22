@@ -16,7 +16,7 @@ public sealed class CadLogOutputToolViewModelTests
         var logPath = CreateTempLogPath();
         try
         {
-            var service = new AppLogService(logPath, maxEntries: 16);
+            var service = CreateService(logPath, maxEntries: 16);
             service.Log(AppLogLevel.Warning, "Tests", "before clear");
             WaitFor(() => service.Entries.Count == 1);
             var viewModel = new CadLogOutputToolViewModel(service);
@@ -38,7 +38,7 @@ public sealed class CadLogOutputToolViewModelTests
         var logPath = CreateTempLogPath();
         try
         {
-            var service = new AppLogService(logPath, maxEntries: 16);
+            var service = CreateService(logPath, maxEntries: 16);
             var viewModel = new CadLogOutputToolViewModel(service)
             {
                 SearchText = "warn",
@@ -76,6 +76,11 @@ public sealed class CadLogOutputToolViewModelTests
     private static string CreateTempLogPath()
     {
         return Path.Combine(Path.GetTempPath(), $"procad-log-vm-{Guid.NewGuid():N}.log");
+    }
+
+    private static AppLogService CreateService(string logPath, int maxEntries)
+    {
+        return new AppLogService(logPath, maxEntries, static action => action());
     }
 
     private static void DeleteIfExists(string path)
