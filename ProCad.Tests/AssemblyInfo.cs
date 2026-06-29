@@ -6,7 +6,8 @@ using System.Runtime.CompilerServices;
 using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(ProCad.Tests.TestApp))]
-[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
+// Avalonia 12 does not dispose headless resources in per-assembly mode.
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerTest)]
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace ProCad.Tests;
