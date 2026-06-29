@@ -117,7 +117,7 @@ public sealed partial class CadEditorToolPanelViewModel : CadToolViewModelBase, 
         ];
 
         _activeDocumentSubscription = _documentContext.WhenAnyValue(x => x.ActiveDocument)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => BindActiveController());
 
         BindActiveController();

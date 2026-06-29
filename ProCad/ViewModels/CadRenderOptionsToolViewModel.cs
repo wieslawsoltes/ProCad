@@ -43,7 +43,7 @@ public sealed partial class CadRenderOptionsToolViewModel : CadToolViewModelBase
     public CadRenderOptionsToolViewModel(CadDocumentContextService documentContext)
     {
         documentContext.WhenAnyValue(x => x.ActiveDocument)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(SetActiveDocument);
 
         SetActiveDocument(documentContext.ActiveDocument);
@@ -94,7 +94,7 @@ public sealed partial class CadRenderOptionsToolViewModel : CadToolViewModelBase
         if (document is not null)
         {
             subscriptions.Add(document.WhenAnyValue(x => x.Title)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(title => ActiveDocumentTitle = ResolveDocumentTitle(title)));
         }
 
@@ -105,7 +105,7 @@ public sealed partial class CadRenderOptionsToolViewModel : CadToolViewModelBase
                 x => x.EnableColorRendering,
                 x => x.EnableInteractionOptimization,
                 x => x.FitOnLoad)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => SyncFromRender(render)));
 
         _activeSubscriptions.Disposable = subscriptions;

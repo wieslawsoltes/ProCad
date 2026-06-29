@@ -38,12 +38,23 @@ using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
 using Splat;
+using System.Reactive.Concurrency;
 using Xunit;
 
 namespace ProCad.Tests.Ui;
 
-public sealed class UiSmokeTests
+public sealed class UiSmokeTests : IDisposable
 {
+    public UiSmokeTests()
+    {
+        RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
+    }
+
+    public void Dispose()
+    {
+        RxSchedulers.MainThreadScheduler = CurrentThreadScheduler.Instance;
+    }
+
     [AvaloniaFact]
     public void WorkspaceView_RendersAndRoutes()
     {

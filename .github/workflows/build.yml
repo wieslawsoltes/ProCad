@@ -69,7 +69,12 @@ jobs:
           dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release --no-restore --nologo -v minimal
 
       - name: Test ProCad
+        if: runner.os != 'Windows'
         run: dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad
+
+      - name: Test ProCad without headless UI tests
+        if: runner.os == 'Windows'
+        run: dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --filter "FullyQualifiedName!~ProCad.Tests.Ui.UiSmokeTests&FullyQualifiedName!~ProCad.Tests.Rendering.RenderSnapshotTests" --logger trx --results-directory artifacts/test-results/procad
 
       - name: Test editing
         run: dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing

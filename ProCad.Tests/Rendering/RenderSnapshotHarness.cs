@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using ProCad.Controls;
 using ProCad.Rendering;
 using Xunit;
@@ -63,8 +65,8 @@ internal static class RenderSnapshotHarness
             throw new XunitException($"Baseline size {baseline.PixelSize} does not match actual {actual.PixelSize}.");
         }
 
-        var baselineBytes = File.ReadAllBytes(baselinePath);
-        var actualBytes = EncodePng(actual);
+        var baselineBytes = CopyPixels(baseline);
+        var actualBytes = CopyPixels(actual);
         if (!baselineBytes.AsSpan().SequenceEqual(actualBytes))
         {
             var actualPath = Path.ChangeExtension(baselinePath, ".actual.png");
@@ -101,10 +103,14 @@ internal static class RenderSnapshotHarness
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static byte[] EncodePng(Bitmap bitmap)
+    private static byte[] CopyPixels(Bitmap bitmap)
     {
-        using var stream = new MemoryStream();
-        bitmap.Save(stream);
-        return stream.ToArray();
+        using var copy = new WriteableBitmap(bitmap.PixelSize, bitmap.Dpi, PixelFormat.Bgra8888, AlphaFormat.Premul);
+        using var framebuffer = copy.Lock();
+        bitmap.CopyPixels(framebuffer);
+
+        var pixels = new byte[framebuffer.RowBytes * framebuffer.Size.Height];
+        Marshal.Copy(framebuffer.Address, pixels, 0, pixels.Length);
+        return pixels;
     }
 }

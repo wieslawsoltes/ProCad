@@ -9,7 +9,7 @@ internal sealed partial class Program
 {
     private static Task Main(string[] args) => BuildAvaloniaApp()
             .WithInterFont()
-            .UseReactiveUI()
+            .UseReactiveUI(_ => { })
             .StartBrowserAppAsync("out");
 
     public static AppBuilder BuildAvaloniaApp()

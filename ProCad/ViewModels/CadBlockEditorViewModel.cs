@@ -238,7 +238,7 @@ public sealed partial class CadBlockEditorViewModel : CadDocumentViewModelBase, 
             return;
         }
 
-        RxApp.MainThreadScheduler.Schedule(() => Render.Scene = scene);
+        RxSchedulers.MainThreadScheduler.Schedule(() => Render.Scene = scene);
     }
 
     private DynamicBlockOverrideSet? BuildOverrideSet(string? stateName)

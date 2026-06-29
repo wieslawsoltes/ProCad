@@ -197,7 +197,7 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
 
         _savePathSubscription = this.WhenAnyValue(x => x.RecordingSavePath)
             .Skip(1)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(path => _workspace.RecordingSavePath = path);
 
         _includeFailedSubscription = this.WhenAnyValue(x => x.IncludeFailedRecordedCommands)
@@ -214,17 +214,17 @@ public sealed partial class CadScriptingViewModel : CadToolViewModelBase, IDispo
 
         _commandStartLineSubscription = this.WhenAnyValue(x => x.CommandStartLine)
             .Skip(1)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(value => _workspace.CommandStartLine = value);
 
         _commandMaxCommandsSubscription = this.WhenAnyValue(x => x.CommandMaxCommands)
             .Skip(1)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(value => _workspace.CommandMaxCommands = value);
 
         _macroNameSubscription = this.WhenAnyValue(x => x.MacroName)
             .Skip(1)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(value => _workspace.LastMacroName = value);
     }
 

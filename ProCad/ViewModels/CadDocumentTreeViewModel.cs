@@ -101,7 +101,7 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
             .Subscribe(canEdit => CanEditBlock = canEdit);
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(OnSelectedObjectChanged);
         _sessionHost.SessionChanged += OnSessionChanged;
 
@@ -213,7 +213,7 @@ public sealed partial class CadDocumentTreeViewModel : CadToolViewModelBase, IFa
             return;
         }
 
-        RxApp.MainThreadScheduler.Schedule(() =>
+        RxSchedulers.MainThreadScheduler.Schedule(() =>
         {
             if (_isSwitchingDocument || _isRefreshingForSession)
             {

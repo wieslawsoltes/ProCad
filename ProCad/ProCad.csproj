@@ -25,7 +25,7 @@
     <PackageReference Include="Dock.Model.ReactiveUI" />
     <PackageReference Include="ProDataGrid" />
     <PackageReference Include="AvaloniaEdit.TextMate" />
-    <PackageReference Include="Avalonia.Xaml.Behaviors" />
+    <PackageReference Include="Xaml.Behaviors" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="HarfBuzzSharp" />
   </ItemGroup>

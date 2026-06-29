@@ -18,14 +18,33 @@ public sealed class AppViewLocator : IViewLocator
         };
     }
 
-    public IViewFor? ResolveView<T>(T? viewModel, string? contract = null)
+    public IViewFor<TViewModel>? ResolveView<TViewModel>(string? contract = null)
+        where TViewModel : class
     {
-        if (viewModel is null)
+        return ResolveView(typeof(TViewModel)) as IViewFor<TViewModel>;
+    }
+
+    public IViewFor<TViewModel>? ResolveView<TViewModel>(TViewModel viewModel, string? contract = null)
+        where TViewModel : class
+    {
+        return viewModel is null
+            ? ResolveView<TViewModel>(contract)
+            : ResolveView(viewModel.GetType()) as IViewFor<TViewModel>;
+    }
+
+    public IViewFor? ResolveView(object? instance, string? contract = null)
+    {
+        if (instance is null)
         {
             return null;
         }
 
-        return _factories.TryGetValue(viewModel.GetType(), out var factory)
+        return ResolveView(instance.GetType());
+    }
+
+    private IViewFor? ResolveView(Type viewModelType)
+    {
+        return _factories.TryGetValue(viewModelType, out var factory)
             ? factory()
             : null;
     }

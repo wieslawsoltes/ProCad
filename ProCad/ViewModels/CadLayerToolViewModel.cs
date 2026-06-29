@@ -44,7 +44,7 @@ public sealed partial class CadLayerToolViewModel : CadToolViewModelBase
 
         documentContext.WhenAnyValue(x => x.ActiveDocument)
             .Select(document => document?.Render?.LayerList ?? _emptyLayerList)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .DistinctUntilChanged()
             .BindTo(this, x => x.LayerList);
 

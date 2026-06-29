@@ -120,11 +120,11 @@ public sealed partial class CadDwgSemanticsViewModel : CadToolViewModelBase, IFa
             .Subscribe(_ => ApplySummaryFilter());
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(UpdateDwgSemantics);
 
         this.WhenAnyValue(x => x.IsActive)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(OnIsActiveChanged);
 
         ClearHeaderSearchCommand = ReactiveCommand.Create(() => { HeaderSearchText = string.Empty; });

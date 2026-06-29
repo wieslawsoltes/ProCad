@@ -1,10 +1,24 @@
 using Avalonia;
 using Avalonia.Headless.XUnit;
+using ReactiveUI;
+using ReactiveUI.Avalonia;
+using System;
+using System.Reactive.Concurrency;
 
 namespace ProCad.Tests.Rendering;
 
-public sealed class RenderSnapshotTests
+public sealed class RenderSnapshotTests : IDisposable
 {
+    public RenderSnapshotTests()
+    {
+        RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
+    }
+
+    public void Dispose()
+    {
+        RxSchedulers.MainThreadScheduler = CurrentThreadScheduler.Instance;
+    }
+
     [AvaloniaFact]
     public void RenderScene_MatchesBaseline()
     {

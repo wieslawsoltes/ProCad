@@ -13,6 +13,7 @@ namespace ProCad.Behaviors;
 public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
 {
     private Point _dragStart;
+    private PointerPressedEventArgs? _dragStartEvent;
     private string? _pendingBlockName;
     private bool _isDragging;
 
@@ -69,11 +70,13 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
         var point = e.GetCurrentPoint(AssociatedObject);
         if (!point.Properties.IsLeftButtonPressed)
         {
+            _dragStartEvent = null;
             _pendingBlockName = null;
             return;
         }
 
         _dragStart = point.Position;
+        _dragStartEvent = e;
         _pendingBlockName = ResolveBlockName(e.Source) ?? ResolveBlockName(AssociatedObject.SelectedItem);
     }
 
@@ -93,6 +96,7 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
         var point = e.GetCurrentPoint(AssociatedObject);
         if (!point.Properties.IsLeftButtonPressed)
         {
+            _dragStartEvent = null;
             _pendingBlockName = null;
             return;
         }
@@ -104,8 +108,11 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
         }
 
         var blockName = _pendingBlockName;
+        var dragStartEvent = _dragStartEvent;
         _pendingBlockName = null;
-        if (string.IsNullOrWhiteSpace(blockName))
+        _dragStartEvent = null;
+        if (string.IsNullOrWhiteSpace(blockName) ||
+            dragStartEvent is null)
         {
             return;
         }
@@ -117,7 +124,7 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
             transfer.Add(DataTransferItem.Create(CadInsertDragDropFormats.BlockNameFormat, blockName));
             transfer.Add(DataTransferItem.Create(CadInsertDragDropFormats.BlockNamePlatformFormat, blockName));
             transfer.Add(DataTransferItem.CreateText(blockName));
-            await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy);
+            await DragDrop.DoDragDropAsync(dragStartEvent, transfer, DragDropEffects.Copy);
         }
         finally
         {
@@ -127,6 +134,7 @@ public sealed class CadBlocksDragDropBehavior : Behavior<DataGrid>
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        _dragStartEvent = null;
         _pendingBlockName = null;
         _isDragging = false;
     }
