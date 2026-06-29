@@ -60,9 +60,11 @@ jobs:
             exit 1
           fi
 
-          echo "value=${version}" >> "${GITHUB_OUTPUT}"
-          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
-          echo "tag-name=v${version}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "value=${version}"
+            echo "prerelease=${prerelease}"
+            echo "tag-name=v${version}"
+          } >> "${GITHUB_OUTPUT}"
 
   validate:
     name: Validate (${{ matrix.os }})
@@ -103,19 +105,19 @@ jobs:
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          dotnet build ProCad.Desktop/ProCad.Desktop.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
-          dotnet build ProCad.TraceCli/ProCad.TraceCli.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
-          dotnet build ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
-          dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet build ProCad.Desktop/ProCad.Desktop.csproj -c Release --no-restore --nologo -v minimal -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
+          dotnet build ProCad.TraceCli/ProCad.TraceCli.csproj -c Release --no-restore --nologo -v minimal -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
+          dotnet build ProCad.Controls.Avalonia/ProCad.Controls.Avalonia.csproj -c Release --no-restore --nologo -v minimal -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
+          dotnet build ProCad.Collaboration.ServerHost/ProCad.Collaboration.ServerHost.csproj -c Release --no-restore --nologo -v minimal -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
 
       - name: Run tests
         shell: bash
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad /p:Version=${VERSION} /p:PackageVersion=${VERSION}
-          dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing /p:Version=${VERSION} /p:PackageVersion=${VERSION}
-          dotnet test ProCad.Controls.Tests/ProCad.Controls.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/controls /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+          dotnet test ProCad.Tests/ProCad.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/procad -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
+          dotnet test ProCad.Editing.Tests/ProCad.Editing.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/editing -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
+          dotnet test ProCad.Controls.Tests/ProCad.Controls.Tests.csproj -c Release --no-restore --nologo -m:1 --logger trx --results-directory artifacts/test-results/controls -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
 
       - name: Upload test results
         if: always()
@@ -151,7 +153,7 @@ jobs:
       - name: Build solution
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
-        run: dotnet build ProCad.slnx -c Release --no-restore --nologo -v minimal /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+        run: dotnet build ProCad.slnx -c Release --no-restore --nologo -v minimal -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
 
   pack:
     name: Pack packages
@@ -208,7 +210,7 @@ jobs:
             ProCad.Controls.Uno/ProCad.Controls.Uno.csproj
           )
           for project in "${package_projects[@]}"; do
-            dotnet pack "$project" -c Release --no-restore --nologo -o artifacts/packages /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+            dotnet pack "$project" -c Release --no-restore --nologo -o artifacts/packages -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
           done
 
       - name: Upload packages
@@ -246,7 +248,7 @@ jobs:
       - name: Pack MAUI package
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
-        run: dotnet pack ProCad.Controls.Maui/ProCad.Controls.Maui.csproj -c Release --no-restore --nologo -o artifacts/maui-packages /p:Version=${VERSION} /p:PackageVersion=${VERSION}
+        run: dotnet pack ProCad.Controls.Maui/ProCad.Controls.Maui.csproj -c Release --no-restore --nologo -o artifacts/maui-packages -p:Version="${VERSION}" -p:PackageVersion="${VERSION}"
 
       - name: Upload MAUI package
         uses: actions/upload-artifact@v7
