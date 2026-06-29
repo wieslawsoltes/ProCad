@@ -375,21 +375,106 @@ jobs:
       - name: Publish to NuGet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         shell: bash
         run: |
           if [ -z "${NUGET_API_KEY}" ]; then
             echo "::error::NUGET_API_KEY is not configured."
             exit 1
           fi
+          package_ids=(
+            ProCad.Core
+            ProCad.IO
+            ProCad.Rendering
+            ProCad.Editing
+            ProCad.Scripting
+            ProCad.Collaboration
+            ProCad.Collaboration.ServerHost
+            ProCad.Controls
+            ProCad.Controls.Skia
+            ProCad.Controls.Avalonia
+            ProCad.Controls.Uno
+            ProCad.Controls.Maui
+          )
+
           shopt -s nullglob
-          for package in artifacts/packages/*.nupkg; do
+          pushd artifacts/packages
+          for package in *.nupkg; do
             echo "Publishing package ${package}"
-            dotnet nuget push "$package" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            dotnet nuget push "$package" \
+              --api-key "${NUGET_API_KEY}" \
+              --source https://api.nuget.org/v3/index.json \
+              --no-symbols \
+              --skip-duplicate
           done
-          for package in artifacts/packages/*.snupkg; do
+          popd
+
+          python3 - "${VERSION}" "${package_ids[@]}" <<'PY'
+          import json
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          version = sys.argv[1].lower()
+          package_ids = sys.argv[2:]
+          deadline = time.monotonic() + 900
+
+          while True:
+              missing = []
+              for package_id in package_ids:
+                  url = f"https://api.nuget.org/v3-flatcontainer/{package_id.lower()}/index.json"
+                  try:
+                      with urllib.request.urlopen(url, timeout=20) as response:
+                          versions = json.load(response).get("versions", [])
+                  except (OSError, urllib.error.URLError, json.JSONDecodeError):
+                      missing.append(package_id)
+                      continue
+
+                  if version not in (item.lower() for item in versions):
+                      missing.append(package_id)
+
+              if not missing:
+                  print(f"NuGet package version {version} is visible for all packages.")
+                  break
+
+              if time.monotonic() >= deadline:
+                  print(
+                      f"::error::NuGet package version {version} was not visible for: {', '.join(missing)}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+
+              print(f"Waiting for NuGet package version {version}: {', '.join(missing)}")
+              time.sleep(15)
+          PY
+
+          pushd artifacts/packages
+          for package in *.snupkg; do
             echo "Publishing symbols ${package}"
-            dotnet nuget push "$package" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            for attempt in {1..20}; do
+              if output="$(dotnet nuget push "$package" \
+                --api-key "${NUGET_API_KEY}" \
+                --source https://api.nuget.org/v3/index.json \
+                --skip-duplicate 2>&1)"; then
+                printf '%s\n' "${output}"
+                break
+              fi
+
+              status=$?
+              printf '%s\n' "${output}"
+              if ! grep -Fq "does not exist. Please upload the package before uploading its symbols" <<< "${output}"; then
+                exit "${status}"
+              fi
+              if [ "${attempt}" -eq 20 ]; then
+                exit "${status}"
+              fi
+
+              echo "NuGet has not made the package visible to the symbol endpoint yet; retrying in 15 seconds."
+              sleep 15
+            done
           done
+          popd
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
