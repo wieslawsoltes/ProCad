@@ -42,9 +42,8 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     private readonly RenderHitTestEngine _hitTestEngine = new();
     private readonly List<RenderHitTestResult> _hitResults = new();
     private readonly List<CadSnapCandidate> _snapCandidates = new();
-    private readonly List<CadGripPoint> _gripSeeds = new();
-    private readonly Dictionary<string, GripBinding> _gripBindings = new(StringComparer.Ordinal);
-
+    private IReadOnlyDictionary<string, GripBinding> _gripBindings =
+        new Dictionary<string, GripBinding>(StringComparer.Ordinal);
     private IReadOnlyList<CadGripPoint> _activeGripSet = Array.Empty<CadGripPoint>();
     private CadGripPoint? _hotGrip;
     private CadGripPoint? _dragGrip;
@@ -620,8 +619,9 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     {
         status = "Grip edit applied.";
         operations = Array.Empty<CadOperation>();
+        var gripBindings = _gripBindings;
         if (string.IsNullOrWhiteSpace(grip.Tag) ||
-            !_gripBindings.TryGetValue(grip.Tag, out var binding) ||
+            !gripBindings.TryGetValue(grip.Tag, out var binding) ||
             !session.EntityIndex.TryGetEntity(binding.EntityId, out var entity))
         {
             return false;
@@ -3318,7 +3318,8 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
     private void UpdateGripFeedback(ICadEditorSession? session, Vector2 pickPoint, float tolerance)
     {
         RebuildGripSet(session);
-        if (_activeGripSet.Count == 0)
+        var activeGripSet = _activeGripSet;
+        if (activeGripSet.Count == 0)
         {
             _hotGrip = null;
             return;
@@ -3327,7 +3328,7 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         _hotGrip = _gripService.TryResolveHotGrip(
             pickPoint,
             ResolveGripTolerance(tolerance),
-            _activeGripSet,
+            activeGripSet,
             out var grip)
             ? grip
             : null;
@@ -3378,14 +3379,15 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
     private void RebuildGripSet(ICadEditorSession? session)
     {
-        _gripSeeds.Clear();
-        _gripBindings.Clear();
+        var gripSeeds = new List<CadGripPoint>();
+        var gripBindings = new Dictionary<string, GripBinding>(StringComparer.Ordinal);
         foreach (var entity in EnumerateSelectedEntities(session))
         {
-            AppendGripSeeds(session, entity, _gripSeeds);
+            AppendGripSeeds(session, entity, gripSeeds, gripBindings);
         }
 
-        _activeGripSet = _gripService.BuildGripSet(_gripSeeds);
+        _gripBindings = gripBindings;
+        _activeGripSet = _gripService.BuildGripSet(gripSeeds);
     }
 
     private IEnumerable<Entity> EnumerateSelectedEntities(ICadEditorSession? session)
@@ -3497,7 +3499,11 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                leftId.Equals(rightId);
     }
 
-    private void AppendGripSeeds(ICadEditorSession? session, Entity entity, ICollection<CadGripPoint> target)
+    private void AppendGripSeeds(
+        ICadEditorSession? session,
+        Entity entity,
+        ICollection<CadGripPoint> target,
+        IDictionary<string, GripBinding> gripBindings)
     {
         switch (entity)
         {
@@ -3505,9 +3511,9 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
             {
                 var start = ToVector2(line.StartPoint);
                 var end = ToVector2(line.EndPoint);
-                AddGripSeed(session, entity, start, "Endpoint", "Start", 0, target);
-                AddGripSeed(session, entity, end, "Endpoint", "End", 1, target);
-                AddGripSeed(session, entity, (start + end) * 0.5f, "Midpoint", "Mid", 0, target);
+                AddGripSeed(session, entity, start, "Endpoint", "Start", 0, target, gripBindings);
+                AddGripSeed(session, entity, end, "Endpoint", "End", 1, target, gripBindings);
+                AddGripSeed(session, entity, (start + end) * 0.5f, "Midpoint", "Mid", 0, target, gripBindings);
                 break;
             }
             case Arc arc:
@@ -3516,9 +3522,9 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                 var radius = (float)arc.Radius;
                 var start = PointAtAngle(center, radius, (float)arc.StartAngle);
                 var end = PointAtAngle(center, radius, (float)arc.EndAngle);
-                AddGripSeed(session, entity, center, "Center", "Center", 0, target);
-                AddGripSeed(session, entity, start, "Endpoint", "Start", 0, target);
-                AddGripSeed(session, entity, end, "Endpoint", "End", 1, target);
+                AddGripSeed(session, entity, center, "Center", "Center", 0, target, gripBindings);
+                AddGripSeed(session, entity, start, "Endpoint", "Start", 0, target, gripBindings);
+                AddGripSeed(session, entity, end, "Endpoint", "End", 1, target, gripBindings);
                 AddGripSeed(
                     session,
                     entity,
@@ -3526,18 +3532,19 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                     "Midpoint",
                     "Mid",
                     2,
-                    target);
+                    target,
+                    gripBindings);
                 break;
             }
             case Circle circle:
             {
                 var center = ToVector2(circle.Center);
                 var radius = (float)circle.Radius;
-                AddGripSeed(session, entity, center, "Center", "Center", 0, target);
-                AddGripSeed(session, entity, center + new Vector2(radius, 0f), "Quadrant", "Quadrant", 0, target);
-                AddGripSeed(session, entity, center + new Vector2(0f, radius), "Quadrant", "Quadrant", 1, target);
-                AddGripSeed(session, entity, center + new Vector2(-radius, 0f), "Quadrant", "Quadrant", 2, target);
-                AddGripSeed(session, entity, center + new Vector2(0f, -radius), "Quadrant", "Quadrant", 3, target);
+                AddGripSeed(session, entity, center, "Center", "Center", 0, target, gripBindings);
+                AddGripSeed(session, entity, center + new Vector2(radius, 0f), "Quadrant", "Quadrant", 0, target, gripBindings);
+                AddGripSeed(session, entity, center + new Vector2(0f, radius), "Quadrant", "Quadrant", 1, target, gripBindings);
+                AddGripSeed(session, entity, center + new Vector2(-radius, 0f), "Quadrant", "Quadrant", 2, target, gripBindings);
+                AddGripSeed(session, entity, center + new Vector2(0f, -radius), "Quadrant", "Quadrant", 3, target, gripBindings);
                 break;
             }
             case LwPolyline polyline:
@@ -3552,7 +3559,7 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
                 for (var index = 0; index < vertices.Length; index++)
                 {
-                    AddGripSeed(session, entity, ToVector2(vertices[index]), "Vertex", "Vertex", index, target);
+                    AddGripSeed(session, entity, ToVector2(vertices[index]), "Vertex", "Vertex", index, target, gripBindings);
                 }
 
                 var segmentCount = polyline.IsClosed ? vertices.Length : vertices.Length - 1;
@@ -3560,13 +3567,13 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                 {
                     var start = ToVector2(vertices[index]);
                     var end = ToVector2(vertices[(index + 1) % vertices.Length]);
-                    AddGripSeed(session, entity, (start + end) * 0.5f, "Midpoint", "SegmentMidpoint", index, target);
+                    AddGripSeed(session, entity, (start + end) * 0.5f, "Midpoint", "SegmentMidpoint", index, target, gripBindings);
                 }
 
                 break;
             }
             case Point point:
-                AddGripSeed(session, entity, ToVector2(point.Location), "Node", "Node", 0, target);
+                AddGripSeed(session, entity, ToVector2(point.Location), "Node", "Node", 0, target, gripBindings);
                 break;
             case TextEntity text:
             {
@@ -3576,10 +3583,10 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                     var baselineEnd = ResolveRenderTextBaselineEnd(renderedText);
                     var heightPoint = ResolveRenderTextHeightHandle(renderedText);
                     var renderedAlignment = ResolveRenderTextCenter(renderedText);
-                    AddGripSeed(session, entity, renderedInsert, "Text", "Insert", 0, target);
-                    AddGripSeed(session, entity, renderedAlignment, "Text", "Alignment", 1, target);
-                    AddGripSeed(session, entity, baselineEnd, "Text", "BaselineEnd", 2, target);
-                    AddGripSeed(session, entity, heightPoint, "Text", "Height", 3, target);
+                    AddGripSeed(session, entity, renderedInsert, "Text", "Insert", 0, target, gripBindings);
+                    AddGripSeed(session, entity, renderedAlignment, "Text", "Alignment", 1, target, gripBindings);
+                    AddGripSeed(session, entity, baselineEnd, "Text", "BaselineEnd", 2, target, gripBindings);
+                    AddGripSeed(session, entity, heightPoint, "Text", "Height", 3, target, gripBindings);
                     break;
                 }
 
@@ -3606,10 +3613,10 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
                     alignment = ResolveTextAlignmentGripPosition(text, insert, direction, normal, baselineLength, textHeight);
                 }
 
-                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target);
-                AddGripSeed(session, entity, alignment, "Text", "Alignment", 1, target);
-                AddGripSeed(session, entity, insert + direction * baselineLength, "Text", "BaselineEnd", 2, target);
-                AddGripSeed(session, entity, insert + direction * baselineLength + normal * textHeight, "Text", "Height", 3, target);
+                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target, gripBindings);
+                AddGripSeed(session, entity, alignment, "Text", "Alignment", 1, target, gripBindings);
+                AddGripSeed(session, entity, insert + direction * baselineLength, "Text", "BaselineEnd", 2, target, gripBindings);
+                AddGripSeed(session, entity, insert + direction * baselineLength + normal * textHeight, "Text", "Height", 3, target, gripBindings);
                 break;
             }
             case MText mtext:
@@ -3662,10 +3669,10 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
                 var normal = new Vector2(-direction.Y, direction.X);
                 var directionHandleDistance = MathF.Max(width * 0.5f, textHeight * 1.5f);
-                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target);
-                AddGripSeed(session, entity, insert + direction * directionHandleDistance, "Text", "Direction", 1, target);
-                AddGripSeed(session, entity, insert + direction * width, "Text", "Width", 2, target);
-                AddGripSeed(session, entity, insert + direction * width + normal * height, "Text", "Height", 3, target);
+                AddGripSeed(session, entity, insert, "Text", "Insert", 0, target, gripBindings);
+                AddGripSeed(session, entity, insert + direction * directionHandleDistance, "Text", "Direction", 1, target, gripBindings);
+                AddGripSeed(session, entity, insert + direction * width, "Text", "Width", 2, target, gripBindings);
+                AddGripSeed(session, entity, insert + direction * width + normal * height, "Text", "Height", 3, target, gripBindings);
                 break;
             }
         }
@@ -3678,7 +3685,8 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
         string kind,
         string role,
         int segmentIndex,
-        ICollection<CadGripPoint> target)
+        ICollection<CadGripPoint> target,
+        IDictionary<string, GripBinding> gripBindings)
     {
         string? tag = null;
         if (session is not null)
@@ -3690,7 +3698,7 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
             var binding = new GripBinding(id, entity.GetType().Name, role, segmentIndex);
             tag = CreateGripTag(binding);
-            _gripBindings[tag] = binding;
+            gripBindings[tag] = binding;
         }
 
         target.Add(new CadGripPoint(position, kind, tag));
@@ -3705,17 +3713,19 @@ public sealed class CadInteractionRouter : ICadInteractionRouter
 
     private void AppendGripHints(ICollection<CadToolVisualHint> hints, bool includeAll = false)
     {
-        if (_activeGripSet.Count == 0)
+        var activeGripSet = _activeGripSet;
+        var hotGrip = _hotGrip;
+        if (activeGripSet.Count == 0)
         {
             return;
         }
 
-        var limit = includeAll ? Math.Min(_activeGripSet.Count, 256) : Math.Min(_activeGripSet.Count, 96);
+        var limit = includeAll ? Math.Min(activeGripSet.Count, 256) : Math.Min(activeGripSet.Count, 96);
         for (var index = 0; index < limit; index++)
         {
-            var grip = _activeGripSet[index];
-            var isHot = _hotGrip.HasValue &&
-                        Vector2.DistanceSquared(_hotGrip.Value.Position, grip.Position) <= 1e-6f;
+            var grip = activeGripSet[index];
+            var isHot = hotGrip.HasValue &&
+                        Vector2.DistanceSquared(hotGrip.Value.Position, grip.Position) <= 1e-6f;
             hints.Add(new CadToolVisualHint(
                 Kind: isHot ? "HotGrip" : "Grip",
                 Anchor: grip.Position,
