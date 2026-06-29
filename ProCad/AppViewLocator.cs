@@ -24,6 +24,14 @@ public sealed class AppViewLocator : IViewLocator
         return ResolveView(typeof(TViewModel)) as IViewFor<TViewModel>;
     }
 
+    public IViewFor<TViewModel>? ResolveView<TViewModel>(TViewModel viewModel, string? contract = null)
+        where TViewModel : class
+    {
+        return viewModel is null
+            ? ResolveView<TViewModel>(contract)
+            : ResolveView(viewModel.GetType()) as IViewFor<TViewModel>;
+    }
+
     public IViewFor? ResolveView(object? instance, string? contract = null)
     {
         if (instance is null)
