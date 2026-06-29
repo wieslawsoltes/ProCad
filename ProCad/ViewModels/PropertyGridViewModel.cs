@@ -93,7 +93,7 @@ public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastP
             .Subscribe(_ => ApplyFilter());
 
         this.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(selected =>
             {
                 if (IsActive)
@@ -103,7 +103,7 @@ public sealed partial class PropertyGridViewModel : CadToolViewModelBase, IFastP
             });
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(selected =>
             {
                 if (IsActive)

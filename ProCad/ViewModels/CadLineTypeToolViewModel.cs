@@ -246,7 +246,7 @@ public sealed partial class CadLineTypeToolViewModel : CadToolViewModelBase
                 return;
             }
 
-            RxApp.MainThreadScheduler.Schedule(() =>
+            RxSchedulers.MainThreadScheduler.Schedule(() =>
             {
                 if (!token.IsCancellationRequested)
                 {

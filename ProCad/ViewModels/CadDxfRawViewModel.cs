@@ -38,11 +38,11 @@ public sealed partial class CadDxfRawViewModel : CadToolViewModelBase
         _documentContext = documentContext;
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(UpdatePreview);
 
         this.WhenAnyValue(x => x.IsActive)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(OnIsActiveChanged);
     }
 

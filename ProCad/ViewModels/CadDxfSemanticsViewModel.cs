@@ -63,11 +63,11 @@ public sealed partial class CadDxfSemanticsViewModel : CadToolViewModelBase, IFa
             .Subscribe(_ => ApplyFilter());
 
         _selectionService.WhenAnyValue(x => x.SelectedObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(UpdateRows);
 
         this.WhenAnyValue(x => x.IsActive)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(OnIsActiveChanged);
 
         ClearSearchCommand = ReactiveCommand.Create(() => { SearchText = string.Empty; });

@@ -133,7 +133,7 @@ public sealed partial class CadDimensionStyleToolViewModel : CadToolViewModelBas
                 return;
             }
 
-            RxApp.MainThreadScheduler.Schedule(() =>
+            RxSchedulers.MainThreadScheduler.Schedule(() =>
             {
                 if (!token.IsCancellationRequested)
                 {

@@ -23,7 +23,7 @@ public sealed class CadCommandScriptRecordingTracker : IDisposable
         _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
         _recording = recording ?? throw new ArgumentNullException(nameof(recording));
         _activeDocumentSubscription = _documentContext.WhenAnyValue(x => x.ActiveDocument)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => BindActiveRuntime());
         BindActiveRuntime();
     }

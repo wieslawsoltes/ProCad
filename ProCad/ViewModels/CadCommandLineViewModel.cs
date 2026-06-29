@@ -90,7 +90,7 @@ public sealed partial class CadCommandLineViewModel : CadToolViewModelBase, IDis
             .Subscribe(_ => RefreshPromptState());
 
         _activeDocumentSubscription = _documentContext.WhenAnyValue(x => x.ActiveDocument)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => BindActiveController());
         BindActiveController();
     }

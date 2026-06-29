@@ -318,12 +318,12 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             .DisposeWith(_subscriptions);
 
         _selectionService.WhenAnyValue(x => x.SelectionStamp)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => UpdateSelectionFromService(_selectionService.SelectedObject))
             .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.HoverAnnotation)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(annotation =>
             {
                 HoverAnnotation = annotation;
@@ -333,7 +333,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.SelectionAnnotation)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(annotation =>
             {
                 SelectionAnnotation = annotation;
@@ -343,14 +343,14 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             .DisposeWith(_subscriptions);
 
         _annotationService.WhenAnyValue(x => x.HoveredObject)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(obj => HoveredObject = obj)
             .DisposeWith(_subscriptions);
 
         if (dynamicBlockOverrideChanges is not null)
         {
             dynamicBlockOverrideChanges
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(stamp =>
                 {
                     if (SelectedLayout is not null)
@@ -362,7 +362,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
         }
 
         _focusService.WhenAnyValue(x => x.FocusRequest)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(HandleFocusRequest)
             .DisposeWith(_subscriptions);
 
@@ -577,7 +577,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        RxApp.MainThreadScheduler.Schedule(() =>
+        RxSchedulers.MainThreadScheduler.Schedule(() =>
         {
             Scene = scene;
             if (!preserveView)
@@ -1217,7 +1217,7 @@ public sealed partial class CadRenderViewModel : ViewModelBase, IDisposable
 
     private void OnCollaborationPresenceChanged(object? sender, EventArgs e)
     {
-        RxApp.MainThreadScheduler.Schedule(() =>
+        RxSchedulers.MainThreadScheduler.Schedule(() =>
         {
             var mergedHints = MergeToolVisualHints(_localToolVisualHints);
             ToolVisualHints = mergedHints;
