@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
+using Avalonia;
 using Avalonia.Threading;
 
 namespace ProCad.Diagnostics;
@@ -17,7 +18,7 @@ public sealed class AppLogService : IAppLogService
     private long _sequence;
 
     public AppLogService()
-        : this(logPath: null, maxEntries: DefaultMaxEntries)
+        : this(logPath: null, maxEntries: DefaultMaxEntries, InvokeOnUiThread)
     {
     }
 
@@ -118,6 +119,12 @@ public sealed class AppLogService : IAppLogService
     {
         try
         {
+            if (Application.Current is null)
+            {
+                action();
+                return;
+            }
+
             if (Dispatcher.UIThread.CheckAccess())
             {
                 action();
