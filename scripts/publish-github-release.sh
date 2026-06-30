@@ -98,8 +98,10 @@ if [[ "${#assets[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+release_title="ProCad ${version}"
+
 if [[ "$dry_run" == "true" ]]; then
-  echo "Would publish GitHub release ${tag_name} (${version}) for ${target}."
+  echo "Would publish GitHub release ${tag_name} (${release_title}) for ${target}."
   printf 'Would upload %s\n' "${assets[@]}"
   exit 0
 fi
@@ -110,7 +112,7 @@ if [[ -z "${GH_TOKEN:-}" && -z "${GITHUB_TOKEN:-}" ]]; then
 fi
 
 release_args=(
-  --title "Release ${version}"
+  --title "$release_title"
   --target "$target"
 )
 
@@ -126,7 +128,7 @@ if gh release view "$tag_name" >/dev/null 2>&1; then
 else
   echo "Creating GitHub release ${tag_name}."
   create_args=(
-    --title "Release ${version}"
+    --title "$release_title"
     --target "$target"
     --generate-notes
   )
