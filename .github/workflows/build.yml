@@ -204,6 +204,10 @@ jobs:
             dotnet pack "$project" -c Release --no-restore --nologo -o artifacts/packages
           done
 
+      - name: Validate package symbols
+        shell: bash
+        run: bash scripts/push-nuget.sh --directory artifacts/packages --dry-run
+
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:

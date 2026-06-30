@@ -15,7 +15,7 @@ Options:
       --api-key <Key>       NuGet API key. Defaults to NUGET_API_KEY.
       --source <Source>     NuGet push source. Defaults to NUGET_SOURCE or nuget.org.
       --directory <Path>    Directory containing .nupkg and .snupkg files.
-      --dry-run             Validate package metadata without pushing.
+      --dry-run             Validate package metadata and symbol/package pairing without pushing.
   -h, --help                Show this help text.
 EOF
 }
@@ -89,6 +89,81 @@ print(f"{id_node.text.strip()}\t{version_node.text.strip()}")
 PY
 }
 
+validate_symbol_package_matches_package() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+package_path = sys.argv[1]
+symbols_path = sys.argv[2]
+
+def read_metadata(path):
+    with zipfile.ZipFile(path) as archive:
+        nuspec_names = [name for name in archive.namelist() if name.endswith(".nuspec")]
+        if len(nuspec_names) != 1:
+            raise ValueError(f"expected exactly one .nuspec, found {len(nuspec_names)}")
+
+        root = ET.fromstring(archive.read(nuspec_names[0]))
+
+    namespace = ""
+    if root.tag.startswith("{"):
+        namespace = root.tag.split("}", 1)[0][1:]
+
+    prefix = f"{{{namespace}}}" if namespace else ""
+    metadata = root.find(f"{prefix}metadata")
+    if metadata is None:
+        raise ValueError("missing nuspec metadata")
+
+    id_node = metadata.find(f"{prefix}id")
+    version_node = metadata.find(f"{prefix}version")
+    if id_node is None or version_node is None or not id_node.text or not version_node.text:
+        raise ValueError("missing nuspec id/version")
+
+    return id_node.text.strip(), version_node.text.strip()
+
+try:
+    package_id, package_version = read_metadata(package_path)
+    symbols_id, symbols_version = read_metadata(symbols_path)
+except Exception as ex:
+    print(f"Failed to read package metadata: {ex}", file=sys.stderr)
+    sys.exit(1)
+
+if (package_id, package_version) != (symbols_id, symbols_version):
+    print(
+        f"Symbol package {symbols_path} has metadata {symbols_id} {symbols_version}, "
+        f"but package {package_path} has {package_id} {package_version}.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+with zipfile.ZipFile(package_path) as package_archive:
+    package_entries = set(package_archive.namelist())
+
+with zipfile.ZipFile(symbols_path) as symbols_archive:
+    pdb_entries = [
+        name
+        for name in symbols_archive.namelist()
+        if name.endswith(".pdb")
+        and (name.startswith("lib/") or name.startswith("runtimes/"))
+    ]
+
+missing = []
+for pdb_entry in pdb_entries:
+    dll_entry = f"{pdb_entry[:-4]}.dll"
+    if dll_entry not in package_entries:
+        missing.append((pdb_entry, dll_entry))
+
+if missing:
+    for pdb_entry, dll_entry in missing:
+        print(
+            f"Symbol package contains {pdb_entry}, but {package_path} does not contain {dll_entry}.",
+            file=sys.stderr,
+        )
+    sys.exit(1)
+PY
+}
+
 nuget_package_exists() {
   local package_id="$1"
   local package_version="$2"
@@ -135,6 +210,8 @@ push_regular_package() {
   local output_file
   local push_status
 
+  last_package_publish_result=""
+
   echo "Publishing package ${package}"
   output_file="$(mktemp)"
   set +e
@@ -146,12 +223,14 @@ push_regular_package() {
   set -e
 
   if [[ "$push_status" -eq 0 ]]; then
+    last_package_publish_result="uploaded"
     rm -f "$output_file"
     return 0
   fi
 
   if nuget_package_exists "$package_id" "$package_version"; then
     echo "::warning::Package ${package_id} ${package_version} already exists on NuGet.org; continuing."
+    last_package_publish_result="exists"
     rm -f "$output_file"
     return 0
   fi
@@ -160,6 +239,47 @@ push_regular_package() {
   echo "::error::dotnet nuget push failed with exit code ${push_status}; see output above."
   rm -f "$output_file"
   return "$push_status"
+}
+
+find_matching_package() {
+  local package_id="$1"
+  local package_version="$2"
+  local package
+  local metadata_output
+  local candidate_id
+  local candidate_version
+  local extra_metadata
+
+  for package in "${packages[@]}"; do
+    metadata_output="$(read_package_metadata "$package")"
+    IFS=$'\t' read -r candidate_id candidate_version extra_metadata <<< "$metadata_output"
+    if [[ "$candidate_id" == "$package_id" && "$candidate_version" == "$package_version" && -z "${extra_metadata:-}" ]]; then
+      printf '%s\n' "$package"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+package_was_uploaded_this_run() {
+  local package_id="$1"
+  local package_version="$2"
+  local package_key
+  local uploaded_key
+
+  if [[ "${#uploaded_package_keys[@]}" -eq 0 ]]; then
+    return 1
+  fi
+
+  package_key="${package_id}"$'\t'"${package_version}"
+  for uploaded_key in "${uploaded_package_keys[@]}"; do
+    if [[ "$uploaded_key" == "$package_key" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 push_symbol_package() {
@@ -224,6 +344,8 @@ while IFS= read -r package; do
   symbols+=("$package")
 done < <(find "$package_dir" -maxdepth 1 -type f -name '*.snupkg' | sort)
 
+uploaded_package_keys=()
+
 for package in "${packages[@]}"; do
   metadata_output="$(read_package_metadata "$package")"
   IFS=$'\t' read -r package_id package_version extra_metadata <<< "$metadata_output"
@@ -238,7 +360,14 @@ for package in "${packages[@]}"; do
   fi
 
   push_regular_package "$package" "$package_id" "$package_version"
+  if [[ "$last_package_publish_result" == "uploaded" ]]; then
+    uploaded_package_keys+=("${package_id}"$'\t'"${package_version}")
+  fi
 done
+
+if [[ "${#symbols[@]}" -eq 0 ]]; then
+  exit 0
+fi
 
 for package in "${symbols[@]}"; do
   metadata_output="$(read_package_metadata "$package")"
@@ -248,8 +377,22 @@ for package in "${symbols[@]}"; do
     exit 1
   fi
 
+  matching_package="$(find_matching_package "$package_id" "$package_version" || true)"
+  if [[ -z "$matching_package" ]]; then
+    echo "::error::Missing matching NuGet package for symbols ${package_id} ${package_version}."
+    exit 1
+  fi
+
+  validate_symbol_package_matches_package "$matching_package" "$package"
+
   if [[ "$dry_run" == "true" ]]; then
     echo "Found symbols ${package_id} ${package_version} in ${package}"
+    continue
+  fi
+
+  if ! package_was_uploaded_this_run "$package_id" "$package_version"; then
+    echo "::warning::Skipping symbols for ${package_id} ${package_version} because the matching NuGet package was not uploaded in this run."
+    echo "::warning::NuGet packages are immutable; publish a new package version instead of reusing symbols from a later build."
     continue
   fi
 
