@@ -383,13 +383,16 @@ jobs:
         run: bash scripts/push-nuget.sh --directory artifacts/packages
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.metadata.outputs.tag-name }}
-          target_commitish: ${{ github.sha }}
-          name: Release ${{ needs.metadata.outputs.version }}
-          prerelease: ${{ needs.metadata.outputs.prerelease == 'true' }}
-          generate_release_notes: true
-          files: |
-            artifacts/packages/*.nupkg
-            artifacts/packages/*.snupkg
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          TAG_NAME: ${{ needs.metadata.outputs.tag-name }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+        shell: bash
+        run: |
+          bash scripts/publish-github-release.sh \
+            --directory artifacts/packages \
+            --tag "${TAG_NAME}" \
+            --version "${VERSION}" \
+            --target "${GITHUB_SHA}" \
+            --prerelease "${PRERELEASE}"
