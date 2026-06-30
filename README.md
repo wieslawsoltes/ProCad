@@ -81,18 +81,20 @@ dotnet run --project ProCad.Browser/ProCad.Browser.csproj -c Debug
 
 The reusable library and control packages are published with `ProCadSharp.*` package IDs. Project names, assemblies, and namespaces remain `ProCad.*`.
 
-- `ProCadSharp.Core`
-- `ProCadSharp.IO`
-- `ProCadSharp.Rendering`
-- `ProCadSharp.Editing`
-- `ProCadSharp.Scripting`
-- `ProCadSharp.Collaboration`
-- `ProCadSharp.Collaboration.ServerHost`
-- `ProCadSharp.Controls`
-- `ProCadSharp.Controls.Skia`
-- `ProCadSharp.Controls.Avalonia`
-- `ProCadSharp.Controls.Uno`
-- `ProCadSharp.Controls.Maui`
+| Package ID | NuGet | Downloads |
+| --- | --- | --- |
+| [`ProCadSharp.Core`](https://www.nuget.org/packages/ProCadSharp.Core) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Core.svg)](https://www.nuget.org/packages/ProCadSharp.Core) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Core.svg)](https://www.nuget.org/packages/ProCadSharp.Core) |
+| [`ProCadSharp.IO`](https://www.nuget.org/packages/ProCadSharp.IO) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.IO.svg)](https://www.nuget.org/packages/ProCadSharp.IO) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.IO.svg)](https://www.nuget.org/packages/ProCadSharp.IO) |
+| [`ProCadSharp.Rendering`](https://www.nuget.org/packages/ProCadSharp.Rendering) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Rendering.svg)](https://www.nuget.org/packages/ProCadSharp.Rendering) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Rendering.svg)](https://www.nuget.org/packages/ProCadSharp.Rendering) |
+| [`ProCadSharp.Editing`](https://www.nuget.org/packages/ProCadSharp.Editing) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Editing.svg)](https://www.nuget.org/packages/ProCadSharp.Editing) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Editing.svg)](https://www.nuget.org/packages/ProCadSharp.Editing) |
+| [`ProCadSharp.Scripting`](https://www.nuget.org/packages/ProCadSharp.Scripting) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Scripting.svg)](https://www.nuget.org/packages/ProCadSharp.Scripting) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Scripting.svg)](https://www.nuget.org/packages/ProCadSharp.Scripting) |
+| [`ProCadSharp.Collaboration`](https://www.nuget.org/packages/ProCadSharp.Collaboration) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Collaboration.svg)](https://www.nuget.org/packages/ProCadSharp.Collaboration) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Collaboration.svg)](https://www.nuget.org/packages/ProCadSharp.Collaboration) |
+| [`ProCadSharp.Collaboration.ServerHost`](https://www.nuget.org/packages/ProCadSharp.Collaboration.ServerHost) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Collaboration.ServerHost.svg)](https://www.nuget.org/packages/ProCadSharp.Collaboration.ServerHost) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Collaboration.ServerHost.svg)](https://www.nuget.org/packages/ProCadSharp.Collaboration.ServerHost) |
+| [`ProCadSharp.Controls`](https://www.nuget.org/packages/ProCadSharp.Controls) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Controls.svg)](https://www.nuget.org/packages/ProCadSharp.Controls) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Controls.svg)](https://www.nuget.org/packages/ProCadSharp.Controls) |
+| [`ProCadSharp.Controls.Skia`](https://www.nuget.org/packages/ProCadSharp.Controls.Skia) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Controls.Skia.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Skia) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Controls.Skia.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Skia) |
+| [`ProCadSharp.Controls.Avalonia`](https://www.nuget.org/packages/ProCadSharp.Controls.Avalonia) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Controls.Avalonia.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Avalonia) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Controls.Avalonia.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Avalonia) |
+| [`ProCadSharp.Controls.Uno`](https://www.nuget.org/packages/ProCadSharp.Controls.Uno) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Controls.Uno.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Uno) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Controls.Uno.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Uno) |
+| [`ProCadSharp.Controls.Maui`](https://www.nuget.org/packages/ProCadSharp.Controls.Maui) | [![NuGet](https://img.shields.io/nuget/v/ProCadSharp.Controls.Maui.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Maui) | [![Downloads](https://img.shields.io/nuget/dt/ProCadSharp.Controls.Maui.svg)](https://www.nuget.org/packages/ProCadSharp.Controls.Maui) |
 
 Create local packages:
 
