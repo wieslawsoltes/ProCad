@@ -4,9 +4,9 @@ title: "Core And Rendering"
 
 # Core And Rendering
 
-## ProCad.Core
+## ProCadSharp.Core
 
-`ProCad.Core` contains:
+`ProCadSharp.Core` contains:
 
 - file formats and read/write options
 - document service contracts
@@ -18,13 +18,13 @@ title: "Core And Rendering"
 - batch query and search models
 - export contracts and results
 
-## ProCad.IO
+## ProCadSharp.IO
 
-`ProCad.IO` maps the core document service onto ACadSharp. It is the infrastructure boundary for DWG/DXF file access.
+`ProCadSharp.IO` maps the core document service onto ACadSharp. It is the infrastructure boundary for DWG/DXF file access.
 
-## ProCad.Rendering
+## ProCadSharp.Rendering
 
-`ProCad.Rendering` contains:
+`ProCadSharp.Rendering` contains:
 
 - `RenderScene` and render primitives
 - entity dispatch and handlers

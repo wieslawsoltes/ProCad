@@ -8,11 +8,11 @@ The controls packages let applications display and interact with ProCad render s
 
 | Package | Purpose |
 | --- | --- |
-| `ProCad.Controls` | Shared viewport, geometry, options, selection contracts, and math. |
-| `ProCad.Controls.Skia` | SkiaSharp renderer for render scene primitives. |
-| `ProCad.Controls.Avalonia` | Avalonia viewer and editor controls. |
-| `ProCad.Controls.Uno` | Uno Platform viewer and editor controls. |
-| `ProCad.Controls.Maui` | MAUI viewer and editor controls. |
+| `ProCadSharp.Controls` | Shared viewport, geometry, options, selection contracts, and math. |
+| `ProCadSharp.Controls.Skia` | SkiaSharp renderer for render scene primitives. |
+| `ProCadSharp.Controls.Avalonia` | Avalonia viewer and editor controls. |
+| `ProCadSharp.Controls.Uno` | Uno Platform viewer and editor controls. |
+| `ProCadSharp.Controls.Maui` | MAUI viewer and editor controls. |
 
 ## Packaging Notes
 

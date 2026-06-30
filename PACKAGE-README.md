@@ -6,8 +6,8 @@ The control packages expose a small shared viewport layer and Skia-backed platfo
 
 Packages:
 
-- `ProCad.Controls`: platform-neutral viewport, render options, and editor selection contracts.
-- `ProCad.Controls.Skia`: shared SkiaSharp renderer for `RenderScene` primitives.
-- `ProCad.Controls.Avalonia`: Avalonia viewer and editor controls.
-- `ProCad.Controls.Uno`: Uno Platform viewer and editor controls.
-- `ProCad.Controls.Maui`: .NET MAUI viewer and editor controls.
+- `ProCadSharp.Controls`: platform-neutral viewport, render options, and editor selection contracts.
+- `ProCadSharp.Controls.Skia`: shared SkiaSharp renderer for `RenderScene` primitives.
+- `ProCadSharp.Controls.Avalonia`: Avalonia viewer and editor controls.
+- `ProCadSharp.Controls.Uno`: Uno Platform viewer and editor controls.
+- `ProCadSharp.Controls.Maui`: .NET MAUI viewer and editor controls.

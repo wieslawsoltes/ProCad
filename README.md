@@ -14,7 +14,7 @@ ProCad is a .NET 10 CAD inspection, rendering, editing, scripting, and collabora
 - Render model space, paper space, layouts, viewports, plot styles, linetypes, hatches, raster images, underlays, dynamic blocks, XRefs, SHX text, ACIS SAT/SAB geometry, and common 2D/3D entity families.
 - Use a Dock-based Avalonia workspace with document tree, property grid, layers, blocks, viewports, entity type filters, style editors, render options, DXF/DWG semantic views, raw DXF, batch tools, scripting, collaboration, diagnostics, and logs.
 - Drive edits through command-line and interactive tools for draw, modify, annotation, clipboard, XRef, constraints, undo/redo, and script workflows.
-- Embed reusable controls through `ProCad.Controls`, `ProCad.Controls.Skia`, `ProCad.Controls.Avalonia`, `ProCad.Controls.Uno`, and `ProCad.Controls.Maui`.
+- Embed reusable controls through NuGet packages `ProCadSharp.Controls`, `ProCadSharp.Controls.Skia`, `ProCadSharp.Controls.Avalonia`, `ProCadSharp.Controls.Uno`, and `ProCadSharp.Controls.Maui`.
 - Run render profiling and trace capture through `ProCad.TraceCli`.
 - Build narrative and generated API documentation with Lunet.
 
@@ -79,20 +79,20 @@ dotnet run --project ProCad.Browser/ProCad.Browser.csproj -c Debug
 
 ## Packages
 
-The reusable library and control packages are packable:
+The reusable library and control packages are published with `ProCadSharp.*` package IDs. Project names, assemblies, and namespaces remain `ProCad.*`.
 
-- `ProCad.Core`
-- `ProCad.IO`
-- `ProCad.Rendering`
-- `ProCad.Editing`
-- `ProCad.Scripting`
-- `ProCad.Collaboration`
-- `ProCad.Collaboration.ServerHost`
-- `ProCad.Controls`
-- `ProCad.Controls.Skia`
-- `ProCad.Controls.Avalonia`
-- `ProCad.Controls.Uno`
-- `ProCad.Controls.Maui`
+- `ProCadSharp.Core`
+- `ProCadSharp.IO`
+- `ProCadSharp.Rendering`
+- `ProCadSharp.Editing`
+- `ProCadSharp.Scripting`
+- `ProCadSharp.Collaboration`
+- `ProCadSharp.Collaboration.ServerHost`
+- `ProCadSharp.Controls`
+- `ProCadSharp.Controls.Skia`
+- `ProCadSharp.Controls.Avalonia`
+- `ProCadSharp.Controls.Uno`
+- `ProCadSharp.Controls.Maui`
 
 Create local packages:
 

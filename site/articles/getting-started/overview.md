@@ -6,13 +6,13 @@ title: "Overview"
 
 ProCad is organized as a layered CAD workspace:
 
-- `ProCad.Core` defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts.
-- `ProCad.IO` maps those contracts onto ACadSharp for DWG and DXF load/save workflows.
-- `ProCad.Rendering` turns CAD documents into a platform-neutral `RenderScene` made of primitives, bounds, styles, diagnostics, metadata, and hit-test data.
-- `ProCad.Editing` owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard, constraints, snaps, tracking, grips, and entity indexing.
-- `ProCad.Collaboration` shares operation batches, presence, conflict state, snapshots, and transport events between participants.
-- `ProCad.Scripting` runs Roslyn C# scripts and command scripts against ProCad workspace services.
-- `ProCad.Controls*` packages expose reusable render-scene viewers/editors for Avalonia, Uno, and MAUI.
+- `ProCadSharp.Core` defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts.
+- `ProCadSharp.IO` maps those contracts onto ACadSharp for DWG and DXF load/save workflows.
+- `ProCadSharp.Rendering` turns CAD documents into a platform-neutral `RenderScene` made of primitives, bounds, styles, diagnostics, metadata, and hit-test data.
+- `ProCadSharp.Editing` owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard, constraints, snaps, tracking, grips, and entity indexing.
+- `ProCadSharp.Collaboration` shares operation batches, presence, conflict state, snapshots, and transport events between participants.
+- `ProCadSharp.Scripting` runs Roslyn C# scripts and command scripts against ProCad workspace services.
+- `ProCadSharp.Controls*` packages expose reusable render-scene viewers/editors for Avalonia, Uno, and MAUI.
 - `ProCad` and `ProCad.Desktop` provide the Avalonia app shell.
 - `ProCad.Browser` hosts the same app model in WebAssembly.
 - `ProCad.TraceCli` provides repeatable render profiling outside the UI.

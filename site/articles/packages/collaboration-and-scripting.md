@@ -4,7 +4,7 @@ title: "Collaboration And Scripting"
 
 # Collaboration And Scripting
 
-## ProCad.Collaboration
+## ProCadSharp.Collaboration
 
 The collaboration package contains:
 
@@ -17,11 +17,11 @@ The collaboration package contains:
 - ProEdit transport adapters
 - UI-facing collaboration service abstractions
 
-## ProCad.Collaboration.ServerHost
+## ProCadSharp.Collaboration.ServerHost
 
 The server host package contains the server-side hosting helpers for collaboration sessions. Use it when a shared realtime transport is required.
 
-## ProCad.Scripting
+## ProCadSharp.Scripting
 
 The scripting package contains:
 

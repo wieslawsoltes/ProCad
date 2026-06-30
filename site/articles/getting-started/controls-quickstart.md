@@ -8,11 +8,11 @@ The controls packages are for applications that already have or can build a `Pro
 
 ## Package Roles
 
-- `ProCad.Controls`: platform-neutral viewport state, render options, point/size types, selection event contracts, and viewport math.
-- `ProCad.Controls.Skia`: shared SkiaSharp renderer for `RenderScene` primitives.
-- `ProCad.Controls.Avalonia`: Avalonia viewer/editor controls.
-- `ProCad.Controls.Uno`: Uno Platform viewer/editor controls.
-- `ProCad.Controls.Maui`: MAUI viewer/editor controls.
+- `ProCadSharp.Controls`: platform-neutral viewport state, render options, point/size types, selection event contracts, and viewport math.
+- `ProCadSharp.Controls.Skia`: shared SkiaSharp renderer for `RenderScene` primitives.
+- `ProCadSharp.Controls.Avalonia`: Avalonia viewer/editor controls.
+- `ProCadSharp.Controls.Uno`: Uno Platform viewer/editor controls.
+- `ProCadSharp.Controls.Maui`: MAUI viewer/editor controls.
 
 ## Build A Render Scene
 
