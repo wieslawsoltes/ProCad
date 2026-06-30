@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Collaboration</PackageId>
+    <PackageId>ProCadSharp.Collaboration</PackageId>
     <Description>Realtime CAD operation sharing, presence, conflict handling, snapshot stores, and ProEdit transport adapters for ProCad collaboration.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cad;dwg;dxf;collaboration;realtime;presence;procad</PackageTags>

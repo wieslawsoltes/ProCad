@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Collaboration.ServerHost</PackageId>
+    <PackageId>ProCadSharp.Collaboration.ServerHost</PackageId>
     <Description>Server-side hosting helpers for ProCad realtime collaboration sessions and shared transports.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cad;dwg;dxf;collaboration;server;hosting;procad</PackageTags>

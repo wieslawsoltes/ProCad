@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Scripting</PackageId>
+    <PackageId>ProCadSharp.Scripting</PackageId>
     <Description>Roslyn-backed C# scripting host, script globals, controlled reference resolution, execution results, and command script integration for ProCad.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cad;dwg;dxf;scripting;roslyn;automation;procad</PackageTags>

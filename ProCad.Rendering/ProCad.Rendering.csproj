@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Rendering</PackageId>
+    <PackageId>ProCadSharp.Rendering</PackageId>
     <Description>DWG and DXF render-scene pipeline, entity handlers, hit testing, diagnostics, caching, and render stats for ProCad.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

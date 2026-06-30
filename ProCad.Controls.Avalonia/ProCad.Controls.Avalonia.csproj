@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Controls.Avalonia</PackageId>
+    <PackageId>ProCadSharp.Controls.Avalonia</PackageId>
     <Description>Avalonia CAD viewer and editor controls backed by ProCad render scenes and SkiaSharp.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>

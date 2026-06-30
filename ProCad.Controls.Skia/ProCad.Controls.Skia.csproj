@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Controls.Skia</PackageId>
+    <PackageId>ProCadSharp.Controls.Skia</PackageId>
     <Description>Shared SkiaSharp renderer for ProCad CAD viewer and editor controls.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>

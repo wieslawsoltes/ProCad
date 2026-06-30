@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.IO</PackageId>
+    <PackageId>ProCadSharp.IO</PackageId>
     <Description>ACadSharp-backed DWG and DXF load/save services for ProCad document workflows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

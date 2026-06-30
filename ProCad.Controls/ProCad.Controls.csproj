@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Controls</PackageId>
+    <PackageId>ProCadSharp.Controls</PackageId>
     <Description>Platform-neutral CAD viewing and editing control primitives for ProCad render scenes.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>

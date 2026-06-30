@@ -9,7 +9,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <RootNamespace>ProCad.Controls.Uno</RootNamespace>
-    <PackageId>ProCad.Controls.Uno</PackageId>
+    <PackageId>ProCadSharp.Controls.Uno</PackageId>
     <Description>Uno Platform CAD viewer and editor controls backed by ProCad render scenes and SKCanvasElement.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>

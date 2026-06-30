@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <RootNamespace>ProCad.Controls.Maui</RootNamespace>
-    <PackageId>ProCad.Controls.Maui</PackageId>
+    <PackageId>ProCadSharp.Controls.Maui</PackageId>
     <Description>.NET MAUI CAD viewer and editor controls backed by ProCad render scenes and SKCanvasView.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>PACKAGE-README.md</PackageReadmeFile>

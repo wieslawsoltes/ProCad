@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>ProCad.Core</PackageId>
+    <PackageId>ProCadSharp.Core</PackageId>
     <Description>Core CAD document contracts, metadata, validation, diffing, batch query, and export models for ProCad.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
