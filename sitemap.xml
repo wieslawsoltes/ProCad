@@ -1,27 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/platforms</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/scripting</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/testing</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/diagnostics-performance</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/collaboration-and-scripting</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -29,11 +13,11 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/opening-saving</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/collaboration-and-scripting</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/platforms/avalonia-controls</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/core-and-rendering</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -41,7 +25,47 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/tracecli</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/compare-and-batch</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/command-editing</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/diagnostics-performance</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/opening-saving</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/scripting</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
     <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/platforms/browser</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/platforms/avalonia-controls</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/testing</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/platforms</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -61,19 +85,15 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/concepts</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
     <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/concepts/inspection-workspace</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference/api-coverage-index</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/concepts</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference/api-coverage-index</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -89,19 +109,15 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference/build-docs-release</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
     <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference/feature-matrix</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
     <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/tracecli</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/compare-and-batch</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -113,19 +129,11 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/getting-started/controls-quickstart</loc>
+    <lastmod>2026-06-30</lastmod>
+  </url>
+  <url>
     <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/getting-started</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/packages/core-and-rendering</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/getting-started/trace-cli</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/guides/command-editing</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
@@ -133,15 +141,7 @@
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/getting-started/controls-quickstart</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles</loc>
-    <lastmod>2026-06-30</lastmod>
-  </url>
-  <url>
-    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/reference/build-docs-release</loc>
+    <loc>https://wieslawsoltes.github.io/ProCad/ProCad/articles/getting-started/trace-cli</loc>
     <lastmod>2026-06-30</lastmod>
   </url>
   <url>

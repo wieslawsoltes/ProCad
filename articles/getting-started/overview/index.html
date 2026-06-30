@@ -12,13 +12,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@wieslawsoltes">
 <meta name="twitter:title" content="Overview | ProCad">
-<meta name="twitter:description" content="Overview ProCad is organized as a layered CAD workspace: ProCad.Core defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts. ProCad.IO maps those contracts onto ACadSharp for DWG and DXF load/save workflows. ProCad.Rendering turns CAD documents into a platform-neutral RenderScene made of primitives, bounds, styles, diagnostics, metadata, and hit-test data. ProCad.Editing owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard,...">
+<meta name="twitter:description" content="Overview ProCad is organized as a layered CAD workspace: ProCadSharp.Core defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts. ProCadSharp.IO maps those contracts onto ACadSharp for DWG and DXF load/save workflows. ProCadSharp.Rendering turns CAD documents into a platform-neutral RenderScene made of primitives, bounds, styles, diagnostics, metadata, and hit-test data. ProCadSharp.Editing owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard,...">
 <meta name="twitter:image" content="https://wieslawsoltes.github.io/ProCad/images/logo.svg">
 <meta name="twitter:image:alt" content="Overview | ProCad">
 <meta property="og:title" content="Overview | ProCad">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://wieslawsoltes.github.io/ProCad">
-<meta property="og:description" content="Overview ProCad is organized as a layered CAD workspace: ProCad.Core defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts. ProCad.IO maps those contracts onto ACadSharp for DWG and DXF load/save workflows. ProCad.Rendering turns CAD documents into a platform-neutral RenderScene made of primitives, bounds, styles, diagnostics, metadata, and hit-test data. ProCad.Editing owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard,...">
+<meta property="og:description" content="Overview ProCad is organized as a layered CAD workspace: ProCadSharp.Core defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts. ProCadSharp.IO maps those contracts onto ACadSharp for DWG and DXF load/save workflows. ProCadSharp.Rendering turns CAD documents into a platform-neutral RenderScene made of primitives, bounds, styles, diagnostics, metadata, and hit-test data. ProCadSharp.Editing owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard,...">
 <meta property="og:image" content="https://wieslawsoltes.github.io/ProCad/images/logo.svg">
 <meta property="og:image:alt" content="Overview | ProCad">
   </head>
@@ -160,13 +160,13 @@
 <h1 id="overview">Overview</h1>
 <p>ProCad is organized as a layered CAD workspace:</p>
 <ul>
-<li><code>ProCad.Core</code> defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts.</li>
-<li><code>ProCad.IO</code> maps those contracts onto ACadSharp for DWG and DXF load/save workflows.</li>
-<li><code>ProCad.Rendering</code> turns CAD documents into a platform-neutral <code>RenderScene</code> made of primitives, bounds, styles, diagnostics, metadata, and hit-test data.</li>
-<li><code>ProCad.Editing</code> owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard, constraints, snaps, tracking, grips, and entity indexing.</li>
-<li><code>ProCad.Collaboration</code> shares operation batches, presence, conflict state, snapshots, and transport events between participants.</li>
-<li><code>ProCad.Scripting</code> runs Roslyn C# scripts and command scripts against ProCad workspace services.</li>
-<li><code>ProCad.Controls*</code> packages expose reusable render-scene viewers/editors for Avalonia, Uno, and MAUI.</li>
+<li><code>ProCadSharp.Core</code> defines document services, read/write options, file formats, metadata, validation, identity traversal, diffing, batch search, and export contracts.</li>
+<li><code>ProCadSharp.IO</code> maps those contracts onto ACadSharp for DWG and DXF load/save workflows.</li>
+<li><code>ProCadSharp.Rendering</code> turns CAD documents into a platform-neutral <code>RenderScene</code> made of primitives, bounds, styles, diagnostics, metadata, and hit-test data.</li>
+<li><code>ProCadSharp.Editing</code> owns command execution, interactive adapters, editor sessions, operation batches, transactions, undo/redo, clipboard, constraints, snaps, tracking, grips, and entity indexing.</li>
+<li><code>ProCadSharp.Collaboration</code> shares operation batches, presence, conflict state, snapshots, and transport events between participants.</li>
+<li><code>ProCadSharp.Scripting</code> runs Roslyn C# scripts and command scripts against ProCad workspace services.</li>
+<li><code>ProCadSharp.Controls*</code> packages expose reusable render-scene viewers/editors for Avalonia, Uno, and MAUI.</li>
 <li><code>ProCad</code> and <code>ProCad.Desktop</code> provide the Avalonia app shell.</li>
 <li><code>ProCad.Browser</code> hosts the same app model in WebAssembly.</li>
 <li><code>ProCad.TraceCli</code> provides repeatable render profiling outside the UI.</li>
