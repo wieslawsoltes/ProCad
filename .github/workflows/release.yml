@@ -289,18 +289,18 @@ jobs:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           expected_packages=(
-            ProCad.Core
-            ProCad.IO
-            ProCad.Rendering
-            ProCad.Editing
-            ProCad.Scripting
-            ProCad.Collaboration
-            ProCad.Collaboration.ServerHost
-            ProCad.Controls
-            ProCad.Controls.Skia
-            ProCad.Controls.Avalonia
-            ProCad.Controls.Uno
-            ProCad.Controls.Maui
+            ProCadSharp.Core
+            ProCadSharp.IO
+            ProCadSharp.Rendering
+            ProCadSharp.Editing
+            ProCadSharp.Scripting
+            ProCadSharp.Collaboration
+            ProCadSharp.Collaboration.ServerHost
+            ProCadSharp.Controls
+            ProCadSharp.Controls.Skia
+            ProCadSharp.Controls.Avalonia
+            ProCadSharp.Controls.Uno
+            ProCadSharp.Controls.Maui
           )
 
           shopt -s nullglob
@@ -353,7 +353,7 @@ jobs:
             fi
 
             readme="README.md"
-            if [[ "${package_id}" == ProCad.Controls* ]]; then
+            if [[ "${package_id}" == ProCadSharp.Controls* ]]; then
               readme="PACKAGE-README.md"
             fi
             if ! grep -Fq "<readme>${readme}</readme>" <<< "${metadata}"; then
