@@ -187,6 +187,34 @@ public sealed class RenderFillTests
     }
 
     [Fact]
+    public void BuildScene_PatternTooDenseForHatch_FallsBackToBoundary()
+    {
+        // A 3000 x 3000 hatch with rows 0.0005 apart needs ~8.5 million rows; this used to
+        // allocate until the process stalled (seen with GRAVEL at a small scale in a real drawing).
+        var document = new ACadSharp.CadDocument();
+        var hatch = new Hatch
+        {
+            IsSolid = false,
+            Pattern = new HatchPattern("DENSE")
+        };
+        hatch.Pattern.Lines.Add(new HatchPattern.Line
+        {
+            Angle = 0.0,
+            BasePoint = new XY(0, 0),
+            Offset = new XY(0, 0.0005)
+        });
+        hatch.Paths.Add(CreateRectanglePath(0, 0, 3000, 3000, BoundaryPathFlags.External));
+        document.Entities.Add(hatch);
+
+        var build = System.Threading.Tasks.Task.Run(() => CreateSceneBuilder().Build(document, new CadRenderSceneSettings()));
+        Assert.True(build.Wait(System.TimeSpan.FromSeconds(10)), "Scene build did not finish.");
+        var primitives = build.Result.Layers.SelectMany(layer => layer.Primitives).ToArray();
+
+        Assert.DoesNotContain(primitives, primitive => primitive is RenderHatchPattern);
+        Assert.Contains(primitives, primitive => primitive is RenderPolyline);
+    }
+
+    [Fact]
     public void BuildScene_UsesBoundaryWhenPatternDisabled()
     {
         var document = new ACadSharp.CadDocument();

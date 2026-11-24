@@ -13,6 +13,9 @@ namespace ProCad.Rendering;
 public sealed class HatchRenderHandler : IRenderEntityHandler
 {
     private const float Epsilon = 0.0001f;
+    // Upper bound on generated pattern segments per hatch, in the spirit of AutoCAD's HPMAXLINES.
+    // A huge hatch with a tiny pattern scale would otherwise allocate millions of rows.
+    private const double MaxPatternSegments = 1_000_000d;
 
     public bool CanHandle(Entity entity) => entity is Hatch;
 
@@ -174,6 +177,12 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
             return new List<RenderHatchLineSegment>();
         }
 
+        if (EstimatePatternSegmentCount(patternLines, bounds, extent) > MaxPatternSegments)
+        {
+            // Too dense to draw as lines; the caller falls back to the boundary outline.
+            return new List<RenderHatchLineSegment>();
+        }
+
         var segments = new List<RenderHatchLineSegment>();
         foreach (var line in patternLines)
         {
@@ -183,19 +192,71 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         return segments;
     }
 
-    private static void AddPatternLineSegments(
-        List<RenderHatchLineSegment> segments,
+    private static double EstimatePatternSegmentCount(
+        IReadOnlyList<HatchPattern.Line> patternLines,
+        RenderBounds bounds,
+        float extent)
+    {
+        var total = 0d;
+        var rowLength = extent * 3d;
+        foreach (var line in patternLines)
+        {
+            ResolveRowRange(line, bounds, out var startIndex, out var endIndex);
+            var rows = (double)endIndex - startIndex + 1d;
+
+            var perRow = 1d;
+            var dashes = line.DashLengths;
+            if (dashes.Count > 0)
+            {
+                var period = 0d;
+                var visible = 0;
+                for (var i = 0; i < dashes.Count; i++)
+                {
+                    var dashLength = Math.Abs(dashes[i]);
+                    if (dashLength > Epsilon)
+                    {
+                        period += dashLength;
+                        if (dashes[i] > 0)
+                        {
+                            visible++;
+                        }
+                    }
+                }
+
+                if (period > Epsilon)
+                {
+                    perRow = Math.Ceiling(rowLength / period) * Math.Max(visible, 1);
+                }
+            }
+
+            total += rows * perRow;
+            if (total > MaxPatternSegments)
+            {
+                return total;
+            }
+        }
+
+        return total;
+    }
+
+    private static void ResolveRowRange(
         HatchPattern.Line line,
         RenderBounds bounds,
-        float extent,
-        Transform transform)
+        out long startIndex,
+        out long endIndex)
     {
         var angle = (float)line.Angle;
-        var dir = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
-        var normal = new Vector2(-dir.Y, dir.X);
+        var normal = new Vector2(-MathF.Sin(angle), MathF.Cos(angle));
         var basePoint = new Vector2((float)line.BasePoint.X, (float)line.BasePoint.Y);
         var offset = new Vector2((float)line.Offset.X, (float)line.Offset.Y);
         var spacing = Vector2.Dot(offset, normal);
+
+        startIndex = 0;
+        endIndex = 0;
+        if (MathF.Abs(spacing) <= Epsilon)
+        {
+            return;
+        }
 
         var minProj = float.PositiveInfinity;
         var maxProj = float.NegativeInfinity;
@@ -207,15 +268,24 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
         }
 
         var baseProj = Vector2.Dot(basePoint, normal);
-        var startIndex = 0;
-        var endIndex = 0;
-        if (MathF.Abs(spacing) > Epsilon)
-        {
-            var kMin = (minProj - baseProj) / spacing;
-            var kMax = (maxProj - baseProj) / spacing;
-            startIndex = (int)MathF.Floor(MathF.Min(kMin, kMax)) - 1;
-            endIndex = (int)MathF.Ceiling(MathF.Max(kMin, kMax)) + 1;
-        }
+        var kMin = (minProj - baseProj) / spacing;
+        var kMax = (maxProj - baseProj) / spacing;
+        startIndex = (long)Math.Floor(MathF.Min(kMin, kMax)) - 1;
+        endIndex = (long)Math.Ceiling(MathF.Max(kMin, kMax)) + 1;
+    }
+
+    private static void AddPatternLineSegments(
+        List<RenderHatchLineSegment> segments,
+        HatchPattern.Line line,
+        RenderBounds bounds,
+        float extent,
+        Transform transform)
+    {
+        var angle = (float)line.Angle;
+        var dir = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+        var basePoint = new Vector2((float)line.BasePoint.X, (float)line.BasePoint.Y);
+        var offset = new Vector2((float)line.Offset.X, (float)line.Offset.Y);
+        ResolveRowRange(line, bounds, out var startIndex, out var endIndex);
 
         var half = extent * 1.5f;
         for (var i = startIndex; i <= endIndex; i++)
