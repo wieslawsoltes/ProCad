@@ -99,7 +99,10 @@ public sealed class RenderHitTestEngine
                     metadata.OwnerEntity,
                     metadata.SourceEntity));
             }
-            if (maxResults > 0 && results.Count >= maxResults)
+            // When sorting, every candidate has to be tested first: stopping at the first
+            // maxResults hits would return whichever primitives the spatial index yielded
+            // first, not the closest ones.
+            if (!resolvedOptions.SortByDistance && maxResults > 0 && results.Count >= maxResults)
             {
                 break;
             }
@@ -108,6 +111,11 @@ public sealed class RenderHitTestEngine
         if (resolvedOptions.SortByDistance && results.Count > 1)
         {
             results.Sort(static (left, right) => left.Distance.CompareTo(right.Distance));
+        }
+
+        if (maxResults > 0 && results.Count > maxResults)
+        {
+            results.RemoveRange(maxResults, results.Count - maxResults);
         }
     }
 

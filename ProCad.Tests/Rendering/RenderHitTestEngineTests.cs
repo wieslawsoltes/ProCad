@@ -49,6 +49,51 @@ public class RenderHitTestEngineTests
     }
 
     [Fact]
+    public void HitTestPoint_WithMaxResults_ReturnsNearestHit_NotFirstCandidate()
+    {
+        // The farther line is added first so the spatial index yields it first.
+        var far = new RenderLine(
+            new Vector2(0f, 0.8f),
+            new Vector2(10f, 0.8f),
+            RenderColor.DefaultForeground,
+            0f,
+            RenderLineCap.Round,
+            RenderLineJoin.Round);
+        var near = new RenderLine(
+            new Vector2(0f, 0.1f),
+            new Vector2(10f, 0.1f),
+            RenderColor.DefaultForeground,
+            0f,
+            RenderLineCap.Round,
+            RenderLineJoin.Round);
+        var primitives = new List<IRenderPrimitive> { far, near };
+        var bounds = far.Bounds.Expand(near.Bounds);
+        var layer = new RenderLayer("Test", RenderColor.DefaultForeground, isVisible: true, primitives, bounds);
+        var scene = new RenderScene(
+            new[] { layer },
+            bounds,
+            RenderColor.DefaultBackground,
+            RenderVisualStyle.Wireframe,
+            RenderHiddenLineSettings.Default,
+            RenderSpatialIndex.Build(new[] { layer }),
+            null,
+            new RenderDiagnostics(),
+            RenderStats.Empty);
+
+        var engine = new RenderHitTestEngine();
+        var all = new List<RenderHitTestResult>();
+        engine.HitTestPoint(scene, new Vector2(5f, 0f), 1f, all, new RenderHitTestOptions(includeHiddenLayers: false, maxResults: 0, sortByDistance: false));
+        Assert.Equal(2, all.Count);
+        Assert.Same(far, all[0].Primitive);
+
+        var results = new List<RenderHitTestResult>();
+        engine.HitTestPoint(scene, new Vector2(5f, 0f), 1f, results, new RenderHitTestOptions(includeHiddenLayers: false, maxResults: 1, sortByDistance: true));
+
+        var hit = Assert.Single(results);
+        Assert.Same(near, hit.Primitive);
+    }
+
+    [Fact]
     public void HitTestPoint_ReportsCircleHit()
     {
         var primitives = new List<IRenderPrimitive>
