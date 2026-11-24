@@ -13,6 +13,7 @@ namespace ProCad.Rendering;
 public sealed class HatchRenderHandler : IRenderEntityHandler
 {
     private const float Epsilon = 0.0001f;
+    private const float MaxDashPatternRepeats = 10000f;
 
     public bool CanHandle(Entity entity) => entity is Hatch;
 
@@ -243,6 +244,25 @@ public sealed class HatchRenderHandler : IRenderEntityHandler
 
         var direction = delta / totalLength;
         if (dashes.Count == 0)
+        {
+            segments.Add(TransformSegment(start, end, transform));
+            return;
+        }
+
+        // Same guard as RenderLinePatternStroker: the loop below only advances through dashes
+        // longer than Epsilon, so a dash list without one would never terminate, and a pattern
+        // repeating more than MaxDashPatternRepeats times along the line reads as solid anyway.
+        var period = 0f;
+        for (var i = 0; i < dashes.Count; i++)
+        {
+            var dashLength = (float)Math.Abs(dashes[i]);
+            if (dashLength > Epsilon)
+            {
+                period += dashLength;
+            }
+        }
+
+        if (period <= Epsilon || totalLength / period > MaxDashPatternRepeats)
         {
             segments.Add(TransformSegment(start, end, transform));
             return;

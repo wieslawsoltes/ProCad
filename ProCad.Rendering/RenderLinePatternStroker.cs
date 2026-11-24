@@ -7,6 +7,7 @@ namespace ProCad.Rendering;
 internal static class RenderLinePatternStroker
 {
     private const float Epsilon = 0.0001f;
+    private const float MaxPatternRepeats = 10000f;
 
     public static void AddLine(
         RenderLayerBuilder builder,
@@ -68,17 +69,7 @@ internal static class RenderLinePatternStroker
 
         if (pattern.IsContinuous)
         {
-            if (points.Count == 2 && !isClosed)
-            {
-                var startDepth = useDepths ? depths![0] : (float?)null;
-                var endDepth = useDepths ? depths![1] : (float?)null;
-                builder.Add(new RenderLine(points[0], points[1], color, thickness, lineCap, lineJoin, startDepth, endDepth));
-            }
-            else
-            {
-                builder.Add(new RenderPolyline(points, isClosed, color, thickness, lineCap, lineJoin, useDepths ? depths : null));
-            }
-
+            AddContinuous(builder, points, isClosed, color, thickness, lineCap, lineJoin, useDepths ? depths : null);
             return;
         }
 
@@ -86,6 +77,27 @@ internal static class RenderLinePatternStroker
         if (segments.Length == 0)
         {
             builder.Add(new RenderPolyline(points, isClosed, color, thickness, lineCap, lineJoin));
+            return;
+        }
+
+        // The stroking loop below only advances through segments longer than Epsilon. A pattern
+        // made entirely of shorter segments (for example a shape linetype scaled down until its
+        // segments are clamped to the resolver's minimum length) would never advance and would
+        // loop forever. A pattern that repeats more than MaxPatternRepeats times along the path is
+        // visually solid at any practical zoom and would emit an unbounded number of primitives,
+        // so both cases are drawn as a continuous stroke instead.
+        var period = 0f;
+        foreach (var segment in segments)
+        {
+            if (segment.Length > Epsilon)
+            {
+                period += segment.Length;
+            }
+        }
+
+        if (period <= Epsilon || MeasurePath(points, isClosed) / period > MaxPatternRepeats)
+        {
+            AddContinuous(builder, points, isClosed, color, thickness, lineCap, lineJoin, useDepths ? depths : null);
             return;
         }
 
@@ -164,6 +176,43 @@ internal static class RenderLinePatternStroker
                 }
             }
         }
+    }
+
+    private static void AddContinuous(
+        RenderLayerBuilder builder,
+        IReadOnlyList<Vector2> points,
+        bool isClosed,
+        RenderColor color,
+        float thickness,
+        RenderLineCap lineCap,
+        RenderLineJoin lineJoin,
+        IReadOnlyList<float>? depths)
+    {
+        if (points.Count == 2 && !isClosed)
+        {
+            var startDepth = depths is not null ? depths[0] : (float?)null;
+            var endDepth = depths is not null ? depths[1] : (float?)null;
+            builder.Add(new RenderLine(points[0], points[1], color, thickness, lineCap, lineJoin, startDepth, endDepth));
+            return;
+        }
+
+        builder.Add(new RenderPolyline(points, isClosed, color, thickness, lineCap, lineJoin, depths));
+    }
+
+    private static float MeasurePath(IReadOnlyList<Vector2> points, bool isClosed)
+    {
+        var total = 0f;
+        for (var i = 1; i < points.Count; i++)
+        {
+            total += Vector2.Distance(points[i - 1], points[i]);
+        }
+
+        if (isClosed && points.Count > 2)
+        {
+            total += Vector2.Distance(points[^1], points[0]);
+        }
+
+        return total;
     }
 
     private static void AddDecoration(
